@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import SURVEY_BASICS from "./surveyBasics.json";
-import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections } from "./airtable";
+import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections } from "./airtable";
 
 // Map app department keys (HR, LD, LC1/LC2, JVK1/JVK2, ...) to surveyBasics.json keys
 // (which are lowercase and un-split: hr, ld, lc, jvk, ...).
@@ -922,13 +922,36 @@ export default function App() {
     try { localStorage.setItem("pulse:sbMaster", JSON.stringify(updated)); } catch(e) {}
   };
 
-  // Reload selections when country+year change (e.g. opening a previous run)
+  // Loading indicator while pulling the shared version from Airtable.
+  const [cloudLoading, setCloudLoading] = useState(false);
+
+  // When a run opens (country+year set), load the SHARED version from Airtable
+  // (source of truth). Fall back to the local copy if Airtable is empty/unreachable,
+  // so the app still works offline or before the first push.
   useEffect(() => {
     if (!country || !year) return;
+    let cancelled = false;
+    // start from local immediately so nothing flashes empty
     try {
       const raw = localStorage.getItem(`pulse:sel:${country}:${year}`);
       if (raw) setSelections(JSON.parse(raw));
     } catch(e) {}
+    // then pull the shared version and use it if present
+    (async () => {
+      setCloudLoading(true);
+      try {
+        const shared = await loadRunSelections(country, year);
+        if (!cancelled && shared && Object.keys(shared).length) {
+          setSelections(shared);
+          try { localStorage.setItem(`pulse:sel:${country}:${year}`, JSON.stringify(shared)); } catch {}
+        }
+      } catch (e) {
+        // Airtable unreachable — keep the local copy already loaded above.
+        console.warn("Airtable load failed, using local copy:", e.message);
+      }
+      if (!cancelled) setCloudLoading(false);
+    })();
+    return () => { cancelled = true; };
   }, [country, year]);
 
   const saveRun = async (data) => {
@@ -1070,6 +1093,7 @@ export default function App() {
       isAdmin={isAdmin} toggleAdmin={toggleAdmin}
       sbOverrides={sbOverrides} saveSbOverride={saveSbOverride} setSbOverrides={setSbOverrides}
       sbMaster={sbMaster} promoteSbToMaster={promoteSbToMaster}
+      cloudLoading={cloudLoading}
     />
   );
 
@@ -1231,7 +1255,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 }
 
 // ─── REVIEW VIEW ──────────────────────────────────────────────────────────────
-function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, sbMaster, promoteSbToMaster }) {
+function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, sbMaster, promoteSbToMaster, cloudLoading }) {
   const [activeDept, setActiveDept] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
   const [translating, setTranslating] = useState(false);
@@ -1262,6 +1286,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
         <div style={{ flex:1 }}>
           <span style={{ color:"#FF6600", fontWeight:700, fontSize:13 }}>{country} {year}</span>
           <span style={{ color:"#9C8F82", marginLeft:8, fontSize:13 }}>Director Review</span>
+          {cloudLoading && <span style={{ color:"#FF6600", marginLeft:10, fontSize:11, fontStyle:"italic" }}>☁ syncing…</span>}
         </div>
         <button onClick={()=>setShowHelp(true)} style={{ ...navBtn, background:"white",
           border:"1px solid #F5E4D5", color:"#FF6600", fontWeight:700 }}>

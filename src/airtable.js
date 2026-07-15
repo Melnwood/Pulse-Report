@@ -151,4 +151,60 @@ export async function saveSelections(deptRecordId, selections) {
   return rows.length;
 }
 
+
+// Load ALL selections for a run (country+year) from Airtable, keyed by dept code
+// (HR, LC1, JVK2, ...) in the app's selections shape. Returns {} if nothing found.
+export async function loadRunSelections(country, year) {
+  const runName = `${country} ${year}`;
+  // Map each department record id -> its dept code (HR, LC1, ...) for this run.
+  const depts = await call({ action: "list", table: "departments",
+    filterByFormula: `FIND(${q(runName)}, {Department Key}) = 1` });
+  if (!depts.records.length) return {};
+
+  const codeById = {};   // recId -> dept code
+  for (const dRec of depts.records) {
+    const key = dRec.fields["Department Key"] || "";
+    const code = dRec.fields["Dept Code"]?.name || dRec.fields["Dept Code"] ||
+                 key.split("·").pop().trim();
+    if (code) codeById[dRec.id] = code;
+  }
+
+  // Pull ALL selections whose linked Department name starts with this run, in one query.
+  const sels = await call({ action: "list", table: "selections",
+    filterByFormula: `FIND(${q(runName + " ")}, ARRAYJOIN({Department})) = 1` });
+
+  // Group into the app shape, keyed by dept code.
+  const out = {};
+  const ensure = (code) => (out[code] = out[code] || { strengths: [], growth: [], leadershipQs: [], quotes: [] });
+  sels.records
+    .map(r => ({ id: r.id, f: r.fields }))
+    .sort((a, b) => (a.f["Order"] || 0) - (b.f["Order"] || 0))
+    .forEach(({ id, f }) => {
+      const linked = f["Department"];
+      const depRecId = Array.isArray(linked) && linked[0] ? linked[0].id : null;
+      const code = depRecId ? codeById[depRecId] : null;
+      if (!code) return;
+      const sectionKey = SECTION_KEY[f["Section"]?.name || f["Section"]] || null;
+      if (!sectionKey) return;
+      ensure(code)[sectionKey].push({
+        _recordId: id,
+        text: f["Text"] || "",
+        rewrite: f["Rewrite"] || "",
+        translation: f["Translation"] || null,
+        isOriginalLang: !!f["Is Original Language"],
+        include: !!f["Include"],
+        isRefined: !!(f["Rewrite"] && f["Rewrite"].trim()),
+      });
+    });
+  return out;
+}
+
+// Check whether a run exists in Airtable (any departments for it).
+export async function runExistsInAirtable(country, year) {
+  const runName = `${country} ${year}`;
+  const depts = await call({ action: "list", table: "departments",
+    filterByFormula: `FIND(${q(runName)}, {Department Key}) = 1`, params: { pageSize: 1 } });
+  return depts.records.length > 0;
+}
+
 export { F as AIRTABLE_FIELDS };
