@@ -552,6 +552,61 @@ async function translateMissingQuotes(quotes) {
   });
 }
 
+// Generate exactly two thoughtful, status-aware leadership questions for one
+// department, on demand. Uses the department's status + weakest questions.
+// Returns an array of two strings, or throws a descriptive error.
+async function generateLeadershipQuestions(dept) {
+  const concernQs = (dept.questions || []).filter(q => q.status === 'Concern')
+    .map(q => `- ${q.score?.toFixed(2)} "${q.en}"`).join("\n") || "None";
+  const watchQs = (dept.questions || []).filter(q => q.status === 'Watch')
+    .map(q => `- ${q.score?.toFixed(2)} "${q.en}"`).join("\n") || "None";
+
+  const prompt = `You are helping prepare a JV (Josiah Venture) People & Culture Pulse Report for the ${dept.label} department. This goes to the department's leader.
+
+Department overall status: ${dept.status} (average ${dept.avg} out of 5, n=${dept.n}).
+Scoring: Healthy >= 3.50, Watch 2.50-3.49, Concern < 2.50. Lower means staff are struggling more.
+
+Concern-level questions:
+${concernQs}
+
+Watch-level questions:
+${watchQs}
+
+Write exactly TWO leadership questions for this department's leader. Their purpose is to help the leader personally reflect and figure out how to GO LEARN what is really happening with their team — not to hand them a conclusion.
+
+- Ground them in this department's actual weakest areas above.
+- Calibrate to the overall status: Concern = help them honestly confront a significant gap; Watch = help them investigate something mixed before it worsens; Healthy = help them protect a strength while staying curious about blind spots.
+- Each should prompt the leader to think about HOW they'll find this out — what conversations to have, what to observe, who to ask.
+- Open, non-defensive, thought-provoking. No yes/no questions. No jargon.
+
+Return ONLY a JSON array of exactly two strings, no markdown:
+["first question", "second question"]`;
+
+  const res = await fetch("/.netlify/functions/claude", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1500,
+      messages: [{ role: "user", content: prompt }]
+    })
+  });
+
+  const rawBody = await res.text();
+  if (!res.ok) throw new Error(`Function returned HTTP ${res.status}: ${rawBody.slice(0,300)}`);
+  let data;
+  try { data = JSON.parse(rawBody); }
+  catch { throw new Error(`Function response was not JSON: ${rawBody.slice(0,300)}`); }
+  if (data.error) throw new Error(`API error: ${typeof data.error === "string" ? data.error : JSON.stringify(data.error).slice(0,300)}`);
+  const text = data.content?.find(b => b.type === "text")?.text;
+  if (!text) throw new Error(`Unexpected response shape: ${JSON.stringify(data).slice(0,300)}`);
+  let arr;
+  try { arr = JSON.parse(text.replace(/\`\`\`json|\`\`\`/g, "").trim()); }
+  catch { throw new Error(`Question JSON parse failed. Model returned: ${text.slice(0,300)}`); }
+  if (!Array.isArray(arr) || !arr.length) throw new Error("Model did not return a question array.");
+  return arr.slice(0, 2).map(String);
+}
+
 async function generateDeptContent(dept) {
   const deptSBList = getSurveyBasics(dept.key);
 
@@ -602,22 +657,32 @@ async function generateDeptContent(dept) {
 
   if (dept.openResponses.length > 0) {
     try {
-      const prompt = `You are helping prepare a JV (Josiah Venture) Pulse Report for the ${dept.label} department.
+      const prompt = `You are helping prepare a JV (Josiah Venture) People & Culture Pulse Report for the ${dept.label} department. This report goes to the department's leader.
 
-Department status: ${dept.status} (avg: ${dept.avg}, n=${dept.n})
+Department overall status: ${dept.status} (average score: ${dept.avg} out of 5, n=${dept.n} respondents).
+Scoring: Healthy >= 3.50, Watch 2.50-3.49, Concern < 2.50. Lower scores mean staff are struggling more in that area.
 
-Concern questions:
+Concern-level questions (the most serious):
 ${dept.questions.filter(q=>q.status==='Concern').map(q=>`- ${q.score?.toFixed(2)} "${q.en}"`).join('\n')||'None'}
 
-Watch questions:
+Watch-level questions (mixed / emerging):
 ${dept.questions.filter(q=>q.status==='Watch').map(q=>`- ${q.score?.toFixed(2)} "${q.en}"`).join('\n')||'None'}
 
-Open responses (verbatim — some are in the local language, some in English):
+What staff said in their own words (verbatim — some in the local language, some in English):
 ${dept.openResponses.map((r,i)=>`${i+1}. [${r.isOriginalLang?'NON-ENGLISH':'ENGLISH'}] "${r.text}"`).join('\n')}
+
+Write exactly TWO leadership questions for this department's leader. These are the most important part of the report. Their purpose is NOT to hand the leader a conclusion, but to help the leader personally reflect and figure out how to GO LEARN what is really happening with their team.
+
+Guidelines for the two questions:
+- Ground them in this department's actual weakest areas and what staff wrote above — not generic management advice.
+- Calibrate the tone to the overall status. For a Concern department, the questions should help the leader confront a real, significant gap honestly. For Watch, help them investigate something mixed or emerging before it worsens. For Healthy, help them protect and build on a strength while staying curious about blind spots.
+- Each question should prompt the leader to think about HOW they will find this information out about their team — what conversations to have, what to observe, who to ask — rather than assuming they already know the answer.
+- Make them open, non-defensive, and genuinely thought-provoking. Avoid yes/no questions. Avoid jargon.
+- Write them so a busy ministry leader would pause and actually think.
 
 Return ONLY valid JSON (no markdown):
 {
-  "leadershipQs": ["3 specific, practical questions for the director based on the data above"],
+  "leadershipQs": ["first thoughtful question", "second thoughtful question"],
   "quotes": [
     {
       "original": "the verbatim response exactly as written",
@@ -626,7 +691,7 @@ Return ONLY valid JSON (no markdown):
     }
   ]
 }
-Select 4-6 of the most representative responses. For non-English responses, provide an accurate English translation. For English responses, set translation to null.`;
+For quotes: select 4-6 of the most representative responses. For non-English responses, provide an accurate English translation. For English responses, set translation to null.`;
 
       const res = await fetch("/.netlify/functions/claude", {
         method: "POST",
@@ -1012,6 +1077,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
   const [showHelp, setShowHelp] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [translating, setTranslating] = useState(false);
+  const [genQs, setGenQs] = useState(false);
   const [importMsg, setImportMsg] = useState(null);
   const importInputRef = useRef(null);
   const depts = surveyData ? Object.values(surveyData.depts).filter(d=>d.n>0) : [];
@@ -1021,9 +1087,9 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
   const dept = depts.find(d=>d.key===activeDept);
 
   return (
-    <div style={{ minHeight:"100vh", background:"#F8F7F4", fontFamily:"'Inter',system-ui,sans-serif", display:"flex", flexDirection:"column" }}>
-      {/* Top bar */}
-      <div style={{ background:"#FFFFFF", borderBottom:"1px solid #E2DFF5", padding:"14px 24px", display:"flex", alignItems:"center", gap:16, flexShrink:0 }}>
+    <div style={{ height:"100vh", background:"#F8F7F4", fontFamily:"'Inter',system-ui,sans-serif", display:"flex", flexDirection:"column", overflow:"hidden" }}>
+      {/* Top bar — stays fixed at the top; only the content pane below scrolls so the action buttons (Translate, Import, Save, Generate) stay visible while scrolling */}
+      <div style={{ background:"#FFFFFF", borderBottom:"1px solid #E2DFF5", padding:"14px 24px", display:"flex", alignItems:"center", gap:16, flexShrink:0, zIndex:100, flexWrap:"wrap" }}>
         <button onClick={()=>setView("home")} style={{ ...navBtn, background:"transparent", border:"1px solid #E2DFF5" }}>← Home</button>
         <div style={{ flex:1 }}>
           <span style={{ color:"#FF6600", fontWeight:700, fontSize:13 }}>{country} {year}</span>
@@ -1119,6 +1185,35 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
             color: translating ? "#9391B0" : "#1E1B3A", cursor: translating ? "wait" : "pointer" }}>
           {translating ? "Translating…" : "🌐 Translate quotes"}
         </button>
+        <button
+          disabled={genQs}
+          onClick={async () => {
+            setGenQs(true);
+            try {
+              const updated = { ...selections };
+              const targets = dept ? [dept] : depts;   // active dept, or all if none active
+              let count = 0;
+              for (const d of targets) {
+                if (!updated[d.key]) continue;
+                const qs = await generateLeadershipQuestions(d);
+                updated[d.key] = {
+                  ...updated[d.key],
+                  leadershipQs: qs.map(text => ({ text, include:true, rewrite:"", isRefined:false })),
+                };
+                count += qs.length;
+              }
+              setSelections(updated);
+              try { localStorage.setItem(`pulse:sel:${country}:${year}`, JSON.stringify(updated)); } catch {}
+              setImportMsg({ status:"done", lines:[`Generated ${count} leadership question${count===1?"":"s"} for ${dept ? dept.label : "all departments"}.`] });
+            } catch(e) {
+              setImportMsg({ status:"error", lines:["Leadership question generation failed: " + e.message] });
+            }
+            setGenQs(false);
+          }}
+          style={{ ...navBtn, background:"white", border:"1px solid #E2DFF5",
+            color: genQs ? "#9391B0" : "#1E1B3A", cursor: genQs ? "wait" : "pointer" }}>
+          {genQs ? "Generating…" : "✦ Generate leadership questions"}
+        </button>
         <button onClick={saveSelections} style={{ ...navBtn, background: saved?"#1E8449":"#7C6FE0" }}>
           {saved ? "✓ Saved" : "Save Progress"}
         </button>
@@ -1130,7 +1225,8 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
       {showHelp && <ScoringHelpPanel onClose={()=>setShowHelp(false)} />}
 
       {importMsg && (
-        <div style={{ margin:"12px 20px", padding:"12px 16px", borderRadius:8,
+        <div style={{ margin:"12px 20px", padding:"12px 16px", borderRadius:8, flexShrink:0,
+          maxHeight:"30vh", overflowY:"auto",
           background: importMsg.status==="error" ? "#FDF2F2" : importMsg.status==="done" ? "#F0FDF4" : "#F5F3FF",
           border: `1px solid ${importMsg.status==="error" ? "#FCA5A5" : importMsg.status==="done" ? "#86EFAC" : "#E2DFF5"}` }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
@@ -1520,6 +1616,14 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
         <div key={sec.key} style={{ marginBottom:20, background:"#FFFFFF", borderRadius:10, overflow:"hidden" }}>
           <div style={{ padding:"12px 16px", borderBottom:"1px solid #E2DFF5" }}>
             <div style={{ color:sec.color, fontWeight:700, fontSize:13 }}>{sec.label}</div>
+            {sec.key === "quotes" && dept.openQLabel && (
+              <div style={{ marginTop:6, marginBottom:2, padding:"6px 10px",
+                background:"#F5F3FF", borderLeft:"3px solid #9B8FE8", borderRadius:4 }}>
+                <span style={{ fontSize:9, fontWeight:700, color:"#7C6FE0",
+                  textTransform:"uppercase", letterSpacing:.5, marginRight:6 }}>Responding to</span>
+                <span style={{ fontSize:12, color:"#4A476A", fontStyle:"italic" }}>"{dept.openQLabel}"</span>
+              </div>
+            )}
             <div style={{ color:"#9391B0", fontSize:11, marginTop:2 }}>{sec.instruction}</div>
           </div>
           {(sel[sec.key] || []).map((item, idx) => {
@@ -1858,7 +1962,12 @@ function DeptReportPage({ dept, getApproved }) {
       {quotes.length > 0 && (
         <div>
           <div style={{ fontSize:10, fontWeight:700, color:"#9391B0", textTransform:"uppercase",
-            letterSpacing:2, marginBottom:12 }}>What staff said</div>
+            letterSpacing:2, marginBottom:4 }}>What staff said</div>
+          {dept.openQLabel && (
+            <div style={{ fontSize:12, color:"#6B6894", fontStyle:"italic", marginBottom:12 }}>
+              In response to: "{dept.openQLabel}"
+            </div>
+          )}
           <div style={{ display:"grid", gridTemplateColumns: quotes.length > 1 ? "1fr 1fr" : "1fr", gap:12 }}>
             {quotes.map((q,i) => {
               const isObj = typeof q === 'object' && q !== null;
