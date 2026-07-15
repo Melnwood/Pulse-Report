@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import SURVEY_BASICS from "./surveyBasics.json";
+import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections } from "./airtable";
 
 // Map app department keys (HR, LD, LC1/LC2, JVK1/JVK2, ...) to surveyBasics.json keys
 // (which are lowercase and un-split: hr, ld, lc, jvk, ...).
@@ -1155,6 +1156,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
   const [showHelp, setShowHelp] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [genQs, setGenQs] = useState(false);
+  const [atBusy, setAtBusy] = useState(false);
   const [importMsg, setImportMsg] = useState(null);
   const importInputRef = useRef(null);
   // Order departments by concern: Concern (red) first, then Watch (yellow), then
@@ -1261,6 +1263,39 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
           style={{ ...navBtn, background:"white", border:"1px solid #F5E4D5",
             color: genQs ? "#9C8F82" : "#1E1B3A", cursor: genQs ? "wait" : "pointer" }}>
           {genQs ? "Generating…" : "✦ Generate leadership questions"}
+        </button>
+        <button
+          disabled={atBusy}
+          title="Push this run's departments and your review edits up to the shared Airtable base"
+          onClick={async () => {
+            setAtBusy(true);
+            setImportMsg({ status:"working", lines:["Pushing to Airtable…"] });
+            try {
+              const runName = `${country} ${year}`;
+              const runId = await upsertRun({
+                country, year,
+                status: "In Review",
+                overallAvg: depts.length ? (depts.reduce((a,d)=>a+parseFloat(d.avg||0),0)/depts.length) : null,
+                respondents: surveyData?.raw?.length ?? null,
+              });
+              let pushed = 0;
+              for (const d of depts) {
+                const deptRecId = await upsertDepartment(runId, runName, {
+                  key: d.key, label: d.label, avg: d.avg, status: d.status, n: d.n,
+                  openQLabel: d.openQLabel,
+                  surveyDataJSON: JSON.stringify({ questions: d.questions || [] }).slice(0, 95000),
+                });
+                if (selections[d.key]) { await atSaveSelections(deptRecId, selections[d.key]); pushed++; }
+              }
+              setImportMsg({ status:"done", lines:[`Pushed ${runName} to Airtable — ${depts.length} departments, ${pushed} with review content.`] });
+            } catch(e) {
+              setImportMsg({ status:"error", lines:["Airtable push failed: " + e.message] });
+            }
+            setAtBusy(false);
+          }}
+          style={{ ...navBtn, background:"white", border:"1px solid #F5E4D5",
+            color: atBusy ? "#9C8F82" : "#1E1B3A", cursor: atBusy ? "wait" : "pointer" }}>
+          {atBusy ? "Syncing…" : "☁ Push to Airtable"}
         </button>
         </>)}
         <button onClick={saveSelections} style={{ ...navBtn, background: saved?"#1E8449":"#FF6600" }}>
@@ -1795,11 +1830,70 @@ function ReportView({ country, year, surveyData, getApproved, setView }) {
       return (parseFloat(a.avg)||0) - (parseFloat(b.avg)||0);
     }) : [];
 
-  const concerns = depts.filter(d=>d.status==="Concern");
-  const watches  = depts.filter(d=>d.status==="Watch");
-  const healthys = depts.filter(d=>d.status==="Healthy");
-  const overallAvg = depts.length ? (depts.reduce((a,d)=>a+d.avg,0)/depts.length).toFixed(2) : "—";
-  const totalN = depts.reduce((a,d)=>a+d.n,0);
+  // For the SUMMARY only, combine culture-split departments (JVK1+JVK2 -> JVK,
+  // LC1+LC2 -> Language & Culture) so the health overview matches the director's
+  // report (9 departments). The detail pages below still use the split `depts`.
+  const COMBINE = {
+    JVK1: { group: "JVK", label: "JVK — Josiah Venture Kids" },
+    JVK2: { group: "JVK", label: "JVK — Josiah Venture Kids" },
+    LC1:  { group: "LC",  label: "Language & Culture" },
+    LC2:  { group: "LC",  label: "Language & Culture" },
+  };
+  const summaryDepts = (() => {
+    const singles = [];
+    const groups = {}; // group -> combined dept
+    for (const d of depts) {
+      const c = COMBINE[d.key];
+      if (!c) { singles.push(d); continue; }
+      if (!groups[c.group]) groups[c.group] = { key: c.group, label: c.label, _questions: [], _n: 0 };
+      groups[c.group]._questions.push(...(d.questions || []));
+      groups[c.group]._n += d.n || 0;
+    }
+    const combined = Object.values(groups).map(g => {
+      const scored = g._questions.filter(q => q.score);
+      const avg = scored.length ? scored.reduce((a,q)=>a+q.score,0)/scored.length : 0;
+      return { key: g.key, label: g.label, n: g._n, avg: +avg.toFixed(2),
+               status: deptStatus(g._questions), questions: g._questions };
+    });
+    return [...singles, ...combined].sort((a,b) => {
+      const sa = STATUS_ORDER[a.status] ?? 3, sb = STATUS_ORDER[b.status] ?? 3;
+      if (sa !== sb) return sa - sb;
+      return (parseFloat(a.avg)||0) - (parseFloat(b.avg)||0);
+    });
+  })();
+
+  const concerns = summaryDepts.filter(d=>d.status==="Concern");
+  const watches  = summaryDepts.filter(d=>d.status==="Watch");
+  const healthys = summaryDepts.filter(d=>d.status==="Healthy");
+  const overallAvg = summaryDepts.length ? (summaryDepts.reduce((a,d)=>a+d.avg,0)/summaryDepts.length).toFixed(2) : "—";
+  const totalN = surveyData?.raw?.length ?? depts.reduce((a,d)=>Math.max(a,d.n),0);
+
+  // Tab ordering: keep culture-split pairs together, slotted by their COMBINED score,
+  // with the worse half first inside each pair; standalone depts sort by their own score.
+  const PAIR_OF = { JVK1:"JVK", JVK2:"JVK", LC1:"LC", LC2:"LC" };
+  const orderedDepts = (() => {
+    // combined score per group (from summaryDepts, which already computed it)
+    const combinedScore = {};
+    summaryDepts.forEach(s => { if (s.key==="JVK"||s.key==="LC") combinedScore[s.key]=parseFloat(s.avg)||0; });
+    // group members
+    const members = { JVK:[], LC:[] };
+    const standalone = [];
+    depts.forEach(d => { const g=PAIR_OF[d.key]; if (g) members[g].push(d); else standalone.push(d); });
+    // build sortable units: each unit is {sortStatus, sortScore, items:[...]}
+    const units = [];
+    standalone.forEach(d => units.push({ st: STATUS_ORDER[d.status]??3, sc: parseFloat(d.avg)||0, items:[d] }));
+    ["JVK","LC"].forEach(g => {
+      if (!members[g].length) return;
+      // worse half first (lowest own score first)
+      const pair = members[g].slice().sort((a,b)=>(parseFloat(a.avg)||0)-(parseFloat(b.avg)||0));
+      const cs = combinedScore[g] ?? 0;
+      const st = cs>=3.50?"Healthy":cs>=2.50?"Watch":"Concern";
+      units.push({ st: STATUS_ORDER[st]??3, sc: cs, items: pair });
+    });
+    // sort units by status band then combined/own score, then flatten
+    units.sort((a,b)=> a.st!==b.st ? a.st-b.st : a.sc-b.sc);
+    return units.flatMap(u => u.items);
+  })();
 
   const activeDeptData = activeDept ? depts.find(d=>d.key===activeDept) : null;
 
@@ -1835,7 +1929,7 @@ function ReportView({ country, year, surveyData, getApproved, setView }) {
           {/* Score bar chart — all departments */}
           <div style={{ marginBottom:32 }}>
             <div style={{ fontSize:11, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Department Scores</div>
-            {depts.map(d => (
+            {summaryDepts.map(d => (
               <div key={d.key} onClick={()=>setActiveDept(d.key===activeDept?null:d.key)}
                 style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 12px", marginBottom:4,
                   borderRadius:8, cursor:"pointer",
@@ -1869,12 +1963,15 @@ function ReportView({ country, year, surveyData, getApproved, setView }) {
 
         {/* ── DEPT TABS ── */}
         <div className="no-print" style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:24 }}>
-          {depts.map(d=>(
+          {orderedDepts.map(d=>(
             <button key={d.key} onClick={()=>setActiveDept(d.key===activeDept?null:d.key)}
               style={{ padding:"8px 14px", borderRadius:8, fontSize:12, fontWeight:600,
-                cursor:"pointer", border:`1px solid ${activeDept===d.key ? sbd(d.status) : "#F5E4D5"}`,
-                background: activeDept===d.key ? sb(d.status) : "white",
-                color: activeDept===d.key ? sc(d.status) : "#1E1B3A" }}>
+                cursor:"pointer",
+                border:`1px solid ${sbd(d.status)}`,
+                background: activeDept===d.key ? sc(d.status) : sb(d.status),
+                color: activeDept===d.key ? "white" : sc(d.status),
+                display:"flex", alignItems:"center", gap:6 }}>
+              <span style={{ width:8, height:8, borderRadius:"50%", background: activeDept===d.key ? "white" : sc(d.status), flexShrink:0 }} />
               {d.label}
             </button>
           ))}
