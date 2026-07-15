@@ -78,7 +78,10 @@ const DEPARTMENTS = [
   {
     key: "LC1", label: "Language & Culture (1st Culture)", group: "LC",
     cols: [43,44,45,46], openQ: 47,
-    route: (r) => [43,44,45,46].some(c => !isNaN(parseFloat(r[c]))),
+    // 1st culture = culture code 2 (confirmed across PL/HU/RO). Require they answered
+    // at least one L&C question so we don't include people who skipped the section.
+    route: (r, routing) => routing && parseFloat(r[routing.culture]) === 2 &&
+      [43,44,45,46,48,49,50,51,52,53,54,55].some(c => !isNaN(parseFloat(r[c]))),
     questions: [
       { col:43, en:"I can switch to English and still communicate effectively in team contexts.", burden:false, scale:"dist" },
       { col:44, en:"I am aware of cultural differences on my team and intentionally try to understand them.", burden:false, scale:"mean" },
@@ -90,7 +93,9 @@ const DEPARTMENTS = [
   {
     key: "LC2", label: "Language & Culture (2nd Culture)", group: "LC",
     cols: [48,49,50,51,52,53,54,55], openQ: 56,
-    route: (r) => [48,49,50,51,52,53,54,55].some(c => !isNaN(parseFloat(r[c]))),
+    // 2nd culture = culture code 1.
+    route: (r, routing) => routing && parseFloat(r[routing.culture]) === 1 &&
+      [43,44,45,46,48,49,50,51,52,53,54,55].some(c => !isNaN(parseFloat(r[c]))),
     questions: [
       { col:48, en:"I clearly understand the expectations for my progress in language and culture learning.", burden:false, scale:"dist" },
       { col:49, en:"My team helps me with my language and cultural adaptation needs.", burden:false, scale:"dist" },
@@ -187,7 +192,9 @@ const DEPARTMENTS = [
     key: "JVK2", label: "JVK — 2nd Culture Parents", group: "JVK",
     cols: [103,104,105,106,107], openQ: 117,
     // 2nd-culture parents answer cols 103-107 (exclusive to this group).
-    route: (r) => [103,104,105,106,107].some(c => !isNaN(parseFloat(r[c]))),
+    // 2nd culture parents = culture code 1, who answered any JVK question (cols 103-116).
+    route: (r, routing) => routing && parseFloat(r[routing.culture]) === 1 &&
+      [103,104,105,106,107,108,109,110,111,112,113,114,115,116].some(c => !isNaN(parseFloat(r[c]))),
     questions: [
       { col:103, en:"I'm aware of available resources to support my children in cross-cultural life.", burden:false, scale:"dist" },
       { col:104, en:"I clearly understand JV's approach to caring for kids.", burden:false, scale:"dist" },
@@ -202,7 +209,9 @@ const DEPARTMENTS = [
     cols: [108,109,110,111,112,113,114,115,116], openQ: 117,
     // 1st-culture parents are identified by cols 108-111 (exclusive to this group;
     // cols 112-116 are shared with 2nd-culture parents, so we don't route on those).
-    route: (r) => [108,109,110,111].some(c => !isNaN(parseFloat(r[c]))),
+    // 1st culture parents = culture code 2, who answered any JVK question.
+    route: (r, routing) => routing && parseFloat(r[routing.culture]) === 2 &&
+      [103,104,105,106,107,108,109,110,111,112,113,114,115,116].some(c => !isNaN(parseFloat(r[c]))),
     questions: [
       { col:108, en:"I clearly understand JV's approach to caring for kids.", burden:false, scale:"dist" },
       { col:109, en:"I have someone to turn to for help when my kids face challenges.", burden:false, scale:"dist" },
