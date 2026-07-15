@@ -302,9 +302,12 @@ function getStatus(vals, q) {
 }
 
 function deptStatus(questions) {
+  // A department is Concern if its average is below 2.50, OR if it has 4+ individual
+  // Concern-level questions (matches the director's report: 3 concern Qs stays Watch,
+  // 4+ tips the whole department to Concern). Otherwise status follows the average.
   const statuses = questions.map(q => q.status).filter(Boolean);
   const concerns = statuses.filter(s => s === "Concern").length;
-  if (concerns >= 3) return "Concern";
+  if (concerns >= 4) return "Concern";
   const scores = questions.map(q=>q.score).filter(Boolean);
   const avg = scores.length ? scores.reduce((a,b)=>a+b,0)/scores.length : null;
   if (!avg) return null;
@@ -1102,6 +1105,7 @@ export default function App() {
       country={country} year={year}
       surveyData={surveyData} getApproved={getApproved}
       setView={setView}
+      sbOverrides={sbOverrides} sbMaster={sbMaster}
     />
   );
 
@@ -1980,7 +1984,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
 }
 
 // ─── REPORT VIEW ──────────────────────────────────────────────────────────────
-function ReportView({ country, year, surveyData, getApproved, setView }) {
+function ReportView({ country, year, surveyData, getApproved, setView, sbOverrides, sbMaster }) {
   const [activeDept, setActiveDept] = useState(null);
   // Same ordering as the review sidebar: Concern → Watch → Healthy, worst score first.
   const STATUS_ORDER = { Concern: 0, Watch: 1, Healthy: 2 };
@@ -2059,6 +2063,24 @@ function ReportView({ country, year, surveyData, getApproved, setView }) {
 
   const activeDeptData = activeDept ? depts.find(d=>d.key===activeDept) : null;
 
+  // Resolve a summary row key (which may be a combined "JVK"/"LC") to a real detail
+  // department key — for pairs, open the worse half (lowest score). Then scroll to it.
+  const openDept = (summaryKey) => {
+    let target = summaryKey;
+    if (summaryKey === "JVK" || summaryKey === "LC") {
+      const halves = depts.filter(d => (summaryKey==="JVK" ? (d.key==="JVK1"||d.key==="JVK2")
+                                                           : (d.key==="LC1"||d.key==="LC2")));
+      const worse = halves.slice().sort((a,b)=>(parseFloat(a.avg)||0)-(parseFloat(b.avg)||0))[0];
+      target = worse ? worse.key : summaryKey;
+    }
+    setActiveDept(target);
+    // scroll to the detail section after it renders
+    setTimeout(() => {
+      const el = document.getElementById("dept-detail-section");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
+  };
+
   return (
     <div style={{ minHeight:"100vh", background:"#F8F7F4", fontFamily:"'Inter',system-ui,sans-serif" }}>
       {/* Toolbar */}
@@ -2092,7 +2114,7 @@ function ReportView({ country, year, surveyData, getApproved, setView }) {
           <div style={{ marginBottom:32 }}>
             <div style={{ fontSize:11, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Department Scores</div>
             {summaryDepts.map(d => (
-              <div key={d.key} onClick={()=>setActiveDept(d.key===activeDept?null:d.key)}
+              <div key={d.key} onClick={()=>openDept(d.key)}
                 style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 12px", marginBottom:4,
                   borderRadius:8, cursor:"pointer",
                   background: activeDept===d.key ? sb(d.status) : "transparent",
@@ -2140,9 +2162,10 @@ function ReportView({ country, year, surveyData, getApproved, setView }) {
         </div>
 
         {/* ── DEPT DETAIL PAGES ── */}
+        <div id="dept-detail-section" />
         {activeDept ? (
           // Single dept selected — show just that one
-          <DeptReportPage dept={activeDeptData} getApproved={getApproved} />
+          <DeptReportPage dept={activeDeptData} getApproved={getApproved} country={country} year={year} sbOverrides={sbOverrides} sbMaster={sbMaster} />
         ) : (
           // No tab selected — show all for print
           <div>
@@ -2150,7 +2173,7 @@ function ReportView({ country, year, surveyData, getApproved, setView }) {
               Select a department above to focus, or download PDF to get the full report.
             </div>
             <div className="print-only">
-              {depts.map(dept => <DeptReportPage key={dept.key} dept={dept} getApproved={getApproved} />)}
+              {depts.map(dept => <DeptReportPage key={dept.key} dept={dept} getApproved={getApproved} country={country} year={year} sbOverrides={sbOverrides} sbMaster={sbMaster} />)}
             </div>
           </div>
         )}
@@ -2169,7 +2192,7 @@ function ReportView({ country, year, surveyData, getApproved, setView }) {
   );
 }
 
-function DeptReportPage({ dept, getApproved }) {
+function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaster }) {
   if (!dept) return null;
   const strengths    = getApproved(dept.key, "strengths");
   const growth       = getApproved(dept.key, "growth");
@@ -2252,6 +2275,22 @@ function DeptReportPage({ dept, getApproved }) {
               <tr key={i} style={{ borderBottom:"1px solid #FFF4EC" }}>
                 <td style={{ padding:"8px 10px", color:"#1E1B3A", lineHeight:1.5 }}>
                   {q.en}{q.burden ? <span style={{ color:"#9C8F82", fontSize:10 }}> [Burden]</span> : ""}
+                  {(() => {
+                    const sbMatch = findSurveyBasics(dept.key, q.en);
+                    if (!sbMatch) return null;
+                    const level = q.status === 'Healthy' ? 'high' : q.status === 'Watch' ? 'mid' : 'low';
+                    const sbKey = SB_KEY[dept.key] || String(dept.key||"").toLowerCase();
+                    const ovKey = `${country}:${year}:${dept.key}:${normQ(q.en)}`;
+                    const masterKey = `${sbKey}:${normQ(q.en)}:${level}`;
+                    const text = (sbOverrides && sbOverrides[ovKey]) || (sbMaster && sbMaster[masterKey]) || sbMatch[level];
+                    if (!text) return null;
+                    return (
+                      <div style={{ fontSize:11, color:"#7A6E62", fontStyle:"italic",
+                        lineHeight:1.4, marginTop:4 }}>
+                        {text}
+                      </div>
+                    );
+                  })()}
                 </td>
                 <td style={{ textAlign:"center", padding:"8px 10px", fontWeight:700, color:sc(q.status) }}>{q.score?.toFixed(2)}</td>
                 <td style={{ textAlign:"center", padding:"8px 10px" }}>
