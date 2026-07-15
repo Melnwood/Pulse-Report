@@ -295,6 +295,182 @@ async function parseSurveyFile(file) {
   return { depts: results, merged, raw: dataRows };
 }
 
+
+// ─── PARSE COMPLETED DIRECTOR REVIEW (Excel) ──────────────────────────────────
+// Reads a completed director-review workbook (one sheet per department) and maps
+// each sheet's edits/includes/rewrites into the app's `selections` shape:
+//   { deptKey: { strengths:[{text,include,rewrite,...}], growth:[...], leadershipQs:[...], quotes:[...] } }
+//
+// The director review Excel uses these section markers in column A and this layout:
+//   SECTION 1 — QUESTION SCORES : per-question interpretation (E) + rewrite (G) + score note (H)
+//   SECTION 2 — STRENGTHS       : statement (B), include Yes (F), rewrite (G)
+//   SECTION 3 — GROWTH AREAS     : statement (B), include Yes (F), rewrite (G)
+//   SECTION 4 — LEADERSHIP Qs    : question (B), include Yes (F)
+//   SECTION 5 — STAFF VOICE      : quote (B), tag (D), include Yes (F)
+//
+// Sheet names look like "Poland Human Resources" — we match by the department label.
+
+// Map an Excel sheet name (e.g. "Poland Human Resources") to an app dept key.
+function matchDeptKeyFromSheet(sheetName, departments) {
+  const clean = sheetName.replace(/^\s*\w+\s+/, "").trim().toLowerCase(); // drop leading country word
+  // Grouped departments come as one combined tab in the director Excel.
+  if (/jvk|josiah venture kid/.test(clean)) return { group: "JVK" };
+  if (/language\s*&?\s*culture|language and culture/.test(clean)) return { group: "LC" };
+  // Try exact label match first, then contains
+  for (const d of departments) {
+    const lbl = d.label.toLowerCase();
+    if (clean === lbl) return { key: d.key };
+  }
+  for (const d of departments) {
+    const lbl = d.label.toLowerCase();
+    const lblCore = lbl.split("(")[0].split("—")[0].trim();
+    const cleanCore = clean.split("(")[0].split("—")[0].trim();
+    if (cleanCore && (lblCore.startsWith(cleanCore) || cleanCore.startsWith(lblCore))) return { key: d.key };
+  }
+  return null;
+}
+
+const isPlaceholder = (t) => {
+  if (!t) return true;
+  const s = String(t).trim();
+  return !s ||
+    s.includes("Type full replacement") ||
+    s.includes("Note here if not") ||
+    s.includes("Add your own") ||
+    s.includes("do not change") ||
+    s.includes("must not be changed") ||
+    s.includes("Quote text must not");
+};
+
+const cell = (row, i) => {
+  const v = row?.[i];
+  return v === null || v === undefined ? "" : String(v).trim();
+};
+const isYes = (v) => String(v || "").trim().toLowerCase() === "yes";
+
+// For grouped departments (JVK, L&C) the director's single Excel tab mixes both
+// cultures; the culture is embedded in each statement's wording. Classify by cue.
+// Returns "1st", "2nd", or "both".
+function classifyCulture(text) {
+  const t = String(text || "").toLowerCase();
+  const has1 = /\b(first culture|1st culture)\b/.test(t);
+  const has2 = /\b(second culture|2nd culture)\b/.test(t);
+  const allP = /\ball (families|parents|staff|the)\b/.test(t);
+  if (allP) return "both";
+  if (has1 && has2) return "both";
+  if (has1) return "1st";
+  if (has2) return "2nd";
+  return "both"; // no marker → applies to both cultures
+}
+
+// Which app sub-keys a grouped sheet fans out to.
+const GROUP_SPLIT = {
+  JVK: { first: "JVK1", second: "JVK2" },
+  LC:  { first: "LC1",  second: "LC2"  },
+};
+
+// Route a list of items to {firstKey:[], secondKey:[]} by culture cue.
+// "both" items are copied into each side.
+function splitByCulture(items, firstKey, secondKey) {
+  const out = { [firstKey]: [], [secondKey]: [] };
+  for (const it of items) {
+    const c = classifyCulture(it.rewrite?.trim() || it.text);
+    if (c === "1st") out[firstKey].push(it);
+    else if (c === "2nd") out[secondKey].push(it);
+    else { out[firstKey].push({ ...it }); out[secondKey].push({ ...it }); }
+  }
+  return out;
+}
+
+async function parseDirectorReview(file, departments) {
+  const { read, utils } = await import("xlsx");
+  const buf = await file.arrayBuffer();
+  const wb  = read(buf);
+
+  const result = {};       // deptKey -> selections object
+  const report = [];       // human-readable summary of what was imported
+
+  for (const sheetName of wb.SheetNames) {
+    if (/summary/i.test(sheetName)) continue;
+    const match = matchDeptKeyFromSheet(sheetName, departments);
+    if (!match) { report.push(`⚠ Skipped sheet "${sheetName}" — no matching department`); continue; }
+
+    const rows = utils.sheet_to_json(wb.Sheets[sheetName], { header:1, defval:null });
+
+    // Find section boundaries by scanning column A
+    let sec = null;
+    const strengths = [], growth = [], leadershipQs = [], quotes = [];
+    let edits = 0, includes = 0;
+
+    for (let r = 0; r < rows.length; r++) {
+      const a = cell(rows[r], 0);
+      if (/SECTION 1/i.test(a)) { sec = "questions"; continue; }
+      if (/SECTION 2/i.test(a)) { sec = "strengths"; continue; }
+      if (/SECTION 3/i.test(a)) { sec = "growth"; continue; }
+      if (/SECTION 4/i.test(a)) { sec = "leadershipQs"; continue; }
+      if (/SECTION 5/i.test(a)) { sec = "quotes"; continue; }
+      if (/^Section$/i.test(a) || !a) continue; // header row or blank
+
+      const B = cell(rows[r], 1), D = cell(rows[r], 3),
+            E = cell(rows[r], 4), F = cell(rows[r], 5), G = cell(rows[r], 6);
+
+      if (sec === "strengths" && /^Strength/i.test(a)) {
+        const rewrite = !isPlaceholder(G) ? G : "";
+        if (rewrite) edits++;
+        if (isYes(F)) includes++;
+        strengths.push({ text: B, include: isYes(F), rewrite, isRefined:false });
+      }
+      else if (sec === "growth" && /^Growth/i.test(a)) {
+        const rewrite = !isPlaceholder(G) ? G : "";
+        if (rewrite) edits++;
+        if (isYes(F)) includes++;
+        growth.push({ text: B, include: isYes(F), rewrite, isRefined:false });
+      }
+      else if (sec === "leadershipQs" && /^Leader/i.test(a)) {
+        if (isPlaceholder(B)) continue;
+        if (isYes(F)) includes++;
+        leadershipQs.push({ text: B, include: isYes(F), rewrite:"", isRefined:false });
+      }
+      else if (sec === "leadershipQs" && /^Write-in/i.test(a)) {
+        if (isPlaceholder(B)) continue;               // skip empty write-in prompts
+        if (isYes(F)) includes++;
+        leadershipQs.push({ text: B, include: isYes(F), rewrite:"", isRefined:false });
+      }
+      else if (sec === "quotes" && /^Quote/i.test(a)) {
+        // Quote text may carry an inline "Translation:" line — split it so the app shows both.
+        let original = B, translation = null, isOriginalLang = false;
+        const tIdx = B.search(/\n+\s*Translation:/i);
+        if (tIdx !== -1) {
+          original = B.slice(0, tIdx).trim().replace(/^"|"$/g, "");
+          translation = B.slice(tIdx).replace(/^\s*\n+\s*Translation:\s*/i, "").trim().replace(/^"|"$/g, "");
+          isOriginalLang = true;
+        } else {
+          original = B.replace(/^"|"$/g, "");
+        }
+        if (isYes(F)) includes++;
+        quotes.push({ text: original, translation, isOriginalLang, include: isYes(F), rewrite:"", isRefined:false });
+      }
+    }
+
+    if (match.group) {
+      // Grouped dept (JVK / L&C): fan out to 1st / 2nd culture sub-keys by cue.
+      const { first, second } = GROUP_SPLIT[match.group];
+      const s = splitByCulture(strengths, first, second);
+      const g = splitByCulture(growth, first, second);
+      const l = splitByCulture(leadershipQs, first, second);
+      const q = splitByCulture(quotes, first, second);
+      result[first]  = { strengths: s[first],  growth: g[first],  leadershipQs: l[first],  quotes: q[first]  };
+      result[second] = { strengths: s[second], growth: g[second], leadershipQs: l[second], quotes: q[second] };
+      report.push(`✓ ${sheetName} → split ${first} / ${second}: ${strengths.length} strengths, ${growth.length} growth, ${leadershipQs.length} leadership Qs, ${quotes.length} quotes routed by culture · ${includes} included, ${edits} rewritten`);
+    } else {
+      result[match.key] = { strengths, growth, leadershipQs, quotes };
+      report.push(`✓ ${sheetName} → ${match.key}: ${strengths.length} strengths, ${growth.length} growth, ${leadershipQs.length} leadership Qs, ${quotes.length} quotes · ${includes} included, ${edits} rewritten`);
+    }
+  }
+
+  return { selections: result, report };
+}
+
 // ─── COLOR / STATUS UTILS ─────────────────────────────────────────────────────
 const STATUS_COLOR = { Concern:"#C0392B", Watch:"#D68910", Healthy:"#1E8449", null:"#9391B0" };
 const STATUS_BG    = { Concern:"#FDF2F2", Watch:"#FFFBEB", Healthy:"#F0FDF4", null:"#FAFAF8" };
@@ -307,11 +483,30 @@ const sbd= s => STATUS_BORDER[s]|| STATUS_BORDER[null];
 // Strengths and growth come from Survey Basics (approved source of truth).
 // Leadership questions and quote selection use AI since they require reading open responses.
 async function generateDeptContent(dept) {
-  const basics = SURVEY_BASICS[dept.key] || {};
+  const deptSBList = SURVEY_BASICS[dept.key] || [];
 
-  // Strengths and growth from Survey Basics file — fixed, consistent, approved
-  const strengths = basics.strengths || [];
-  const growth    = basics.growth    || [];
+  // Helper: pick the right Survey Basics interpretation level for a question
+  const getSBText = (qText, status) => {
+    const m = deptSBList.find(sb =>
+      qText.toLowerCase().slice(0,50).includes(sb.question.toLowerCase().slice(0,30)) ||
+      sb.question.toLowerCase().slice(0,50).includes(qText.toLowerCase().slice(0,30))
+    );
+    if (!m) return '';
+    return status === 'Healthy' ? m.high : status === 'Watch' ? m.mid : m.low;
+  };
+
+  // Build strengths from Healthy questions and growth from Concern/Watch questions
+  // using the correct level of Survey Basics interpretation
+  const strengths = dept.questions
+    .filter(q => q.status === 'Healthy')
+    .map(q => getSBText(q.en, 'Healthy'))
+    .filter(Boolean);
+  const growth = dept.questions
+    .filter(q => q.status === 'Concern' || q.status === 'Watch')
+    .sort((a,b) => a.score - b.score)
+    .slice(0, 4)
+    .map(q => getSBText(q.en, q.status))
+    .filter(Boolean);
 
   // Leadership questions and quote selection via AI
   let leadershipQs = [];
@@ -377,6 +572,14 @@ Select 4-6 of the most representative responses. For non-English responses, prov
   }
 
   return { strengths, growth, leadershipQs, quotes };
+}
+
+// Detect if text is likely non-English (simple heuristic — works for Polish, Romanian, Hungarian)
+function looksNonEnglish(text) {
+  if (!text || text.length < 5) return false;
+  const letters = text.replace(/[^a-zA-ZÀ-ɏ]/g, '');
+  const ascii   = text.replace(/[^a-zA-Z]/g, '');
+  return letters.length > 4 && (ascii.length / letters.length) < 0.65;
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
@@ -564,7 +767,7 @@ export default function App() {
       toggleItem={toggleItem} setRewrite={setRewrite}
       saveSelections={saveSelections} saved={saved}
       saveRefinement={saveRefinement} refinements={refinements}
-      setView={setView}
+      setView={setView} setSelections={setSelections}
     />
   );
 
@@ -633,6 +836,15 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
           ) : (
             <div
               onClick={() => country && year && fileRef.current?.click()}
+              onDragOver={e => { e.preventDefault(); if(country&&year) e.currentTarget.style.borderColor="#7C6FE0"; }}
+              onDragLeave={e => { e.preventDefault(); e.currentTarget.style.borderColor="#E2DFF5"; }}
+              onDrop={e => {
+                e.preventDefault();
+                e.currentTarget.style.borderColor="#E2DFF5";
+                if (!(country && year)) return;
+                const file = e.dataTransfer.files?.[0];
+                if (file) handleFile(file);
+              }}
               style={{
                 border:"2px dashed #E2DFF5", borderRadius:12, padding:48,
                 textAlign:"center", cursor: country&&year ? "pointer":"not-allowed",
@@ -643,8 +855,8 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
               onMouseLeave={e => { e.currentTarget.style.borderColor="#E2DFF5"; }}
             >
               <div style={{ fontSize:32, marginBottom:12 }}>📊</div>
-              <div style={{ color:"#1E1B3A", fontWeight:600, marginBottom:4 }}>Drop SurveyPro export here</div>
-              <div style={{ color:"#9391B0", fontSize:13 }}>or click to browse — .xlsx or .csv</div>
+              <div style={{ color:"#1E1B3A", fontWeight:600, marginBottom:4 }}>Drop SurveyPro export here, or click to browse</div>
+              <div style={{ color:"#9391B0", fontSize:13 }}>.xlsx or .csv</div>
               <input ref={fileRef} type="file" accept=".xlsx,.csv" style={{ display:"none" }}
                 onChange={e => e.target.files[0] && handleFile(e.target.files[0])} />
             </div>
@@ -706,9 +918,12 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 }
 
 // ─── REVIEW VIEW ──────────────────────────────────────────────────────────────
-function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView }) {
+function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView, setSelections }) {
   const [activeDept, setActiveDept] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [importMsg, setImportMsg] = useState(null);
+  const importInputRef = useRef(null);
   const depts = surveyData ? Object.values(surveyData.depts).filter(d=>d.n>0) : [];
 
   useEffect(() => { if (depts.length && !activeDept) setActiveDept(depts[0].key); }, [depts.length]);
@@ -728,6 +943,68 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
           border:"1px solid #E2DFF5", color:"#7C6FE0", fontWeight:700 }}>
           ? How scoring works
         </button>
+        <button
+          disabled={regenerating}
+          onClick={async () => {
+            if (!surveyData) return;
+            setRegenerating(true);
+            try {
+              let currentRefinements = {};
+              try { const r = localStorage.getItem("pulse:refinements"); currentRefinements = r ? JSON.parse(r) : {}; } catch {}
+              const depts = Object.values(surveyData.depts).filter(d => d.n > 0);
+              const sels = {};
+              for (let i = 0; i < depts.length; i++) {
+                const d = depts[i];
+                const gen = await generateDeptContent(d, country);
+                const applyRef = (section, items) => items.map((t, idx) => {
+                  const key = `${d.key}:${section}:${idx}`;
+                  const refined = currentRefinements[key];
+                  const textVal = (section === 'quotes' && typeof t === 'object') ? t.original : t;
+                  return { text: textVal,
+                    translation: (section === 'quotes' && typeof t === 'object') ? t.translation : null,
+                    isOriginalLang: (section === 'quotes' && typeof t === 'object') ? t.isOriginalLang : false,
+                    include: true, rewrite: refined ? refined.text : "", isRefined: !!refined };
+                });
+                sels[d.key] = {
+                  strengths: applyRef("strengths", gen.strengths || []),
+                  growth: applyRef("growth", gen.growth || []),
+                  leadershipQs: applyRef("leadershipQs", gen.leadershipQs || []),
+                  quotes: applyRef("quotes", gen.quotes || []),
+                };
+              }
+              setSelections(sels);
+              try { localStorage.setItem(`pulse:sel:${country}:${year}`, JSON.stringify(sels)); } catch {}
+            } catch(e) { console.error(e); }
+            finally { setRegenerating(false); }
+          }}
+          style={{ ...navBtn, background:"white", border:"1px solid #E2DFF5",
+            color: regenerating ? "#9391B0" : "#1E1B3A", cursor: regenerating ? "wait" : "pointer" }}>
+          {regenerating ? "Regenerating…" : "↺ Regenerate content"}
+        </button>
+        <input ref={importInputRef} type="file" accept=".xlsx" style={{ display:"none" }}
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            setImportMsg({ status:"working", lines:["Reading director review…"] });
+            try {
+              const { selections: imported, report } = await parseDirectorReview(file, DEPARTMENTS);
+              if (!Object.keys(imported).length) {
+                setImportMsg({ status:"error", lines:["No matching department sheets found in that file."] });
+              } else {
+                // Merge into existing selections so untouched depts are preserved
+                setSelections(prev => ({ ...prev, ...imported }));
+                try { localStorage.setItem(`pulse:sel:${country}:${year}`, JSON.stringify({ ...(selections||{}), ...imported })); } catch {}
+                setImportMsg({ status:"done", lines:["Imported director review:", ...report] });
+              }
+            } catch (err) {
+              setImportMsg({ status:"error", lines:["Import failed: " + err.message] });
+            }
+            e.target.value = ""; // allow re-import of same file
+          }} />
+        <button onClick={() => importInputRef.current?.click()}
+          style={{ ...navBtn, background:"white", border:"1px solid #E2DFF5", color:"#1E1B3A" }}>
+          ⬆ Import director review (Excel)
+        </button>
         <button onClick={saveSelections} style={{ ...navBtn, background: saved?"#1E8449":"#7C6FE0" }}>
           {saved ? "✓ Saved" : "Save Progress"}
         </button>
@@ -737,6 +1014,28 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
       </div>
 
       {showHelp && <ScoringHelpPanel onClose={()=>setShowHelp(false)} />}
+
+      {importMsg && (
+        <div style={{ margin:"12px 20px", padding:"12px 16px", borderRadius:8,
+          background: importMsg.status==="error" ? "#FDF2F2" : importMsg.status==="done" ? "#F0FDF4" : "#F5F3FF",
+          border: `1px solid ${importMsg.status==="error" ? "#FCA5A5" : importMsg.status==="done" ? "#86EFAC" : "#E2DFF5"}` }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+            <div style={{ fontSize:12, lineHeight:1.6, color:"#1E1B3A" }}>
+              {importMsg.lines.map((l,i) => (
+                <div key={i} style={{ fontWeight: i===0 ? 700 : 400 }}>{l}</div>
+              ))}
+            </div>
+            <button onClick={()=>setImportMsg(null)} style={{ background:"none", border:"none",
+              cursor:"pointer", color:"#9391B0", fontSize:16, lineHeight:1 }}>×</button>
+          </div>
+          {importMsg.status==="done" && (
+            <div style={{ fontSize:11, color:"#166534", marginTop:8 }}>
+              Review the imported edits in each department below, then generate the report when ready.
+            </div>
+          )}
+        </div>
+      )}
+
       <div style={{ display:"flex", flex:1, overflow:"hidden" }}>
         {/* Sidebar */}
         <div style={{ width:220, background:"#FFFFFF", borderRight:"1px solid #E2DFF5", overflowY:"auto", flexShrink:0 }}>
@@ -1009,11 +1308,16 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                       {q.en}{q.burden ? <span style={{ color:"#B45309", fontSize:10, marginLeft:4 }}>[Burden]</span> : ""}
                     </div>
                     {(() => {
-                      const basics = SURVEY_BASICS[dept.key] || {};
-                      const interps = basics.q_interpretations || {};
-                      const match = Object.entries(interps).find(([k]) =>
-                        q.en.toLowerCase().startsWith(k.toLowerCase().slice(0,40)));
-                      if (!match) return null;
+                      const deptSB = (SURVEY_BASICS[dept.key] || []);
+                      const sbMatch = deptSB.find(sb =>
+                        q.en.toLowerCase().slice(0,50).includes(sb.question.toLowerCase().slice(0,30)) ||
+                        sb.question.toLowerCase().slice(0,50).includes(q.en.toLowerCase().slice(0,30))
+                      );
+                      if (!sbMatch) return null;
+                      // Pick interpretation based on actual question status
+                      const sbText = q.status === 'Healthy' ? sbMatch.high
+                                   : q.status === 'Watch'   ? sbMatch.mid
+                                   : sbMatch.low;
                       const editId = `sbedit-${dept.key}-${i}`;
                       return (
                         <div>
@@ -1023,7 +1327,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                               textTransform:"uppercase", letterSpacing:.5,
                               whiteSpace:"nowrap", paddingTop:1, flexShrink:0 }}>Survey Basics</span>
                             <span style={{ fontSize:11, color:"#6B6894", fontStyle:"italic",
-                              lineHeight:1.4, flex:1 }}>{match[1].interpretation}</span>
+                              lineHeight:1.4, flex:1 }}>{sbText}</span>
                             <button
                               onClick={() => {
                                 const el = document.getElementById(editId);
@@ -1117,18 +1421,23 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                     style={{ flexShrink:0, cursor:"pointer", accentColor:"#7C6FE0",
                       width:15, height:15 }} />
                   <div style={{ flex:1 }}>
-                    <div style={{ fontSize:12, lineHeight:1.5,
-                      color: item.include ? "#1E1B3A" : "#9391B0",
-                      textDecoration: item.include ? "none" : "line-through",
-                      fontStyle: item.isOriginalLang ? "italic" : "normal" }}>
-                      {item.rewrite.trim() || item.text}
-                      {item.isRefined && !item.rewrite && (
-                        <span style={{ marginLeft:8, fontSize:9, color:"#8B85E8",
-                          fontWeight:600, background:"#EDE9FF", borderRadius:4,
-                          padding:"1px 5px" }}>✦ refined</span>
-                      )}
-                    </div>
-                    {item.isOriginalLang && (
+                    {(() => {
+                      const displayText = item.rewrite.trim() || item.text;
+                      const nonEng = item.isOriginalLang || looksNonEnglish(displayText);
+                      return (
+                        <>
+                          <div style={{ fontSize:12, lineHeight:1.5,
+                            color: item.include ? "#1E1B3A" : "#9391B0",
+                            textDecoration: item.include ? "none" : "line-through",
+                            fontStyle: nonEng ? "italic" : "normal" }}>
+                            {displayText}
+                            {item.isRefined && !item.rewrite && (
+                              <span style={{ marginLeft:8, fontSize:9, color:"#8B85E8",
+                                fontWeight:600, background:"#EDE9FF", borderRadius:4,
+                                padding:"1px 5px" }}>✦ refined</span>
+                            )}
+                          </div>
+                          {nonEng && (
                       <div style={{ marginTop:4, fontSize:11, lineHeight:1.4,
                         borderLeft:"2px solid #D6D2EF", paddingLeft:8 }}>
                         {item.translation ? (
@@ -1143,8 +1452,11 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                             Original language response — translation not yet available
                           </span>
                         )}
-                      </div>
-                    )}
+                          </div>
+                        )}
+                        </>
+                      );
+                    })()}
                   </div>
                   {item.include && (
                     <button
@@ -1438,7 +1750,7 @@ function DeptReportPage({ dept, getApproved }) {
               const isObj = typeof q === 'object' && q !== null;
               const orig = isObj ? (q.rewrite?.trim() || q.text || q.original) : q;
               const trans = isObj ? q.translation : null;
-              const isOrig = isObj ? q.isOriginalLang : false;
+              const isOrig = (isObj ? q.isOriginalLang : false) || looksNonEnglish(orig);
               return (
                 <div key={i} style={{ background:"#F8F7F4", borderLeft:"3px solid #D6D2EF",
                   borderRadius:"0 8px 8px 0", padding:"12px 16px" }}>
