@@ -10,6 +10,43 @@ const SB_KEY = {
 };
 const getSurveyBasics = (deptKey) => SURVEY_BASICS[SB_KEY[deptKey] || String(deptKey||"").toLowerCase()] || [];
 
+// Normalize question text for matching: unify apostrophes/quotes, collapse spaces,
+// strip punctuation. Makes Survey Basics matching robust to curly-vs-straight quotes
+// and tiny wording differences that were hiding the Survey Basics + Edit button.
+const normQ = (s) => String(s || "")
+  .toLowerCase()
+  .replace(/[\u2018\u2019\u201B\u2032]/g, "'")   // curly/uncommon apostrophes -> '
+  .replace(/[\u201C\u201D]/g, '"')
+  .replace(/[^a-z0-9 ]/g, " ")                      // drop punctuation
+  .replace(/\s+/g, " ")
+  .trim();
+
+// Find the Survey Basics entry for a question, tolerant of small text differences.
+const findSurveyBasics = (deptKey, qText) => {
+  const list = getSurveyBasics(deptKey);
+  const nq = normQ(qText);
+  if (!nq) return null;
+  // 1. exact normalized match — check the question AND any aliases (app-worded variants)
+  let m = list.find(sb => normQ(sb.question) === nq ||
+    (sb.aliases || []).some(a => normQ(a) === nq));
+  if (m) return m;
+  // 2. strong prefix overlap (first ~35 normalized chars)
+  const head = nq.slice(0, 35);
+  m = list.find(sb => { const sbn = normQ(sb.question); return sbn.startsWith(head) || head.startsWith(sbn.slice(0,35)); });
+  if (m) return m;
+  // 3. token-overlap fallback: >=70% of the shorter question's words shared
+  const words = new Set(nq.split(" ").filter(w => w.length > 2));
+  let best = null, bestScore = 0;
+  for (const sb of list) {
+    const sw = new Set(normQ(sb.question).split(" ").filter(w => w.length > 2));
+    const shared = [...words].filter(w => sw.has(w)).length;
+    const denom = Math.min(words.size, sw.size) || 1;
+    const score = shared / denom;
+    if (score > bestScore) { bestScore = score; best = sb; }
+  }
+  return bestScore >= 0.7 ? best : null;
+};
+
 // ─── AIRTABLE CONFIG ─────────────────────────────────────────────────────────
 const AT_BASE = "appPulseReportBase"; // replace with real base ID
 
@@ -446,6 +483,7 @@ async function parseDirectorReview(file, departments) {
 
   const result = {};       // deptKey -> selections object
   const report = [];       // human-readable summary of what was imported
+  const allInterpretations = []; // { deptKeys:[...], question, text } — Section 1 rewrites
 
   for (const sheetName of wb.SheetNames) {
     if (/summary/i.test(sheetName)) continue;
@@ -457,6 +495,7 @@ async function parseDirectorReview(file, departments) {
     // Find section boundaries by scanning column A
     let sec = null;
     const strengths = [], growth = [], leadershipQs = [], quotes = [];
+    const interpretations = [];   // Section 1: director's reworded question interpretations
     let edits = 0, includes = 0;
 
     for (let r = 0; r < rows.length; r++) {
@@ -471,7 +510,15 @@ async function parseDirectorReview(file, departments) {
       const B = cell(rows[r], 1), D = cell(rows[r], 3),
             E = cell(rows[r], 4), F = cell(rows[r], 5), G = cell(rows[r], 6);
 
-      if (sec === "strengths" && /^Strength/i.test(a)) {
+      if (sec === "questions" && (/^Q$/i.test(a) || /^Burden/i.test(a))) {
+        // Section 1 row: B = question text, G = director's interpretation rewrite.
+        // Only capture when they actually typed a replacement (not the placeholder).
+        if (B && !isPlaceholder(G)) {
+          interpretations.push({ question: B, text: G });
+          edits++;
+        }
+      }
+      else if (sec === "strengths" && /^Strength/i.test(a)) {
         const rewrite = !isPlaceholder(G) ? G : "";
         if (rewrite) edits++;
         if (isYes(F)) includes++;
@@ -518,14 +565,16 @@ async function parseDirectorReview(file, departments) {
       const q = splitByCulture(quotes, first, second);
       result[first]  = { strengths: s[first],  growth: g[first],  leadershipQs: l[first],  quotes: q[first]  };
       result[second] = { strengths: s[second], growth: g[second], leadershipQs: l[second], quotes: q[second] };
+      interpretations.forEach(it => allInterpretations.push({ deptKeys:[first, second], question: it.question, text: it.text }));
       report.push(`✓ ${sheetName} → split ${first} / ${second}: ${strengths.length} strengths, ${growth.length} growth, ${leadershipQs.length} leadership Qs, ${quotes.length} quotes routed by culture · ${includes} included, ${edits} rewritten`);
     } else {
       result[match.key] = { strengths, growth, leadershipQs, quotes };
+      interpretations.forEach(it => allInterpretations.push({ deptKeys:[match.key], question: it.question, text: it.text }));
       report.push(`✓ ${sheetName} → ${match.key}: ${strengths.length} strengths, ${growth.length} growth, ${leadershipQs.length} leadership Qs, ${quotes.length} quotes · ${includes} included, ${edits} rewritten`);
     }
   }
 
-  return { selections: result, report };
+  return { selections: result, report, interpretations: allInterpretations };
 }
 
 // ─── COLOR / STATUS UTILS ─────────────────────────────────────────────────────
@@ -663,10 +712,7 @@ async function generateDeptContent(dept) {
 
   // Helper: pick the right Survey Basics interpretation level for a question
   const getSBText = (qText, status) => {
-    const m = deptSBList.find(sb =>
-      qText.toLowerCase().slice(0,50).includes(sb.question.toLowerCase().slice(0,30)) ||
-      sb.question.toLowerCase().slice(0,50).includes(qText.toLowerCase().slice(0,30))
-    );
+    const m = findSurveyBasics(dept.key, qText);
     if (!m) return '';
     return status === 'Healthy' ? m.high : status === 'Watch' ? m.mid : m.low;
   };
@@ -844,6 +890,38 @@ export default function App() {
     try { localStorage.setItem("pulse:refinements", JSON.stringify(updated)); } catch(e) {}
   };
 
+  // Survey Basics interpretation overrides — a director's reworded interpretation for
+  // a specific question. Keyed country:year:deptKey:normalizedQuestion. Persisted.
+  const [sbOverrides, setSbOverrides] = useState(() => {
+    try { const r = localStorage.getItem("pulse:sbOverrides"); return r ? JSON.parse(r) : {}; }
+    catch { return {}; }
+  });
+  const saveSbOverride = (deptKey, qText, text) => {
+    const key = `${country}:${year}:${deptKey}:${normQ(qText)}`;
+    const updated = { ...sbOverrides };
+    if (text && text.trim()) updated[key] = text.trim();
+    else delete updated[key];   // empty clears the override
+    setSbOverrides(updated);
+    try { localStorage.setItem("pulse:sbOverrides", JSON.stringify(updated)); } catch(e) {}
+  };
+
+  // MASTER Survey Basics overrides — promoted interpretations that become the default
+  // for ALL countries/years. Keyed sbKey:normalizedQuestion:level (e.g. "hr:...:low").
+  // (localStorage for now; syncs to Airtable once the master table is wired.)
+  const [sbMaster, setSbMaster] = useState(() => {
+    try { const r = localStorage.getItem("pulse:sbMaster"); return r ? JSON.parse(r) : {}; }
+    catch { return {}; }
+  });
+  // Promote a rewrite into the master for a specific question + level.
+  const promoteSbToMaster = (sbKey, qText, level, text) => {
+    const key = `${sbKey}:${normQ(qText)}:${level}`;
+    const updated = { ...sbMaster };
+    if (text && text.trim()) updated[key] = text.trim();
+    else delete updated[key];
+    setSbMaster(updated);
+    try { localStorage.setItem("pulse:sbMaster", JSON.stringify(updated)); } catch(e) {}
+  };
+
   // Reload selections when country+year change (e.g. opening a previous run)
   useEffect(() => {
     if (!country || !year) return;
@@ -990,6 +1068,8 @@ export default function App() {
       saveRefinement={saveRefinement} refinements={refinements}
       setView={setView} setSelections={setSelections}
       isAdmin={isAdmin} toggleAdmin={toggleAdmin}
+      sbOverrides={sbOverrides} saveSbOverride={saveSbOverride} setSbOverrides={setSbOverrides}
+      sbMaster={sbMaster} promoteSbToMaster={promoteSbToMaster}
     />
   );
 
@@ -1151,7 +1231,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 }
 
 // ─── REVIEW VIEW ──────────────────────────────────────────────────────────────
-function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin }) {
+function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, sbMaster, promoteSbToMaster }) {
   const [activeDept, setActiveDept] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
   const [translating, setTranslating] = useState(false);
@@ -1193,14 +1273,31 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
             if (!file) return;
             setImportMsg({ status:"working", lines:["Reading director review…"] });
             try {
-              const { selections: imported, report } = await parseDirectorReview(file, DEPARTMENTS);
+              const { selections: imported, report, interpretations } = await parseDirectorReview(file, DEPARTMENTS);
               if (!Object.keys(imported).length) {
                 setImportMsg({ status:"error", lines:["No matching department sheets found in that file."] });
               } else {
                 // Merge into existing selections so untouched depts are preserved
                 setSelections(prev => ({ ...prev, ...imported }));
                 try { localStorage.setItem(`pulse:sel:${country}:${year}`, JSON.stringify({ ...(selections||{}), ...imported })); } catch {}
-                setImportMsg({ status:"done", lines:["Imported director review:", ...report] });
+                // Apply the director's Section 1 interpretation rewrites as Survey Basics overrides.
+                let sbCount = 0;
+                if (interpretations?.length && setSbOverrides) {
+                  setSbOverrides(prev => {
+                    const updated = { ...prev };
+                    interpretations.forEach(it => {
+                      it.deptKeys.forEach(dk => {
+                        const key = `${country}:${year}:${dk}:${normQ(it.question)}`;
+                        updated[key] = it.text;
+                        sbCount++;
+                      });
+                    });
+                    try { localStorage.setItem("pulse:sbOverrides", JSON.stringify(updated)); } catch {}
+                    return updated;
+                  });
+                }
+                const extra = sbCount ? [`Applied ${sbCount} Survey Basics interpretation edit${sbCount===1?"":"s"} from the director.`] : [];
+                setImportMsg({ status:"done", lines:["Imported director review:", ...report, ...extra] });
               }
             } catch (err) {
               setImportMsg({ status:"error", lines:["Import failed: " + err.message] });
@@ -1367,6 +1464,9 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
               dept={dept} sel={selections[dept.key]}
               toggleItem={toggleItem} setRewrite={setRewrite}
               saveRefinement={saveRefinement} refinements={refinements}
+              country={country} year={year}
+              sbOverrides={sbOverrides} saveSbOverride={saveSbOverride}
+              sbMaster={sbMaster} promoteSbToMaster={promoteSbToMaster} isAdmin={isAdmin}
             />
           )}
         </div>
@@ -1526,7 +1626,7 @@ function ScoringHelpPanel({ onClose }) {
   );
 }
 
-function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, refinements }) {
+function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, refinements, country, year, sbOverrides, saveSbOverride, sbMaster, promoteSbToMaster, isAdmin }) {
   const sections = [
     { key:"strengths",    label:"✓ Strengths",            color:"#1E8449", instruction:"Check to include. Uncheck to exclude. Click Edit to revise wording — it will appear exactly as written in the report." },
     { key:"growth",       label:"→ Growth areas",         color:"#D68910", instruction:"Check to include. Click Edit to revise wording." },
@@ -1612,16 +1712,19 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                       {q.en}{q.burden ? <span style={{ color:"#B45309", fontSize:10, marginLeft:4 }}>[Burden]</span> : ""}
                     </div>
                     {(() => {
-                      const deptSB = getSurveyBasics(dept.key);
-                      const sbMatch = deptSB.find(sb =>
-                        q.en.toLowerCase().slice(0,50).includes(sb.question.toLowerCase().slice(0,30)) ||
-                        sb.question.toLowerCase().slice(0,50).includes(q.en.toLowerCase().slice(0,30))
-                      );
+                      const sbMatch = findSurveyBasics(dept.key, q.en);
                       if (!sbMatch) return null;
-                      // Pick interpretation based on actual question status
-                      const sbText = q.status === 'Healthy' ? sbMatch.high
-                                   : q.status === 'Watch'   ? sbMatch.mid
-                                   : sbMatch.low;
+                      // Level for this question based on its status
+                      const level = q.status === 'Healthy' ? 'high' : q.status === 'Watch' ? 'mid' : 'low';
+                      const origText = sbMatch[level];
+                      // Precedence: this-report override > promoted master default > original.
+                      const sbKey = SB_KEY[dept.key] || String(dept.key||"").toLowerCase();
+                      const masterKey = `${sbKey}:${normQ(q.en)}:${level}`;
+                      const masterText = sbMaster?.[masterKey];
+                      const sbDefault = masterText || origText;
+                      const ovKey = `${country}:${year}:${dept.key}:${normQ(q.en)}`;
+                      const override = sbOverrides?.[ovKey];
+                      const sbText = override || sbDefault;
                       const editId = `sbedit-${dept.key}-${i}`;
                       return (
                         <div>
@@ -1630,8 +1733,12 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                             <span style={{ fontSize:9, fontWeight:700, color:"#9C8F82",
                               textTransform:"uppercase", letterSpacing:.5,
                               whiteSpace:"nowrap", paddingTop:1, flexShrink:0 }}>Survey Basics</span>
-                            <span style={{ fontSize:11, color:"#7A6E62", fontStyle:"italic",
-                              lineHeight:1.4, flex:1 }}>{sbText}</span>
+                            <span style={{ fontSize:11, color: override ? "#1E1B3A" : "#7A6E62",
+                              fontStyle:"italic", lineHeight:1.4, flex:1 }}>
+                              {sbText}
+                              {override && <span style={{ fontStyle:"normal", fontSize:9, fontWeight:700,
+                                color:"#FF6600", marginLeft:6 }}>(edited)</span>}
+                            </span>
                             <button
                               onClick={() => {
                                 const el = document.getElementById(editId);
@@ -1645,12 +1752,42 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                           </div>
                           <div id={editId} style={{ display:"none", marginTop:5 }}>
                             <textarea
+                              defaultValue={override || ""}
                               placeholder="Type your own interpretation if this doesn't match what you see on your team."
+                              onBlur={(e) => saveSbOverride && saveSbOverride(dept.key, q.en, e.target.value)}
                               style={{ width:"100%", border:"0.5px solid #F0DFCE", borderRadius:5,
                                 padding:"6px 8px", fontSize:11, color:"#1E1B3A",
                                 background:"white", resize:"vertical", minHeight:44,
                                 fontFamily:"inherit", lineHeight:1.5 }}
                             />
+                            <div style={{ fontSize:9, color:"#9C8F82", marginTop:3 }}>
+                              Saves automatically when you click away. Clear the box to restore the default.
+                            </div>
+                            {/* Admin-only: promote this rewrite to the master Survey Basics for all reports */}
+                            {isAdmin && override && override !== masterText && (
+                              <div style={{ marginTop:6, display:"flex", alignItems:"center", gap:8 }}>
+                                <button
+                                  onClick={() => promoteSbToMaster && promoteSbToMaster(sbKey, q.en, level, override)}
+                                  style={{ fontSize:10, fontWeight:600, color:"white", background:"#FF6600",
+                                    border:"none", borderRadius:4, padding:"3px 10px", cursor:"pointer" }}>
+                                  ★ Promote to master ({level})
+                                </button>
+                                <span style={{ fontSize:9, color:"#9C8F82" }}>
+                                  Makes this the default {level==="low"?"Concern":level==="mid"?"Watch":"Healthy"} interpretation for this question in every future report.
+                                </span>
+                              </div>
+                            )}
+                            {isAdmin && masterText && (
+                              <div style={{ marginTop:4, fontSize:9, color:"#166534" }}>
+                                ★ A promoted master interpretation is active for this question ({level}).
+                                {" "}
+                                <button onClick={() => promoteSbToMaster && promoteSbToMaster(sbKey, q.en, level, "")}
+                                  style={{ fontSize:9, color:"#C0392B", background:"none", border:"none",
+                                    cursor:"pointer", textDecoration:"underline", padding:0 }}>
+                                  Remove from master
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       );

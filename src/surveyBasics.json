@@ -170,7 +170,10 @@
       "question": "It is important for me to grow in my English skills because I am part of such an international organization.",
       "low": "Staff show limited motivation or urgency to grow in English despite JV’s international context.",
       "mid": "Staff see some value in English growth, but progress is inconsistent or slow.",
-      "high": "Staff value English growth and intentionally invest in improving their skills."
+      "high": "Staff value English growth and intentionally invest in improving their skills.",
+      "aliases": [
+        "Improving my language skills matters to me as part of an international team"
+      ]
     },
     {
       "question": "I am aware of cultural differences on my team and I intentionally seek to understand them.",
@@ -182,7 +185,10 @@
       "question": "I regularly offer grace and encouragement to teammates who experience culture shock or slow progress in language learning.",
       "low": "Staff report struggling to extend grace to teammates facing language or culture challenges.",
       "mid": "Grace and encouragement are offered inconsistently across staff or contexts.",
-      "high": "Staff regularly offer grace and encouragement to teammates in language and culture growth."
+      "high": "Staff regularly offer grace and encouragement to teammates in language and culture growth.",
+      "aliases": [
+        "I regularly show patience and support to team members experiencing culture shock."
+      ]
     }
   ],
   "mpd": [
