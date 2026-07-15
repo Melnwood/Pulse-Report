@@ -287,8 +287,8 @@ async function parseSurveyFile(file) {
 }
 
 // ─── COLOR / STATUS UTILS ─────────────────────────────────────────────────────
-const STATUS_COLOR = { Concern:"#B91C1C", Watch:"#B45309", Healthy:"#166534", null:"#64748B" };
-const STATUS_BG    = { Concern:"#FEF2F2", Watch:"#FFFBEB", Healthy:"#F0FDF4", null:"#F8FAFC" };
+const STATUS_COLOR = { Concern:"#C0392B", Watch:"#D68910", Healthy:"#1E8449", null:"#9391B0" };
+const STATUS_BG    = { Concern:"#FDF2F2", Watch:"#FFFBEB", Healthy:"#F0FDF4", null:"#FAFAF8" };
 const STATUS_BORDER= { Concern:"#FCA5A5", Watch:"#FCD34D", Healthy:"#86EFAC", null:"#E2E8F0" };
 const sc = s => STATUS_COLOR[s] || STATUS_COLOR[null];
 const sb = s => STATUS_BG[s]    || STATUS_BG[null];
@@ -556,12 +556,12 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
   const countries = [...new Set(allRuns.map(r=>r.country))].sort();
 
   return (
-    <div style={{ minHeight:"100vh", background:"#0F172A", fontFamily:"'Inter',system-ui,sans-serif" }}>
+    <div style={{ minHeight:"100vh", background:"#F8F7F4", fontFamily:"'Inter',system-ui,sans-serif" }}>
       {/* Header */}
-      <div style={{ background:"linear-gradient(135deg,#1E293B 0%,#0F172A 100%)", borderBottom:"1px solid #1E3A5F", padding:"24px 40px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+      <div style={{ background:"linear-gradient(135deg,#FFFFFF 0%,#F8F7F4 100%)", borderBottom:"1px solid #EDE9FF", padding:"24px 40px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <div>
-          <div style={{ fontSize:11, letterSpacing:3, color:"#3B82F6", fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>Josiah Venture</div>
-          <div style={{ fontSize:22, fontWeight:700, color:"white" }}>Pulse Report Platform</div>
+          <div style={{ fontSize:11, letterSpacing:3, color:"#7C6FE0", fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>Josiah Venture</div>
+          <div style={{ fontSize:22, fontWeight:700, color:"#1E1B3A" }}>Pulse Report Platform</div>
         </div>
         <button onClick={() => setView("dashboard")} style={navBtn}>
           P&C Dashboard
@@ -572,7 +572,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 
         {/* Upload card */}
         <div style={card}>
-          <div style={{ fontSize:13, fontWeight:700, color:"#3B82F6", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>New Survey Run</div>
+          <div style={{ fontSize:13, fontWeight:700, color:"#7C6FE0", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>New Survey Run</div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:24 }}>
             <div>
               <label style={lbl}>Country</label>
@@ -587,26 +587,26 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
           </div>
 
           {generating ? (
-            <div style={{ background:"#1E293B", borderRadius:12, padding:24, textAlign:"center" }}>
-              <div style={{ width:40, height:40, border:"3px solid #3B82F6", borderTopColor:"transparent", borderRadius:"50%", margin:"0 auto 16px", animation:"spin 1s linear infinite" }} />
-              <div style={{ color:"white", fontWeight:600 }}>{genProgress.step || "Processing…"}</div>
-              <div style={{ color:"#64748B", fontSize:12, marginTop:8 }}>This may take a minute while AI generates draft content</div>
+            <div style={{ background:"#FFFFFF", borderRadius:12, padding:24, textAlign:"center" }}>
+              <div style={{ width:40, height:40, border:"3px solid #7C6FE0", borderTopColor:"transparent", borderRadius:"50%", margin:"0 auto 16px", animation:"spin 1s linear infinite" }} />
+              <div style={{ color:"#1E1B3A", fontWeight:600 }}>{genProgress.step || "Processing…"}</div>
+              <div style={{ color:"#9391B0", fontSize:12, marginTop:8 }}>This may take a minute while AI generates draft content</div>
             </div>
           ) : (
             <div
               onClick={() => country && year && fileRef.current?.click()}
               style={{
-                border:"2px dashed #334155", borderRadius:12, padding:48,
+                border:"2px dashed #E2DFF5", borderRadius:12, padding:48,
                 textAlign:"center", cursor: country&&year ? "pointer":"not-allowed",
                 opacity: country&&year ? 1 : 0.5,
                 transition:"border-color 0.2s",
               }}
-              onMouseEnter={e => { if(country&&year) e.currentTarget.style.borderColor="#3B82F6"; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor="#334155"; }}
+              onMouseEnter={e => { if(country&&year) e.currentTarget.style.borderColor="#7C6FE0"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor="#E2DFF5"; }}
             >
               <div style={{ fontSize:32, marginBottom:12 }}>📊</div>
-              <div style={{ color:"white", fontWeight:600, marginBottom:4 }}>Drop SurveyPro export here</div>
-              <div style={{ color:"#64748B", fontSize:13 }}>or click to browse — .xlsx or .csv</div>
+              <div style={{ color:"#1E1B3A", fontWeight:600, marginBottom:4 }}>Drop SurveyPro export here</div>
+              <div style={{ color:"#9391B0", fontSize:13 }}>or click to browse — .xlsx or .csv</div>
               <input ref={fileRef} type="file" accept=".xlsx,.csv" style={{ display:"none" }}
                 onChange={e => e.target.files[0] && handleFile(e.target.files[0])} />
             </div>
@@ -616,13 +616,13 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
         {/* Previous runs */}
         {allRuns.length > 0 && (
           <div style={{ marginTop:32 }}>
-            <div style={{ fontSize:13, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Previous Runs</div>
+            <div style={{ fontSize:13, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Previous Runs</div>
             <div style={{ display:"grid", gap:12 }}>
               {allRuns.slice().reverse().map(run => (
                 <div key={run.id} style={{ ...card, display:"flex", justifyContent:"space-between", alignItems:"center", padding:"16px 20px" }}>
                   <div>
-                    <div style={{ color:"white", fontWeight:600 }}>{run.country} — {run.year}</div>
-                    <div style={{ color:"#64748B", fontSize:12, marginTop:2 }}>{run.depts?.length} departments · {new Date(run.savedAt).toLocaleDateString()}</div>
+                    <div style={{ color:"#1E1B3A", fontWeight:600 }}>{run.country} — {run.year}</div>
+                    <div style={{ color:"#9391B0", fontSize:12, marginTop:2 }}>{run.depts?.length} departments · {new Date(run.savedAt).toLocaleDateString()}</div>
                   </div>
                   <div style={{ display:"flex", gap:8 }}>
                     {run.depts?.slice(0,5).map(d => (
@@ -642,13 +642,18 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
                         setView("review");
                       } catch {}
                     }}>Open</button>
-                    <button style={{ ...navBtn, background:"#7F1D1D" }} onClick={() => {
+                    <button style={{ ...navBtn, background:"#C0392B" }} onClick={() => {
                       if (!window.confirm(`Delete ${run.country} ${run.year}? This cannot be undone.`)) return;
-                      const updated = allRuns.filter(r => r.id !== run.id);
-                      setAllRuns(updated);
-                      try { localStorage.setItem("pulse:runs", JSON.stringify(updated)); } catch {}
-                      try { localStorage.removeItem(`pulse:data:${run.country}:${run.year}`); } catch {}
-                      try { localStorage.removeItem(`pulse:sel:${run.country}:${run.year}`); } catch {}
+                      const runId = run.id;
+                      const runCountry = run.country;
+                      const runYear = run.year;
+                      setAllRuns(prev => {
+                        const updated = prev.filter(r => r.id !== runId);
+                        try { localStorage.setItem("pulse:runs", JSON.stringify(updated)); } catch {}
+                        return updated;
+                      });
+                      try { localStorage.removeItem(`pulse:data:${runCountry}:${runYear}`); } catch {}
+                      try { localStorage.removeItem(`pulse:sel:${runCountry}:${runYear}`); } catch {}
                     }}>Delete</button>
                   </div>
                 </div>
@@ -672,38 +677,38 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
   const dept = depts.find(d=>d.key===activeDept);
 
   return (
-    <div style={{ minHeight:"100vh", background:"#0F172A", fontFamily:"'Inter',system-ui,sans-serif", display:"flex", flexDirection:"column" }}>
+    <div style={{ minHeight:"100vh", background:"#F8F7F4", fontFamily:"'Inter',system-ui,sans-serif", display:"flex", flexDirection:"column" }}>
       {/* Top bar */}
-      <div style={{ background:"#1E293B", borderBottom:"1px solid #334155", padding:"14px 24px", display:"flex", alignItems:"center", gap:16, flexShrink:0 }}>
-        <button onClick={()=>setView("home")} style={{ ...navBtn, background:"transparent", border:"1px solid #334155" }}>← Home</button>
+      <div style={{ background:"#FFFFFF", borderBottom:"1px solid #E2DFF5", padding:"14px 24px", display:"flex", alignItems:"center", gap:16, flexShrink:0 }}>
+        <button onClick={()=>setView("home")} style={{ ...navBtn, background:"transparent", border:"1px solid #E2DFF5" }}>← Home</button>
         <div style={{ flex:1 }}>
-          <span style={{ color:"#3B82F6", fontWeight:700, fontSize:13 }}>{country} {year}</span>
-          <span style={{ color:"#64748B", marginLeft:8, fontSize:13 }}>Director Review</span>
+          <span style={{ color:"#7C6FE0", fontWeight:700, fontSize:13 }}>{country} {year}</span>
+          <span style={{ color:"#9391B0", marginLeft:8, fontSize:13 }}>Director Review</span>
         </div>
-        <button onClick={saveSelections} style={{ ...navBtn, background: saved?"#166534":"#3B82F6" }}>
+        <button onClick={saveSelections} style={{ ...navBtn, background: saved?"#1E8449":"#7C6FE0" }}>
           {saved ? "✓ Saved" : "Save Progress"}
         </button>
-        <button onClick={()=>setView("report")} style={{ ...navBtn, background:"#7C3AED" }}>
+        <button onClick={()=>setView("report")} style={{ ...navBtn, background:"#9B8FE8" }}>
           Generate Report →
         </button>
       </div>
 
       <div style={{ display:"flex", flex:1, overflow:"hidden" }}>
         {/* Sidebar */}
-        <div style={{ width:220, background:"#1E293B", borderRight:"1px solid #334155", overflowY:"auto", flexShrink:0 }}>
+        <div style={{ width:220, background:"#FFFFFF", borderRight:"1px solid #E2DFF5", overflowY:"auto", flexShrink:0 }}>
           {depts.map(d => (
             <button key={d.key} onClick={()=>setActiveDept(d.key)}
               style={{
                 display:"block", width:"100%", textAlign:"left",
-                padding:"12px 16px", background: activeDept===d.key ? "#0F172A" : "transparent",
-                border:"none", borderLeft: activeDept===d.key ? "3px solid #3B82F6" : "3px solid transparent",
+                padding:"12px 16px", background: activeDept===d.key ? "#F8F7F4" : "transparent",
+                border:"none", borderLeft: activeDept===d.key ? "3px solid #7C6FE0" : "3px solid transparent",
                 cursor:"pointer",
               }}>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                 <span style={{ width:8, height:8, borderRadius:"50%", background:sc(d.status), flexShrink:0 }} />
-                <span style={{ color: activeDept===d.key ? "white":"#94A3B8", fontSize:13, fontWeight: activeDept===d.key?600:400 }}>{d.label}</span>
+                <span style={{ color: activeDept===d.key ? "#1E1B3A":"#6B6894", fontSize:13, fontWeight: activeDept===d.key?600:400 }}>{d.label}</span>
               </div>
-              <div style={{ color:"#475569", fontSize:11, marginLeft:16, marginTop:2 }}>{d.avg} · {d.n} respondents</div>
+              <div style={{ color:"#7B78A0", fontSize:11, marginLeft:16, marginTop:2 }}>{d.avg} · {d.n} respondents</div>
             </button>
           ))}
         </div>
@@ -725,9 +730,9 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
 
 function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, refinements }) {
   const sections = [
-    { key:"strengths",    label:"✓ Strengths",           color:"#166534", bg:"#F0FDF4", instruction:"Check items to include. Uncheck to exclude. Type a rewrite to change wording — it will appear exactly as written." },
-    { key:"growth",       label:"→ Growth Areas",        color:"#B45309", bg:"#FFFBEB", instruction:"Check items to include." },
-    { key:"leadershipQs", label:"? Leadership Questions",color:"#1E3A8A", bg:"#EFF6FF", instruction:"Select 1–2 questions to carry into the final report." },
+    { key:"strengths",    label:"✓ Strengths",           color:"#1E8449", bg:"#F0FDF4", instruction:"Check items to include. Uncheck to exclude. Type a rewrite to change wording — it will appear exactly as written." },
+    { key:"growth",       label:"→ Growth Areas",        color:"#D68910", bg:"#FFFBEB", instruction:"Check items to include." },
+    { key:"leadershipQs", label:"? Leadership Questions",color:"#3B3882", bg:"#F0EEFF", instruction:"Select 1–2 questions to carry into the final report." },
     { key:"quotes",       label:"\" Staff Quotes",        color:"#4B5563", bg:"#F9FAFB", instruction:"Select up to 4 quotes. These appear verbatim — do not edit unless correcting a translation." },
   ];
 
@@ -736,23 +741,23 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
       {/* Dept header */}
       <div style={{ marginBottom:24 }}>
         <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:8 }}>
-          <div style={{ fontSize:20, fontWeight:700, color:"white" }}>{dept.label}</div>
+          <div style={{ fontSize:20, fontWeight:700, color:"#1E1B3A" }}>{dept.label}</div>
           <span style={{ fontSize:12, fontWeight:700, color:sc(dept.status), background:sb(dept.status), border:`1px solid ${sbd(dept.status)}`, borderRadius:6, padding:"3px 10px" }}>{dept.status}</span>
-          <span style={{ color:"#64748B", fontSize:13 }}>{dept.avg} avg · n={dept.n}</span>
+          <span style={{ color:"#9391B0", fontSize:13 }}>{dept.avg} avg · n={dept.n}</span>
         </div>
 
         {/* Question scores */}
-        <div style={{ background:"#1E293B", borderRadius:8, padding:16, marginBottom:0 }}>
-          <div style={{ fontSize:11, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>Question Scores</div>
+        <div style={{ background:"#FFFFFF", borderRadius:8, padding:16, marginBottom:0 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>Question Scores</div>
           {[...dept.questions].sort((a,b) => {
             const o = {Concern:0,Watch:1,Healthy:2};
             return (o[a.status]??1)-(o[b.status]??1) || a.score-b.score;
           }).map((q,i) => (
-            <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"6px 0", borderBottom:"1px solid #334155" }}>
+            <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"6px 0", borderBottom:"1px solid #E2DFF5" }}>
               <span style={{ fontSize:11, fontWeight:700, color:sc(q.status), minWidth:56, paddingTop:1 }}>{q.status}</span>
-              <span style={{ color:"#94A3B8", fontSize:11, minWidth:36, paddingTop:1 }}>{q.score?.toFixed(2)}</span>
-              <span style={{ color:"#CBD5E1", fontSize:12, flex:1 }}>{q.en}</span>
-              <span style={{ color:"#475569", fontSize:10, minWidth:40, textAlign:"right", paddingTop:1 }}>{q.scale.toUpperCase()}</span>
+              <span style={{ color:"#6B6894", fontSize:11, minWidth:36, paddingTop:1 }}>{q.score?.toFixed(2)}</span>
+              <span style={{ color:"#4A476A", fontSize:12, flex:1 }}>{q.en}</span>
+              <span style={{ color:"#7B78A0", fontSize:10, minWidth:40, textAlign:"right", paddingTop:1 }}>{q.scale.toUpperCase()}</span>
             </div>
           ))}
         </div>
@@ -760,21 +765,21 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
 
       {/* Sections */}
       {sections.map(sec => (
-        <div key={sec.key} style={{ marginBottom:20, background:"#1E293B", borderRadius:10, overflow:"hidden" }}>
-          <div style={{ padding:"12px 16px", borderBottom:"1px solid #334155" }}>
+        <div key={sec.key} style={{ marginBottom:20, background:"#FFFFFF", borderRadius:10, overflow:"hidden" }}>
+          <div style={{ padding:"12px 16px", borderBottom:"1px solid #E2DFF5" }}>
             <div style={{ color:sec.color, fontWeight:700, fontSize:13 }}>{sec.label}</div>
-            <div style={{ color:"#64748B", fontSize:11, marginTop:2 }}>{sec.instruction}</div>
+            <div style={{ color:"#9391B0", fontSize:11, marginTop:2 }}>{sec.instruction}</div>
           </div>
           {(sel[sec.key] || []).map((item, idx) => (
-            <div key={idx} style={{ padding:"12px 16px", borderBottom:"1px solid #1E293B", background: item.include ? "#0F172A" : "#1A1A2E", opacity: item.include ? 1 : 0.55 }}>
+            <div key={idx} style={{ padding:"12px 16px", borderBottom:"1px solid #FFFFFF", background: item.include ? "#F8F7F4" : "#F5F3FF", opacity: item.include ? 1 : 0.55 }}>
               <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
                 <input type="checkbox" checked={item.include}
                   onChange={() => toggleItem(dept.key, sec.key, idx)}
-                  style={{ marginTop:3, cursor:"pointer", accentColor:"#3B82F6" }} />
+                  style={{ marginTop:3, cursor:"pointer", accentColor:"#7C6FE0" }} />
                 <div style={{ flex:1 }}>
-                  <div style={{ color: item.include?"white":"#64748B", fontSize:13, lineHeight:1.5 }}>{item.text}</div>
+                  <div style={{ color: item.include?"#1E1B3A":"#9391B0", fontSize:13, lineHeight:1.5 }}>{item.text}</div>
                   {item.isRefined && !item.rewrite && (
-                    <div style={{ marginTop:6, fontSize:10, color:"#6366F1", fontWeight:600 }}>
+                    <div style={{ marginTop:6, fontSize:10, color:"#8B85E8", fontWeight:600 }}>
                       ✦ Refined from a previous country — using improved wording
                     </div>
                   )}
@@ -787,7 +792,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                         if (val) saveRefinement(dept.key, sec.key, idx, val);
                       }}
                       placeholder={sec.key==="quotes" ? "Leave blank to use as-is. Edit only if correcting a translation." : "Leave blank to use as-is. Type here to save improved wording for future countries."}
-                      style={{ marginTop:8, width:"100%", background:"#0B1220", border:"1px solid #334155", borderRadius:6, padding:"8px 10px", color:"#93C5FD", fontSize:12, resize:"vertical", minHeight:56, fontFamily:"inherit", boxSizing:"border-box" }}
+                      style={{ marginTop:8, width:"100%", background:"#F1EFF9", border:"1px solid #E2DFF5", borderRadius:6, padding:"8px 10px", color:"#9B8FE8", fontSize:12, resize:"vertical", minHeight:56, fontFamily:"inherit", boxSizing:"border-box" }}
                     />
                   )}
                 </div>
@@ -795,7 +800,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
             </div>
           ))}
           {(!sel[sec.key]?.length) && (
-            <div style={{ padding:"16px", color:"#475569", fontSize:13, fontStyle:"italic" }}>No items generated for this section.</div>
+            <div style={{ padding:"16px", color:"#7B78A0", fontSize:13, fontStyle:"italic" }}>No items generated for this section.</div>
           )}
         </div>
       ))}
@@ -816,47 +821,47 @@ function ReportView({ country, year, surveyData, getApproved, setView }) {
   const printReport = () => window.print();
 
   return (
-    <div style={{ minHeight:"100vh", background:"#F1F5F9", fontFamily:"'Inter',system-ui,sans-serif" }}>
+    <div style={{ minHeight:"100vh", background:"#F5F3FF", fontFamily:"'Inter',system-ui,sans-serif" }}>
       {/* Toolbar — hidden on print */}
-      <div className="no-print" style={{ background:"#1E293B", padding:"12px 24px", display:"flex", gap:12, alignItems:"center" }}>
-        <button onClick={()=>setView("review")} style={{ ...navBtn, background:"transparent", border:"1px solid #334155" }}>← Back to Review</button>
-        <div style={{ flex:1, color:"#94A3B8", fontSize:13 }}>{country} {year} Pulse Report</div>
-        <button onClick={printReport} style={{ ...navBtn, background:"#3B82F6" }}>⬇ Download PDF</button>
+      <div className="no-print" style={{ background:"#FFFFFF", padding:"12px 24px", display:"flex", gap:12, alignItems:"center" }}>
+        <button onClick={()=>setView("review")} style={{ ...navBtn, background:"transparent", border:"1px solid #E2DFF5" }}>← Back to Review</button>
+        <div style={{ flex:1, color:"#6B6894", fontSize:13 }}>{country} {year} Pulse Report</div>
+        <button onClick={printReport} style={{ ...navBtn, background:"#7C6FE0" }}>⬇ Download PDF</button>
       </div>
 
       {/* Report content */}
       <div style={{ maxWidth:900, margin:"0 auto", padding:"40px 24px" }}>
 
         {/* Cover */}
-        <div style={{ background:"#0F172A", borderRadius:16, padding:48, marginBottom:32, textAlign:"center" }}>
-          <div style={{ fontSize:11, letterSpacing:4, color:"#3B82F6", fontWeight:700, textTransform:"uppercase", marginBottom:16 }}>Josiah Venture</div>
-          <div style={{ fontSize:36, fontWeight:800, color:"white", marginBottom:8 }}>{country}</div>
-          <div style={{ fontSize:20, color:"#94A3B8", marginBottom:32 }}>Staff Pulse Report · {year}</div>
+        <div style={{ background:"linear-gradient(135deg,#F0EEFF,#EDE9FF)", borderRadius:16, padding:48, marginBottom:32, textAlign:"center", border:"1px solid #D6D2EF" }}>
+          <div style={{ fontSize:11, letterSpacing:4, color:"#7C6FE0", fontWeight:700, textTransform:"uppercase", marginBottom:16 }}>Josiah Venture</div>
+          <div style={{ fontSize:36, fontWeight:800, color:"#1E1B3A", marginBottom:8 }}>{country}</div>
+          <div style={{ fontSize:20, color:"#6B6894", marginBottom:32 }}>Staff Pulse Report · {year}</div>
           <div style={{ display:"flex", justifyContent:"center", gap:32 }}>
             {[["Departments", depts.length],["Respondents", depts.reduce((a,d)=>a+d.n,0)],["Overall Avg", (depts.reduce((a,d)=>a+d.avg,0)/depts.length).toFixed(2)]].map(([l,v])=>(
               <div key={l}>
-                <div style={{ fontSize:28, fontWeight:800, color:"white" }}>{v}</div>
-                <div style={{ fontSize:12, color:"#64748B" }}>{l}</div>
+                <div style={{ fontSize:28, fontWeight:800, color:"#1E1B3A" }}>{v}</div>
+                <div style={{ fontSize:12, color:"#9391B0" }}>{l}</div>
               </div>
             ))}
           </div>
         </div>
 
         {/* Summary table */}
-        <div style={{ background:"white", borderRadius:12, padding:28, marginBottom:32, boxShadow:"0 1px 4px rgba(0,0,0,0.08)" }}>
-          <div style={{ fontSize:13, fontWeight:700, color:"#1E293B", textTransform:"uppercase", letterSpacing:2, marginBottom:20 }}>Department Summary</div>
+        <div style={{ background:"#1E1B3A", borderRadius:12, padding:28, marginBottom:32, boxShadow:"0 1px 4px rgba(0,0,0,0.08)" }}>
+          <div style={{ fontSize:13, fontWeight:700, color:"#FFFFFF", textTransform:"uppercase", letterSpacing:2, marginBottom:20 }}>Department Summary</div>
           {[["Concern", concerns],["Watch", watches],["Healthy", healthys]].map(([status,group]) =>
             group.length ? (
               <div key={status} style={{ marginBottom:12 }}>
                 <div style={{ fontSize:11, fontWeight:700, color:sc(status), textTransform:"uppercase", letterSpacing:1.5, marginBottom:6 }}>{status}</div>
                 {group.map(d => (
-                  <div key={d.key} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 0", borderBottom:"1px solid #F1F5F9" }}>
-                    <div style={{ width:120, color:"#1E293B", fontWeight:600, fontSize:13 }}>{d.label}</div>
-                    <div style={{ flex:1, background:"#F1F5F9", borderRadius:4, height:8, overflow:"hidden" }}>
+                  <div key={d.key} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 0", borderBottom:"1px solid #F5F3FF" }}>
+                    <div style={{ width:120, color:"#FFFFFF", fontWeight:600, fontSize:13 }}>{d.label}</div>
+                    <div style={{ flex:1, background:"#F5F3FF", borderRadius:4, height:8, overflow:"hidden" }}>
                       <div style={{ width:`${((d.avg-1)/4)*100}%`, background:sc(d.status), height:"100%", borderRadius:4 }} />
                     </div>
                     <div style={{ fontWeight:700, color:sc(d.status), fontSize:14, width:36, textAlign:"right" }}>{d.avg}</div>
-                    <div style={{ color:"#94A3B8", fontSize:11, width:24 }}>n={d.n}</div>
+                    <div style={{ color:"#6B6894", fontSize:11, width:24 }}>n={d.n}</div>
                   </div>
                 ))}
               </div>
@@ -888,12 +893,12 @@ function DeptReportPage({ dept, getApproved }) {
   const quotes       = getApproved(dept.key, "quotes").slice(0,4);
 
   return (
-    <div style={{ background:"white", borderRadius:12, padding:32, marginBottom:24, boxShadow:"0 1px 4px rgba(0,0,0,0.08)", pageBreakInside:"avoid" }}>
+    <div style={{ background:"#1E1B3A", borderRadius:12, padding:32, marginBottom:24, boxShadow:"0 1px 4px rgba(0,0,0,0.08)", pageBreakInside:"avoid" }}>
       {/* Dept header */}
-      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:24, paddingBottom:16, borderBottom:"2px solid #F1F5F9" }}>
+      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:24, paddingBottom:16, borderBottom:"2px solid #F5F3FF" }}>
         <div>
-          <div style={{ fontSize:20, fontWeight:800, color:"#0F172A" }}>{dept.label}</div>
-          <div style={{ color:"#64748B", fontSize:13, marginTop:4 }}>n = {dept.n} respondents</div>
+          <div style={{ fontSize:20, fontWeight:800, color:"#F8F7F4" }}>{dept.label}</div>
+          <div style={{ color:"#9391B0", fontSize:13, marginTop:4 }}>n = {dept.n} respondents</div>
         </div>
         <div style={{ textAlign:"right" }}>
           <div style={{ fontSize:28, fontWeight:800, color:sc(dept.status) }}>{dept.avg}</div>
@@ -903,14 +908,14 @@ function DeptReportPage({ dept, getApproved }) {
 
       {/* Question scores */}
       <div style={{ marginBottom:24 }}>
-        <div style={{ fontSize:11, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>Question Scores — Concern · Watch · Healthy</div>
+        <div style={{ fontSize:11, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>Question Scores — Concern · Watch · Healthy</div>
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
           <thead>
-            <tr style={{ background:"#F8FAFC" }}>
-              <th style={{ textAlign:"left", padding:"6px 10px", color:"#64748B", fontWeight:600 }}>Question</th>
-              <th style={{ textAlign:"center", padding:"6px 10px", color:"#64748B", fontWeight:600, width:60 }}>Score</th>
-              <th style={{ textAlign:"center", padding:"6px 10px", color:"#64748B", fontWeight:600, width:70 }}>Status</th>
-              <th style={{ textAlign:"center", padding:"6px 10px", color:"#64748B", fontWeight:600, width:50 }}>Scale</th>
+            <tr style={{ background:"#FAFAF8" }}>
+              <th style={{ textAlign:"left", padding:"6px 10px", color:"#9391B0", fontWeight:600 }}>Question</th>
+              <th style={{ textAlign:"center", padding:"6px 10px", color:"#9391B0", fontWeight:600, width:60 }}>Score</th>
+              <th style={{ textAlign:"center", padding:"6px 10px", color:"#9391B0", fontWeight:600, width:70 }}>Status</th>
+              <th style={{ textAlign:"center", padding:"6px 10px", color:"#9391B0", fontWeight:600, width:50 }}>Scale</th>
             </tr>
           </thead>
           <tbody>
@@ -918,13 +923,13 @@ function DeptReportPage({ dept, getApproved }) {
               const o={Concern:0,Watch:1,Healthy:2};
               return (o[a.status]??1)-(o[b.status]??1)||a.score-b.score;
             }).map((q,i)=>(
-              <tr key={i} style={{ borderBottom:"1px solid #F1F5F9" }}>
-                <td style={{ padding:"7px 10px", color:"#1E293B" }}>{q.en}{q.burden ? " [Burden]":""}</td>
+              <tr key={i} style={{ borderBottom:"1px solid #F5F3FF" }}>
+                <td style={{ padding:"7px 10px", color:"#FFFFFF" }}>{q.en}{q.burden ? " [Burden]":""}</td>
                 <td style={{ textAlign:"center", padding:"7px 10px", fontWeight:700, color:sc(q.status) }}>{q.score?.toFixed(2)}</td>
                 <td style={{ textAlign:"center", padding:"7px 10px" }}>
                   <span style={{ fontSize:10, fontWeight:700, color:sc(q.status), background:sb(q.status), borderRadius:4, padding:"2px 6px" }}>{q.status}</span>
                 </td>
-                <td style={{ textAlign:"center", padding:"7px 10px", color:"#94A3B8", fontSize:10 }}>{q.scale.toUpperCase()}</td>
+                <td style={{ textAlign:"center", padding:"7px 10px", color:"#6B6894", fontSize:10 }}>{q.scale.toUpperCase()}</td>
               </tr>
             ))}
           </tbody>
@@ -936,10 +941,10 @@ function DeptReportPage({ dept, getApproved }) {
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:24 }}>
           {strengths.length ? (
             <div>
-              <div style={{ fontSize:11, fontWeight:700, color:"#166534", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>What is Working</div>
+              <div style={{ fontSize:11, fontWeight:700, color:"#1E8449", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>What is Working</div>
               {strengths.map((s,i) => (
-                <div key={i} style={{ display:"flex", gap:8, marginBottom:6, fontSize:12, color:"#1E293B", lineHeight:1.5 }}>
-                  <span style={{ color:"#166534", marginTop:1 }}>✓</span><span>{s}</span>
+                <div key={i} style={{ display:"flex", gap:8, marginBottom:6, fontSize:12, color:"#FFFFFF", lineHeight:1.5 }}>
+                  <span style={{ color:"#1E8449", marginTop:1 }}>✓</span><span>{s}</span>
                 </div>
               ))}
             </div>
@@ -948,7 +953,7 @@ function DeptReportPage({ dept, getApproved }) {
             <div>
               <div style={{ fontSize:11, fontWeight:700, color:sc(dept.status), textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>Where Attention is Needed</div>
               {growth.map((g,i) => (
-                <div key={i} style={{ display:"flex", gap:8, marginBottom:6, fontSize:12, color:"#1E293B", lineHeight:1.5 }}>
+                <div key={i} style={{ display:"flex", gap:8, marginBottom:6, fontSize:12, color:"#FFFFFF", lineHeight:1.5 }}>
                   <span style={{ color:sc(dept.status), marginTop:1 }}>→</span><span>{g}</span>
                 </div>
               ))}
@@ -959,10 +964,10 @@ function DeptReportPage({ dept, getApproved }) {
 
       {/* Leadership Questions */}
       {leadershipQs.length ? (
-        <div style={{ background:"#EFF6FF", borderRadius:8, padding:16, marginBottom:20 }}>
-          <div style={{ fontSize:11, fontWeight:700, color:"#1E3A8A", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>Questions for Leadership</div>
+        <div style={{ background:"#F5F3FF", borderRadius:8, padding:16, marginBottom:20, border:"1px solid #E2DFF5" }}>
+          <div style={{ fontSize:11, fontWeight:700, color:"#3B3882", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>Questions for Leadership</div>
           {leadershipQs.map((q,i) => (
-            <div key={i} style={{ display:"flex", gap:10, marginBottom:8, fontSize:12, color:"#1E3A8A" }}>
+            <div key={i} style={{ display:"flex", gap:10, marginBottom:8, fontSize:12, color:"#3B3882" }}>
               <span style={{ fontWeight:700, minWidth:16 }}>{i+1}</span><span>{q}</span>
             </div>
           ))}
@@ -972,10 +977,10 @@ function DeptReportPage({ dept, getApproved }) {
       {/* Quotes */}
       {quotes.length ? (
         <div>
-          <div style={{ fontSize:11, fontWeight:700, color:"#475569", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>What Staff Said</div>
+          <div style={{ fontSize:11, fontWeight:700, color:"#7B78A0", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>What Staff Said</div>
           <div style={{ display:"grid", gridTemplateColumns: quotes.length>1?"1fr 1fr":"1fr", gap:12 }}>
             {quotes.map((q,i) => (
-              <div key={i} style={{ background:"#F8FAFC", borderLeft:"3px solid #CBD5E1", borderRadius:"0 8px 8px 0", padding:"12px 14px", fontSize:12, color:"#334155", lineHeight:1.6, fontStyle:"italic" }}>
+              <div key={i} style={{ background:"#FAFAF8", borderLeft:"3px solid #4A476A", borderRadius:"0 8px 8px 0", padding:"12px 14px", fontSize:12, color:"#E2DFF5", lineHeight:1.6, fontStyle:"italic" }}>
                 "{q}"
               </div>
             ))}
@@ -1010,12 +1015,12 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
   }
 
   return (
-    <div style={{ minHeight:"100vh", background:"#0F172A", fontFamily:"'Inter',system-ui,sans-serif" }}>
-      <div style={{ background:"#1E293B", borderBottom:"1px solid #334155", padding:"14px 24px", display:"flex", alignItems:"center", gap:16 }}>
-        <button onClick={()=>setView("home")} style={{ ...navBtn, background:"transparent", border:"1px solid #334155" }}>← Home</button>
-        <div style={{ flex:1, color:"white", fontWeight:700 }}>P&C Dashboard</div>
+    <div style={{ minHeight:"100vh", background:"#F8F7F4", fontFamily:"'Inter',system-ui,sans-serif" }}>
+      <div style={{ background:"#FFFFFF", borderBottom:"1px solid #E2DFF5", padding:"14px 24px", display:"flex", alignItems:"center", gap:16 }}>
+        <button onClick={()=>setView("home")} style={{ ...navBtn, background:"transparent", border:"1px solid #E2DFF5" }}>← Home</button>
+        <div style={{ flex:1, color:"#1E1B3A", fontWeight:700 }}>P&C Dashboard</div>
         <select value={dashCountry} onChange={e=>setDashCountry(e.target.value)}
-          style={{ background:"#0F172A", border:"1px solid #334155", borderRadius:6, color:"white", padding:"6px 12px", fontSize:13 }}>
+          style={{ background:"#F8F7F4", border:"1px solid #E2DFF5", borderRadius:6, color:"#1E1B3A", padding:"6px 12px", fontSize:13 }}>
           <option value="all">All Countries</option>
           {countries.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
@@ -1026,7 +1031,7 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
         {/* JV-wide overview grid */}
         {dashCountry === "all" && (
           <>
-            <div style={{ fontSize:13, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Latest Results by Country</div>
+            <div style={{ fontSize:13, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Latest Results by Country</div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:16, marginBottom:40 }}>
               {Object.values(latestByCountry).map(run => {
                 const concern = run.depts?.filter(d=>d.status==="Concern").length||0;
@@ -1037,16 +1042,16 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
                   <div key={run.id} style={{ ...card, cursor:"pointer" }} onClick={()=>setDashCountry(run.country)}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16 }}>
                       <div>
-                        <div style={{ color:"white", fontWeight:700, fontSize:16 }}>{run.country}</div>
-                        <div style={{ color:"#64748B", fontSize:12 }}>{run.year}</div>
+                        <div style={{ color:"#1E1B3A", fontWeight:700, fontSize:16 }}>{run.country}</div>
+                        <div style={{ color:"#9391B0", fontSize:12 }}>{run.year}</div>
                       </div>
                       <span style={{ fontSize:11, fontWeight:700, color:sc(overallStatus), background:sb(overallStatus), border:`1px solid ${sbd(overallStatus)}`, borderRadius:6, padding:"3px 10px" }}>{overallStatus}</span>
                     </div>
                     <div style={{ display:"flex", gap:12 }}>
-                      {[["Concern",concern,"#B91C1C"],["Watch",watch,"#B45309"],["Healthy",healthy,"#166534"]].map(([l,n,c])=>(
-                        <div key={l} style={{ flex:1, textAlign:"center", background:"#1E293B", borderRadius:8, padding:"10px 4px" }}>
+                      {[["Concern",concern,"#C0392B"],["Watch",watch,"#D68910"],["Healthy",healthy,"#1E8449"]].map(([l,n,c])=>(
+                        <div key={l} style={{ flex:1, textAlign:"center", background:"#FFFFFF", borderRadius:8, padding:"10px 4px" }}>
                           <div style={{ fontSize:22, fontWeight:800, color:c }}>{n}</div>
-                          <div style={{ fontSize:10, color:"#64748B" }}>{l}</div>
+                          <div style={{ fontSize:10, color:"#9391B0" }}>{l}</div>
                         </div>
                       ))}
                     </div>
@@ -1056,28 +1061,28 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
             </div>
 
             {/* Cross-country dept heatmap */}
-            <div style={{ fontSize:13, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Department Health — All Countries</div>
-            <div style={{ background:"#1E293B", borderRadius:12, overflow:"hidden", marginBottom:40 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Department Health — All Countries</div>
+            <div style={{ background:"#FFFFFF", borderRadius:12, overflow:"hidden", marginBottom:40 }}>
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
                 <thead>
-                  <tr style={{ borderBottom:"1px solid #334155" }}>
-                    <th style={{ textAlign:"left", padding:"12px 16px", color:"#64748B" }}>Department</th>
+                  <tr style={{ borderBottom:"1px solid #E2DFF5" }}>
+                    <th style={{ textAlign:"left", padding:"12px 16px", color:"#9391B0" }}>Department</th>
                     {Object.keys(latestByCountry).map(c => (
-                      <th key={c} style={{ textAlign:"center", padding:"12px 10px", color:"#64748B", fontWeight:600 }}>{c}</th>
+                      <th key={c} style={{ textAlign:"center", padding:"12px 10px", color:"#9391B0", fontWeight:600 }}>{c}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {DEPTS_ORDER.map(dk => (
-                    <tr key={dk} style={{ borderBottom:"1px solid #334155" }}>
-                      <td style={{ padding:"10px 16px", color:"#94A3B8", fontWeight:500 }}>{dk}</td>
+                    <tr key={dk} style={{ borderBottom:"1px solid #E2DFF5" }}>
+                      <td style={{ padding:"10px 16px", color:"#6B6894", fontWeight:500 }}>{dk}</td>
                       {Object.values(latestByCountry).map(run => {
                         const d = run.depts?.find(dep=>dep.key===dk||dep.group===dk);
                         return (
                           <td key={run.country} style={{ textAlign:"center", padding:"10px" }}>
                             {d ? (
                               <span style={{ fontSize:11, fontWeight:700, color:sc(d.status), background:sb(d.status), borderRadius:4, padding:"2px 8px" }}>{d.avg}</span>
-                            ) : <span style={{ color:"#334155" }}>—</span>}
+                            ) : <span style={{ color:"#E2DFF5" }}>—</span>}
                           </td>
                         );
                       })}
@@ -1092,19 +1097,19 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
         {/* Single country trend view */}
         {dashCountry !== "all" && (
           <>
-            <div style={{ fontSize:13, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>{dashCountry} — Department Health</div>
+            <div style={{ fontSize:13, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>{dashCountry} — Department Health</div>
             {(runsByCountry[dashCountry]||[]).map(run => (
               <div key={run.id} style={{ marginBottom:32 }}>
-                <div style={{ color:"#3B82F6", fontWeight:700, fontSize:13, marginBottom:12 }}>{run.year}</div>
+                <div style={{ color:"#7C6FE0", fontWeight:700, fontSize:13, marginBottom:12 }}>{run.year}</div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))", gap:12 }}>
                   {(run.depts||[]).sort((a,b)=>a.avg-b.avg).map(d => (
-                    <div key={d.key} style={{ background:"#1E293B", borderRadius:10, padding:"14px 16px", border:`1px solid ${sbd(d.status)}` }}>
-                      <div style={{ color:"#94A3B8", fontSize:11, marginBottom:6 }}>{d.label}</div>
+                    <div key={d.key} style={{ background:"#FFFFFF", borderRadius:10, padding:"14px 16px", border:`1px solid ${sbd(d.status)}` }}>
+                      <div style={{ color:"#6B6894", fontSize:11, marginBottom:6 }}>{d.label}</div>
                       <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
                         <span style={{ fontSize:22, fontWeight:800, color:sc(d.status) }}>{d.avg}</span>
                         <span style={{ fontSize:10, fontWeight:700, color:sc(d.status) }}>{d.status}</span>
                       </div>
-                      <div style={{ color:"#475569", fontSize:10, marginTop:4 }}>n={d.n}</div>
+                      <div style={{ color:"#7B78A0", fontSize:10, marginTop:4 }}>n={d.n}</div>
                     </div>
                   ))}
                 </div>
@@ -1113,14 +1118,14 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
 
             {/* Trend chart (text-based for now) */}
             {(runsByCountry[dashCountry]||[]).length > 1 && (
-              <div style={{ background:"#1E293B", borderRadius:12, padding:20, marginTop:24 }}>
-                <div style={{ fontSize:11, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:1.5, marginBottom:16 }}>Trend — Year over Year</div>
+              <div style={{ background:"#FFFFFF", borderRadius:12, padding:20, marginTop:24 }}>
+                <div style={{ fontSize:11, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:1.5, marginBottom:16 }}>Trend — Year over Year</div>
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
                   <thead>
-                    <tr style={{ borderBottom:"1px solid #334155" }}>
-                      <th style={{ textAlign:"left", padding:"8px 12px", color:"#64748B" }}>Department</th>
+                    <tr style={{ borderBottom:"1px solid #E2DFF5" }}>
+                      <th style={{ textAlign:"left", padding:"8px 12px", color:"#9391B0" }}>Department</th>
                       {[...(runsByCountry[dashCountry]||[])].sort((a,b)=>a.year-b.year).map(r=>(
-                        <th key={r.year} style={{ textAlign:"center", padding:"8px 12px", color:"#64748B" }}>{r.year}</th>
+                        <th key={r.year} style={{ textAlign:"center", padding:"8px 12px", color:"#9391B0" }}>{r.year}</th>
                       ))}
                     </tr>
                   </thead>
@@ -1130,13 +1135,13 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
                         .map(r => r.depts?.find(d=>d.key===dk||d.group===dk));
                       if (rows.every(r=>!r)) return null;
                       return (
-                        <tr key={dk} style={{ borderBottom:"1px solid #334155" }}>
-                          <td style={{ padding:"8px 12px", color:"#94A3B8" }}>{dk}</td>
+                        <tr key={dk} style={{ borderBottom:"1px solid #E2DFF5" }}>
+                          <td style={{ padding:"8px 12px", color:"#6B6894" }}>{dk}</td>
                           {rows.map((d,i)=>(
                             <td key={i} style={{ textAlign:"center", padding:"8px 12px" }}>
                               {d ? (
                                 <span style={{ fontWeight:700, color:sc(d.status) }}>{d.avg}</span>
-                              ) : <span style={{ color:"#334155" }}>—</span>}
+                              ) : <span style={{ color:"#E2DFF5" }}>—</span>}
                             </td>
                           ))}
                         </tr>
@@ -1148,16 +1153,16 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
             )}
 
             {/* OKR placeholder */}
-            <div style={{ background:"#1E293B", borderRadius:12, padding:24, marginTop:24, border:"1px dashed #334155" }}>
-              <div style={{ fontSize:11, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:1.5, marginBottom:8 }}>OKR Integration</div>
-              <div style={{ color:"#475569", fontSize:13 }}>Key Results tied to staff health metrics will appear here once OKR system integration is connected.</div>
+            <div style={{ background:"#FFFFFF", borderRadius:12, padding:24, marginTop:24, border:"1px dashed #E2DFF5" }}>
+              <div style={{ fontSize:11, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:1.5, marginBottom:8 }}>OKR Integration</div>
+              <div style={{ color:"#7B78A0", fontSize:13 }}>Key Results tied to staff health metrics will appear here once OKR system integration is connected.</div>
             </div>
           </>
         )}
       {/* Refinements manager — always visible in P&C view */}
       <div style={{ marginTop:32 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-          <div style={{ fontSize:13, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:2 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:2 }}>
             Saved Refinements ({Object.keys(refinements).length})
           </div>
           {Object.keys(refinements).length > 0 && (
@@ -1166,11 +1171,11 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
                 setRefinements({});
                 try { localStorage.removeItem("pulse:refinements"); } catch {}
               }
-            }} style={{ ...navBtn, background:"#7F1D1D", fontSize:12 }}>Clear All</button>
+            }} style={{ ...navBtn, background:"#C0392B", fontSize:12 }}>Clear All</button>
           )}
         </div>
         {Object.keys(refinements).length === 0 ? (
-          <div style={{ color:"#475569", fontSize:13, fontStyle:"italic" }}>
+          <div style={{ color:"#7B78A0", fontSize:13, fontStyle:"italic" }}>
             No refinements saved yet. When directors edit wording in the Director Review, those edits are saved here and pre-filled in future country reports.
           </div>
         ) : (
@@ -1178,22 +1183,22 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
             {Object.entries(refinements).map(([key, val]) => {
               const [deptKey, section, idx] = key.split(":");
               return (
-                <div key={key} style={{ background:"#1E293B", borderRadius:8, padding:"12px 16px", display:"flex", alignItems:"flex-start", gap:12 }}>
+                <div key={key} style={{ background:"#FFFFFF", borderRadius:8, padding:"12px 16px", display:"flex", alignItems:"flex-start", gap:12 }}>
                   <div style={{ flex:1 }}>
                     <div style={{ display:"flex", gap:8, marginBottom:4 }}>
-                      <span style={{ fontSize:10, fontWeight:700, color:"#6366F1", background:"#1E1B4B", borderRadius:4, padding:"2px 8px" }}>{deptKey}</span>
-                      <span style={{ fontSize:10, fontWeight:700, color:"#64748B", background:"#0F172A", borderRadius:4, padding:"2px 8px" }}>{section}</span>
-                      <span style={{ fontSize:10, color:"#475569" }}>#{parseInt(idx)+1}</span>
+                      <span style={{ fontSize:10, fontWeight:700, color:"#8B85E8", background:"#EDE9FF", borderRadius:4, padding:"2px 8px" }}>{deptKey}</span>
+                      <span style={{ fontSize:10, fontWeight:700, color:"#9391B0", background:"#F8F7F4", borderRadius:4, padding:"2px 8px" }}>{section}</span>
+                      <span style={{ fontSize:10, color:"#7B78A0" }}>#{parseInt(idx)+1}</span>
                     </div>
-                    <div style={{ color:"white", fontSize:13, lineHeight:1.5 }}>{val.text}</div>
-                    <div style={{ color:"#475569", fontSize:10, marginTop:4 }}>Saved {new Date(val.savedAt).toLocaleDateString()}</div>
+                    <div style={{ color:"#1E1B3A", fontSize:13, lineHeight:1.5 }}>{val.text}</div>
+                    <div style={{ color:"#7B78A0", fontSize:10, marginTop:4 }}>Saved {new Date(val.savedAt).toLocaleDateString()}</div>
                   </div>
                   <button onClick={() => {
                     const updated = { ...refinements };
                     delete updated[key];
                     setRefinements(updated);
                     try { localStorage.setItem("pulse:refinements", JSON.stringify(updated)); } catch {}
-                  }} style={{ color:"#64748B", background:"none", border:"none", cursor:"pointer", fontSize:16, lineHeight:1 }}>×</button>
+                  }} style={{ color:"#9391B0", background:"none", border:"none", cursor:"pointer", fontSize:16, lineHeight:1 }}>×</button>
                 </div>
               );
             })}
@@ -1207,13 +1212,14 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
 
 // ─── SHARED STYLES ────────────────────────────────────────────────────────────
 const card = {
-  background:"#1E293B", borderRadius:12, padding:24,
-  border:"1px solid #334155",
+  background:"#FFFFFF", borderRadius:12, padding:24,
+  border:"1px solid #E2DFF5",
+  boxShadow:"0 1px 4px rgba(124,111,224,0.07)",
 };
 const navBtn = {
-  background:"#1E3A5F", border:"none", borderRadius:8,
-  color:"white", padding:"8px 16px", fontSize:13, fontWeight:600,
+  background:"#EDE9FF", border:"none", borderRadius:8,
+  color:"#1E1B3A", padding:"8px 16px", fontSize:13, fontWeight:600,
   cursor:"pointer",
 };
-const lbl = { display:"block", fontSize:11, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:1, marginBottom:6 };
-const inp = { width:"100%", background:"#0F172A", border:"1px solid #334155", borderRadius:8, padding:"10px 14px", color:"white", fontSize:14, boxSizing:"border-box" };
+const lbl = { display:"block", fontSize:11, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:1, marginBottom:6 };
+const inp = { width:"100%", background:"#F8F7F4", border:"1px solid #E2DFF5", borderRadius:8, padding:"10px 14px", color:"#1E1B3A", fontSize:14, boxSizing:"border-box" };
