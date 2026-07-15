@@ -1,6 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import SURVEY_BASICS from "./surveyBasics.json";
 
+// Map app department keys (HR, LD, LC1/LC2, JVK1/JVK2, ...) to surveyBasics.json keys
+// (which are lowercase and un-split: hr, ld, lc, jvk, ...).
+const SB_KEY = {
+  HR:"hr", LD:"ld", LC1:"lc", LC2:"lc", MPD:"mpd", Counseling:"counseling",
+  Women:"women", Singles:"singles", Marriages:"marriages", JVK1:"jvk", JVK2:"jvk",
+};
+const getSurveyBasics = (deptKey) => SURVEY_BASICS[SB_KEY[deptKey] || String(deptKey||"").toLowerCase()] || [];
+
 // ─── AIRTABLE CONFIG ─────────────────────────────────────────────────────────
 const AT_BASE = "appPulseReportBase"; // replace with real base ID
 
@@ -264,10 +272,8 @@ async function parseSurveyFile(file) {
       .map(r => {
         const raw = (r[dept.openQ] || "").toString().trim();
         if (!raw || raw === ".") return null;
-        // Simple heuristic: if majority of chars are ASCII letters, it's likely English
-        const letters = raw.replace(/[^a-zA-ZÀ-ɏ]/g,'');
-        const ascii = raw.replace(/[^a-zA-Z]/g,'');
-        const isOriginalLang = letters.length > 4 && (ascii.length / letters.length) < 0.6;
+        // Use the shared diacritic-based detector (defined below) so Polish/Romanian/etc. flag correctly
+        const isOriginalLang = looksNonEnglish(raw);
         return { text: raw, isOriginalLang };
       })
       .filter(Boolean);
@@ -483,7 +489,7 @@ const sbd= s => STATUS_BORDER[s]|| STATUS_BORDER[null];
 // Strengths and growth come from Survey Basics (approved source of truth).
 // Leadership questions and quote selection use AI since they require reading open responses.
 async function generateDeptContent(dept) {
-  const deptSBList = SURVEY_BASICS[dept.key] || [];
+  const deptSBList = getSurveyBasics(dept.key);
 
   // Helper: pick the right Survey Basics interpretation level for a question
   const getSBText = (qText, status) => {
@@ -577,9 +583,14 @@ Select 4-6 of the most representative responses. For non-English responses, prov
 // Detect if text is likely non-English (simple heuristic — works for Polish, Romanian, Hungarian)
 function looksNonEnglish(text) {
   if (!text || text.length < 5) return false;
+  // Detect diacritics / language-specific letters (Polish, Romanian, Hungarian, Czech, etc.)
+  // Polish text is mostly ASCII with only a few accented chars, so an ASCII-ratio test fails —
+  // detecting the presence of these characters is far more reliable.
+  const diacritics = text.match(/[ąćęłńóśźżäöüßàâçéèêëîïôûùÿœáíúőűăîșțčřšžě]/gi);
+  if (diacritics && diacritics.length >= 2) return true;
   const letters = text.replace(/[^a-zA-ZÀ-ɏ]/g, '');
   const ascii   = text.replace(/[^a-zA-Z]/g, '');
-  return letters.length > 4 && (ascii.length / letters.length) < 0.65;
+  return letters.length > 8 && (ascii.length / letters.length) < 0.92;
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
@@ -675,12 +686,13 @@ export default function App() {
           items.map((t, idx) => {
             const key = `${d.key}:${section}:${idx}`;
             const refined = currentRefinements[key];
-            // quotes are objects {original, translation, isOriginalLang}; others are strings
-            const textVal = (section === 'quotes' && typeof t === 'object') ? t.original : t;
+            // quotes are objects — AI gen uses {original}, import uses {text}; accept both
+            const isObj = section === 'quotes' && typeof t === 'object' && t !== null;
+            const textVal = isObj ? (t.original ?? t.text ?? '') : t;
             return {
               text: textVal,
-              translation: (section === 'quotes' && typeof t === 'object') ? t.translation : null,
-              isOriginalLang: (section === 'quotes' && typeof t === 'object') ? t.isOriginalLang : false,
+              translation: isObj ? (t.translation ?? null) : null,
+              isOriginalLang: isObj ? !!t.isOriginalLang : false,
               include: true,
               rewrite: refined ? refined.text : "",
               isRefined: !!refined,
@@ -959,10 +971,11 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
                 const applyRef = (section, items) => items.map((t, idx) => {
                   const key = `${d.key}:${section}:${idx}`;
                   const refined = currentRefinements[key];
-                  const textVal = (section === 'quotes' && typeof t === 'object') ? t.original : t;
+                  const isObj = section === 'quotes' && typeof t === 'object' && t !== null;
+                  const textVal = isObj ? (t.original ?? t.text ?? '') : t;
                   return { text: textVal,
-                    translation: (section === 'quotes' && typeof t === 'object') ? t.translation : null,
-                    isOriginalLang: (section === 'quotes' && typeof t === 'object') ? t.isOriginalLang : false,
+                    translation: isObj ? (t.translation ?? null) : null,
+                    isOriginalLang: isObj ? !!t.isOriginalLang : false,
                     include: true, rewrite: refined ? refined.text : "", isRefined: !!refined };
                 });
                 sels[d.key] = {
@@ -1308,7 +1321,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                       {q.en}{q.burden ? <span style={{ color:"#B45309", fontSize:10, marginLeft:4 }}>[Burden]</span> : ""}
                     </div>
                     {(() => {
-                      const deptSB = (SURVEY_BASICS[dept.key] || []);
+                      const deptSB = getSurveyBasics(dept.key);
                       const sbMatch = deptSB.find(sb =>
                         q.en.toLowerCase().slice(0,50).includes(sb.question.toLowerCase().slice(0,30)) ||
                         sb.question.toLowerCase().slice(0,50).includes(q.en.toLowerCase().slice(0,30))
