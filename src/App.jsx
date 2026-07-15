@@ -513,7 +513,7 @@ export default function App() {
       year={year} setYear={setYear}
       fileRef={fileRef} handleFile={handleFile}
       generating={generating} genProgress={genProgress}
-      allRuns={allRuns} setView={setView}
+      allRuns={allRuns} setAllRuns={setAllRuns} setView={setView}
       setSurveyData={setSurveyData} setSelections={setSelections}
       setCountry2={setCountry} setYear2={setYear}
     />
@@ -550,7 +550,7 @@ export default function App() {
 
 // ─── HOME VIEW ────────────────────────────────────────────────────────────────
 function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
-  generating, genProgress, allRuns, setView, setSurveyData, setSelections,
+  generating, genProgress, allRuns, setAllRuns, setView, setSurveyData, setSelections,
   setCountry2, setYear2 }) {
 
   const countries = [...new Set(allRuns.map(r=>r.country))].sort();
@@ -560,7 +560,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
       {/* Header */}
       <div style={{ background:"linear-gradient(135deg,#FFFFFF 0%,#F8F7F4 100%)", borderBottom:"1px solid #EDE9FF", padding:"24px 40px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <div>
-          <div style={{ fontSize:11, letterSpacing:3, color:"#7C6FE0", fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>Josiah Venture</div>
+          <div style={{ fontSize:11, letterSpacing:3, color:"#FF6600", fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>Josiah Venture</div>
           <div style={{ fontSize:22, fontWeight:700, color:"#1E1B3A" }}>Pulse Report Platform</div>
         </div>
         <button onClick={() => setView("dashboard")} style={navBtn}>
@@ -682,7 +682,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
       <div style={{ background:"#FFFFFF", borderBottom:"1px solid #E2DFF5", padding:"14px 24px", display:"flex", alignItems:"center", gap:16, flexShrink:0 }}>
         <button onClick={()=>setView("home")} style={{ ...navBtn, background:"transparent", border:"1px solid #E2DFF5" }}>← Home</button>
         <div style={{ flex:1 }}>
-          <span style={{ color:"#7C6FE0", fontWeight:700, fontSize:13 }}>{country} {year}</span>
+          <span style={{ color:"#FF6600", fontWeight:700, fontSize:13 }}>{country} {year}</span>
           <span style={{ color:"#9391B0", marginLeft:8, fontSize:13 }}>Director Review</span>
         </div>
         <button onClick={saveSelections} style={{ ...navBtn, background: saved?"#1E8449":"#7C6FE0" }}>
@@ -746,20 +746,95 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
           <span style={{ color:"#9391B0", fontSize:13 }}>{dept.avg} avg · n={dept.n}</span>
         </div>
 
-        {/* Question scores */}
-        <div style={{ background:"#FFFFFF", borderRadius:8, padding:16, marginBottom:0 }}>
-          <div style={{ fontSize:11, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>Question Scores</div>
+        {/* Director instruction */}
+        <div style={{ background:"#FFF8F5", border:"1px solid #FFD4B3", borderRadius:8,
+          padding:"10px 14px", marginBottom:12, fontSize:12, color:"#994400", lineHeight:1.6 }}>
+          <strong>Section 1 — Question Scores.</strong> Review each question, its score, status, and scale (MEAN or DIST).
+          The heatmap shows the response distribution (SD · D · U · A · SA). Burden questions are inverted —
+          high agreement = negative outcome. If the heatmap doesn't match what you see on your team, note it below in the rewrite field.
+          Survey Basics text shows what the score means at this level.
+        </div>
+
+        {/* Question scores + heatmap */}
+        <div style={{ background:"#FFFFFF", border:"1px solid #E2DFF5", borderRadius:10, overflow:"hidden", marginBottom:0 }}>
+          {/* Header row */}
+          <div style={{ display:"grid", gridTemplateColumns:"60px 50px 1fr 220px 50px", gap:0,
+            background:"#F5F3FF", borderBottom:"1px solid #E2DFF5", padding:"8px 12px",
+            fontSize:10, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:1.5 }}>
+            <span>Status</span>
+            <span>Score</span>
+            <span>Question</span>
+            <span style={{ textAlign:"center" }}>Response Distribution</span>
+            <span style={{ textAlign:"center" }}>Scale</span>
+          </div>
           {[...dept.questions].sort((a,b) => {
             const o = {Concern:0,Watch:1,Healthy:2};
             return (o[a.status]??1)-(o[b.status]??1) || a.score-b.score;
-          }).map((q,i) => (
-            <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"6px 0", borderBottom:"1px solid #E2DFF5" }}>
-              <span style={{ fontSize:11, fontWeight:700, color:sc(q.status), minWidth:56, paddingTop:1 }}>{q.status}</span>
-              <span style={{ color:"#6B6894", fontSize:11, minWidth:36, paddingTop:1 }}>{q.score?.toFixed(2)}</span>
-              <span style={{ color:"#4A476A", fontSize:12, flex:1 }}>{q.en}</span>
-              <span style={{ color:"#7B78A0", fontSize:10, minWidth:40, textAlign:"right", paddingTop:1 }}>{q.scale.toUpperCase()}</span>
-            </div>
-          ))}
+          }).map((q,i) => {
+            const counts = q.counts || [0,0,0,0,0]; // [SD,D,U,A,SA]
+            const n = counts.reduce((a,b)=>a+b,0) || 1;
+            // For burden questions, display inverted (SA=bad, SD=good)
+            const displayCounts = q.burden ? [...counts].reverse() : counts;
+            const HCOLS = q.burden
+              ? ["#C0392B","#E74C3C","#9391B0","#27AE60","#1E8449"]  // inverted: SA→red, SD→green
+              : ["#C0392B","#E74C3C","#9391B0","#27AE60","#1E8449"]; // SD→red, SA→green
+            const HLABELS = q.burden
+              ? ["SA","A","U","D","SD"]
+              : ["SD","D","U","A","SA"];
+            return (
+              <div key={i} style={{ borderBottom:"1px solid #F0EEFF", padding:"10px 12px" }}>
+                <div style={{ display:"grid", gridTemplateColumns:"60px 50px 1fr 220px 50px", gap:0, alignItems:"center" }}>
+                  {/* Status */}
+                  <span style={{ fontSize:10, fontWeight:700, color:sc(q.status) }}>{q.status}</span>
+                  {/* Score */}
+                  <span style={{ fontSize:13, fontWeight:800, color:sc(q.status) }}>{q.score?.toFixed(2)}</span>
+                  {/* Question text */}
+                  <span style={{ fontSize:12, color:"#1E1B3A", lineHeight:1.5, paddingRight:12 }}>
+                    {q.en}{q.burden ? <span style={{ color:"#9391B0", fontSize:10 }}> [Burden]</span> : ""}
+                  </span>
+                  {/* Heatmap */}
+                  <div>
+                    {/* Stacked bar */}
+                    <div style={{ display:"flex", height:14, borderRadius:4, overflow:"hidden", marginBottom:4 }}>
+                      {displayCounts.map((c,ci) => (
+                        <div key={ci} title={`${HLABELS[ci]}: ${c} (${Math.round(c/n*100)}%)`}
+                          style={{ width:`${c/n*100}%`, background:HCOLS[ci], transition:"width 0.3s",
+                            minWidth: c>0 ? 2 : 0 }} />
+                      ))}
+                    </div>
+                    {/* Count labels */}
+                    <div style={{ display:"flex", gap:6 }}>
+                      {displayCounts.map((c,ci) => (
+                        <div key={ci} style={{ flex:1, textAlign:"center" }}>
+                          <div style={{ fontSize:11, fontWeight:700, color:HCOLS[ci] }}>{c}</div>
+                          <div style={{ fontSize:9, color:"#9391B0" }}>{HLABELS[ci]}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Scale */}
+                  <span style={{ textAlign:"center", fontSize:10, fontWeight:700,
+                    color:"#7B78A0", background:"#F5F3FF", borderRadius:4, padding:"2px 6px" }}>
+                    {q.scale.toUpperCase()}
+                  </span>
+                </div>
+                {/* Survey Basics interpretation */}
+                {(() => {
+                  const basics = SURVEY_BASICS[dept.key] || {};
+                  const interps = basics.q_interpretations || {};
+                  const match = Object.entries(interps).find(([k]) => q.en.toLowerCase().startsWith(k.toLowerCase().slice(0,40)));
+                  return match ? (
+                    <div style={{ marginTop:8, marginLeft:110, padding:"6px 10px",
+                      background:"#F8F7F4", borderLeft:"3px solid #D6D2EF",
+                      borderRadius:"0 6px 6px 0", fontSize:11, color:"#6B6894", lineHeight:1.5 }}>
+                      <span style={{ fontWeight:700, color:"#9391B0", marginRight:6 }}>Survey Basics:</span>
+                      {match[1].interpretation}
+                    </div>
+                  ) : null;
+                })()}
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -810,6 +885,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
 
 // ─── REPORT VIEW ──────────────────────────────────────────────────────────────
 function ReportView({ country, year, surveyData, getApproved, setView }) {
+  const [activeDept, setActiveDept] = useState(null);
   const depts = surveyData ? Object.values(surveyData.depts)
     .filter(d=>d.n>0)
     .sort((a,b) => a.avg-b.avg) : [];
@@ -817,176 +893,247 @@ function ReportView({ country, year, surveyData, getApproved, setView }) {
   const concerns = depts.filter(d=>d.status==="Concern");
   const watches  = depts.filter(d=>d.status==="Watch");
   const healthys = depts.filter(d=>d.status==="Healthy");
+  const overallAvg = depts.length ? (depts.reduce((a,d)=>a+d.avg,0)/depts.length).toFixed(2) : "—";
+  const totalN = depts.reduce((a,d)=>a+d.n,0);
 
-  const printReport = () => window.print();
+  const activeDeptData = activeDept ? depts.find(d=>d.key===activeDept) : null;
 
   return (
-    <div style={{ minHeight:"100vh", background:"#F5F3FF", fontFamily:"'Inter',system-ui,sans-serif" }}>
-      {/* Toolbar — hidden on print */}
-      <div className="no-print" style={{ background:"#FFFFFF", padding:"12px 24px", display:"flex", gap:12, alignItems:"center" }}>
-        <button onClick={()=>setView("review")} style={{ ...navBtn, background:"transparent", border:"1px solid #E2DFF5" }}>← Back to Review</button>
-        <div style={{ flex:1, color:"#6B6894", fontSize:13 }}>{country} {year} Pulse Report</div>
-        <button onClick={printReport} style={{ ...navBtn, background:"#7C6FE0" }}>⬇ Download PDF</button>
+    <div style={{ minHeight:"100vh", background:"#F8F7F4", fontFamily:"'Inter',system-ui,sans-serif" }}>
+      {/* Toolbar */}
+      <div className="no-print" style={{ background:"white", borderBottom:"1px solid #E2DFF5", padding:"12px 24px", display:"flex", gap:12, alignItems:"center", position:"sticky", top:0, zIndex:10 }}>
+        <button onClick={()=>setView("review")} style={{ ...navBtn, background:"transparent", border:"1px solid #E2DFF5" }}>← Director Review</button>
+        <div style={{ flex:1, color:"#FF6600", fontWeight:700, fontSize:13, letterSpacing:1 }}>
+          JOSIAH VENTURE · {country.toUpperCase()} {year}
+        </div>
+        <button onClick={()=>window.print()} style={{ ...navBtn, background:"#FF6600", color:"white" }}>Download PDF</button>
       </div>
 
-      {/* Report content */}
-      <div style={{ maxWidth:900, margin:"0 auto", padding:"40px 24px" }}>
+      <div style={{ maxWidth:960, margin:"0 auto", padding:"40px 24px" }}>
 
-        {/* Cover */}
-        <div style={{ background:"linear-gradient(135deg,#F0EEFF,#EDE9FF)", borderRadius:16, padding:48, marginBottom:32, textAlign:"center", border:"1px solid #D6D2EF" }}>
-          <div style={{ fontSize:11, letterSpacing:4, color:"#7C6FE0", fontWeight:700, textTransform:"uppercase", marginBottom:16 }}>Josiah Venture</div>
-          <div style={{ fontSize:36, fontWeight:800, color:"#1E1B3A", marginBottom:8 }}>{country}</div>
-          <div style={{ fontSize:20, color:"#6B6894", marginBottom:32 }}>Staff Pulse Report · {year}</div>
-          <div style={{ display:"flex", justifyContent:"center", gap:32 }}>
-            {[["Departments", depts.length],["Respondents", depts.reduce((a,d)=>a+d.n,0)],["Overall Avg", (depts.reduce((a,d)=>a+d.avg,0)/depts.length).toFixed(2)]].map(([l,v])=>(
-              <div key={l}>
-                <div style={{ fontSize:28, fontWeight:800, color:"#1E1B3A" }}>{v}</div>
-                <div style={{ fontSize:12, color:"#9391B0" }}>{l}</div>
+        {/* ── SUMMARY PAGE ── */}
+        <div style={{ background:"white", borderRadius:16, padding:40, marginBottom:32, border:"1px solid #E2DFF5", boxShadow:"0 2px 8px rgba(124,111,224,0.08)" }}>
+
+          {/* Header */}
+          <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:32, paddingBottom:24, borderBottom:"2px solid #F5F3FF" }}>
+            <div>
+              <div style={{ fontSize:11, fontWeight:700, color:"#FF6600", letterSpacing:3, textTransform:"uppercase", marginBottom:8 }}>Josiah Venture</div>
+              <div style={{ fontSize:32, fontWeight:800, color:"#1E1B3A", marginBottom:4 }}>{country} Staff Pulse Report</div>
+              <div style={{ fontSize:15, color:"#9391B0" }}>{year} · {totalN} respondents across {depts.length} departments</div>
+            </div>
+            <div style={{ textAlign:"right" }}>
+              <div style={{ fontSize:42, fontWeight:800, color:sc(overallAvg>=3.5?"Healthy":overallAvg>=2.5?"Watch":"Concern") }}>{overallAvg}</div>
+              <div style={{ fontSize:11, color:"#9391B0", marginTop:2 }}>Overall avg</div>
+            </div>
+          </div>
+
+          {/* Score bar chart — all departments */}
+          <div style={{ marginBottom:32 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Department Scores</div>
+            {depts.map(d => (
+              <div key={d.key} onClick={()=>setActiveDept(d.key===activeDept?null:d.key)}
+                style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 12px", marginBottom:4,
+                  borderRadius:8, cursor:"pointer",
+                  background: activeDept===d.key ? sb(d.status) : "transparent",
+                  border: activeDept===d.key ? `1px solid ${sbd(d.status)}` : "1px solid transparent",
+                  transition:"all 0.15s" }}>
+                <div style={{ width:180, fontSize:13, fontWeight:600, color:"#1E1B3A", flexShrink:0 }}>{d.label}</div>
+                <div style={{ flex:1, background:"#F1EFF9", borderRadius:6, height:10, overflow:"hidden" }}>
+                  <div style={{ width:`${((d.avg-1)/4)*100}%`, background:sc(d.status), height:"100%", borderRadius:6, transition:"width 0.6s ease" }} />
+                </div>
+                <div style={{ fontWeight:800, color:sc(d.status), fontSize:15, width:40, textAlign:"right" }}>{d.avg}</div>
+                <span style={{ fontSize:10, fontWeight:700, color:sc(d.status), background:sb(d.status), border:`1px solid ${sbd(d.status)}`, borderRadius:4, padding:"2px 7px", width:60, textAlign:"center", flexShrink:0 }}>{d.status}</span>
+                <div style={{ color:"#9391B0", fontSize:11, width:40, textAlign:"right" }}>n={d.n}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Status group summary */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+            {[["Concern","#FDF2F2","#C0392B",concerns],["Watch","#FFFBEB","#D68910",watches],["Healthy","#F0FDF4","#1E8449",healthys]].map(([label,bg,color,group])=>(
+              <div key={label} style={{ background:bg, borderRadius:10, padding:"14px 16px" }}>
+                <div style={{ fontSize:11, fontWeight:700, color, textTransform:"uppercase", letterSpacing:1.5, marginBottom:8 }}>{label} · {group.length}</div>
+                {group.map(d=>(
+                  <div key={d.key} style={{ fontSize:12, color:"#1E1B3A", padding:"3px 0", borderBottom:"1px solid rgba(0,0,0,0.05)" }}>{d.label}</div>
+                ))}
+                {!group.length && <div style={{ fontSize:12, color, opacity:0.5 }}>None</div>}
               </div>
             ))}
           </div>
         </div>
 
-        {/* Summary table */}
-        <div style={{ background:"#1E1B3A", borderRadius:12, padding:28, marginBottom:32, boxShadow:"0 1px 4px rgba(0,0,0,0.08)" }}>
-          <div style={{ fontSize:13, fontWeight:700, color:"#FFFFFF", textTransform:"uppercase", letterSpacing:2, marginBottom:20 }}>Department Summary</div>
-          {[["Concern", concerns],["Watch", watches],["Healthy", healthys]].map(([status,group]) =>
-            group.length ? (
-              <div key={status} style={{ marginBottom:12 }}>
-                <div style={{ fontSize:11, fontWeight:700, color:sc(status), textTransform:"uppercase", letterSpacing:1.5, marginBottom:6 }}>{status}</div>
-                {group.map(d => (
-                  <div key={d.key} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 0", borderBottom:"1px solid #F5F3FF" }}>
-                    <div style={{ width:120, color:"#FFFFFF", fontWeight:600, fontSize:13 }}>{d.label}</div>
-                    <div style={{ flex:1, background:"#F5F3FF", borderRadius:4, height:8, overflow:"hidden" }}>
-                      <div style={{ width:`${((d.avg-1)/4)*100}%`, background:sc(d.status), height:"100%", borderRadius:4 }} />
-                    </div>
-                    <div style={{ fontWeight:700, color:sc(d.status), fontSize:14, width:36, textAlign:"right" }}>{d.avg}</div>
-                    <div style={{ color:"#6B6894", fontSize:11, width:24 }}>n={d.n}</div>
-                  </div>
-                ))}
-              </div>
-            ) : null
-          )}
+        {/* ── DEPT TABS ── */}
+        <div className="no-print" style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:24 }}>
+          {depts.map(d=>(
+            <button key={d.key} onClick={()=>setActiveDept(d.key===activeDept?null:d.key)}
+              style={{ padding:"8px 14px", borderRadius:8, fontSize:12, fontWeight:600,
+                cursor:"pointer", border:`1px solid ${activeDept===d.key ? sbd(d.status) : "#E2DFF5"}`,
+                background: activeDept===d.key ? sb(d.status) : "white",
+                color: activeDept===d.key ? sc(d.status) : "#1E1B3A" }}>
+              {d.label}
+            </button>
+          ))}
         </div>
 
-        {/* Dept pages */}
-        {depts.map(dept => (
-          <DeptReportPage key={dept.key} dept={dept} getApproved={getApproved} />
-        ))}
+        {/* ── DEPT DETAIL PAGES ── */}
+        {activeDept ? (
+          // Single dept selected — show just that one
+          <DeptReportPage dept={activeDeptData} getApproved={getApproved} />
+        ) : (
+          // No tab selected — show all for print
+          <div>
+            <div className="no-print" style={{ textAlign:"center", color:"#9391B0", fontSize:13, padding:"16px 0 32px" }}>
+              Select a department above to focus, or download PDF to get the full report.
+            </div>
+            <div className="print-only">
+              {depts.map(dept => <DeptReportPage key={dept.key} dept={dept} getApproved={getApproved} />)}
+            </div>
+          </div>
+        )}
       </div>
 
       <style>{`
         @media print {
           .no-print { display:none !important; }
+          .print-only { display:block !important; }
           body { background:white; }
           @page { margin:15mm; size:A4; }
         }
+        .print-only { display:none; }
       `}</style>
     </div>
   );
 }
 
 function DeptReportPage({ dept, getApproved }) {
+  if (!dept) return null;
   const strengths    = getApproved(dept.key, "strengths");
   const growth       = getApproved(dept.key, "growth");
   const leadershipQs = getApproved(dept.key, "leadershipQs");
   const quotes       = getApproved(dept.key, "quotes").slice(0,4);
 
+  const statusColor = sc(dept.status);
+  const statusBg    = sb(dept.status);
+  const statusBd    = sbd(dept.status);
+
   return (
-    <div style={{ background:"#1E1B3A", borderRadius:12, padding:32, marginBottom:24, boxShadow:"0 1px 4px rgba(0,0,0,0.08)", pageBreakInside:"avoid" }}>
+    <div style={{ background:"white", borderRadius:16, padding:36, marginBottom:28,
+      border:"1px solid #E2DFF5", boxShadow:"0 2px 8px rgba(124,111,224,0.07)",
+      pageBreakInside:"avoid" }}>
+
       {/* Dept header */}
-      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:24, paddingBottom:16, borderBottom:"2px solid #F5F3FF" }}>
+      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between",
+        paddingBottom:20, marginBottom:24, borderBottom:`2px solid ${statusBd}` }}>
         <div>
-          <div style={{ fontSize:20, fontWeight:800, color:"#F8F7F4" }}>{dept.label}</div>
-          <div style={{ color:"#9391B0", fontSize:13, marginTop:4 }}>n = {dept.n} respondents</div>
+          <div style={{ fontSize:22, fontWeight:800, color:"#1E1B3A", marginBottom:4 }}>{dept.label}</div>
+          <div style={{ fontSize:13, color:"#9391B0" }}>n = {dept.n} respondents</div>
         </div>
         <div style={{ textAlign:"right" }}>
-          <div style={{ fontSize:28, fontWeight:800, color:sc(dept.status) }}>{dept.avg}</div>
-          <div style={{ fontSize:11, fontWeight:700, color:sc(dept.status), textTransform:"uppercase", letterSpacing:1 }}>{dept.status}</div>
+          <div style={{ fontSize:36, fontWeight:800, color:statusColor, lineHeight:1 }}>{dept.avg}</div>
+          <span style={{ fontSize:11, fontWeight:700, color:statusColor, background:statusBg,
+            border:`1px solid ${statusBd}`, borderRadius:6, padding:"3px 10px", display:"inline-block", marginTop:6 }}>
+            {dept.status}
+          </span>
         </div>
       </div>
 
-      {/* Question scores */}
+      {/* Strengths + Growth — two column */}
+      {(strengths.length > 0 || growth.length > 0) && (
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:24 }}>
+          {strengths.length > 0 && (
+            <div>
+              <div style={{ fontSize:10, fontWeight:700, color:"#1E8449", textTransform:"uppercase",
+                letterSpacing:2, marginBottom:12 }}>What is working</div>
+              {strengths.map((s,i) => (
+                <div key={i} style={{ display:"flex", gap:10, marginBottom:10, alignItems:"flex-start" }}>
+                  <span style={{ color:"#1E8449", fontWeight:700, fontSize:14, marginTop:1, flexShrink:0 }}>✓</span>
+                  <span style={{ fontSize:13, color:"#1E1B3A", lineHeight:1.6 }}>{s}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {growth.length > 0 && (
+            <div>
+              <div style={{ fontSize:10, fontWeight:700, color:statusColor, textTransform:"uppercase",
+                letterSpacing:2, marginBottom:12 }}>Where attention is needed</div>
+              {growth.map((g,i) => (
+                <div key={i} style={{ display:"flex", gap:10, marginBottom:10, alignItems:"flex-start" }}>
+                  <span style={{ color:statusColor, fontWeight:700, fontSize:14, marginTop:1, flexShrink:0 }}>→</span>
+                  <span style={{ fontSize:13, color:"#1E1B3A", lineHeight:1.6 }}>{g}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Question scores table */}
       <div style={{ marginBottom:24 }}>
-        <div style={{ fontSize:11, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>Question Scores — Concern · Watch · Healthy</div>
+        <div style={{ fontSize:10, fontWeight:700, color:"#9391B0", textTransform:"uppercase",
+          letterSpacing:2, marginBottom:10 }}>Question Scores — Concern · Watch · Healthy</div>
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
           <thead>
-            <tr style={{ background:"#FAFAF8" }}>
-              <th style={{ textAlign:"left", padding:"6px 10px", color:"#9391B0", fontWeight:600 }}>Question</th>
-              <th style={{ textAlign:"center", padding:"6px 10px", color:"#9391B0", fontWeight:600, width:60 }}>Score</th>
-              <th style={{ textAlign:"center", padding:"6px 10px", color:"#9391B0", fontWeight:600, width:70 }}>Status</th>
-              <th style={{ textAlign:"center", padding:"6px 10px", color:"#9391B0", fontWeight:600, width:50 }}>Scale</th>
+            <tr style={{ background:"#F5F3FF", borderRadius:6 }}>
+              <th style={{ textAlign:"left", padding:"8px 10px", color:"#9391B0", fontWeight:600, borderRadius:"6px 0 0 6px" }}>Question</th>
+              <th style={{ textAlign:"center", padding:"8px 10px", color:"#9391B0", fontWeight:600, width:55 }}>Score</th>
+              <th style={{ textAlign:"center", padding:"8px 10px", color:"#9391B0", fontWeight:600, width:75 }}>Status</th>
+              <th style={{ textAlign:"center", padding:"8px 10px", color:"#9391B0", fontWeight:600, width:45, borderRadius:"0 6px 6px 0" }}>Scale</th>
             </tr>
           </thead>
           <tbody>
             {[...dept.questions].sort((a,b)=>{
               const o={Concern:0,Watch:1,Healthy:2};
-              return (o[a.status]??1)-(o[b.status]??1)||a.score-b.score;
+              return (o[a.status]??1)-(o[b.status]??1) || a.score-b.score;
             }).map((q,i)=>(
               <tr key={i} style={{ borderBottom:"1px solid #F5F3FF" }}>
-                <td style={{ padding:"7px 10px", color:"#FFFFFF" }}>{q.en}{q.burden ? " [Burden]":""}</td>
-                <td style={{ textAlign:"center", padding:"7px 10px", fontWeight:700, color:sc(q.status) }}>{q.score?.toFixed(2)}</td>
-                <td style={{ textAlign:"center", padding:"7px 10px" }}>
-                  <span style={{ fontSize:10, fontWeight:700, color:sc(q.status), background:sb(q.status), borderRadius:4, padding:"2px 6px" }}>{q.status}</span>
+                <td style={{ padding:"8px 10px", color:"#1E1B3A", lineHeight:1.5 }}>
+                  {q.en}{q.burden ? <span style={{ color:"#9391B0", fontSize:10 }}> [Burden]</span> : ""}
                 </td>
-                <td style={{ textAlign:"center", padding:"7px 10px", color:"#6B6894", fontSize:10 }}>{q.scale.toUpperCase()}</td>
+                <td style={{ textAlign:"center", padding:"8px 10px", fontWeight:700, color:sc(q.status) }}>{q.score?.toFixed(2)}</td>
+                <td style={{ textAlign:"center", padding:"8px 10px" }}>
+                  <span style={{ fontSize:10, fontWeight:700, color:sc(q.status), background:sb(q.status),
+                    border:`1px solid ${sbd(q.status)}`, borderRadius:4, padding:"2px 6px" }}>{q.status}</span>
+                </td>
+                <td style={{ textAlign:"center", padding:"8px 10px", color:"#9391B0", fontSize:10 }}>{q.scale.toUpperCase()}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {/* Strengths + Growth */}
-      {(strengths.length || growth.length) && (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:24 }}>
-          {strengths.length ? (
-            <div>
-              <div style={{ fontSize:11, fontWeight:700, color:"#1E8449", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>What is Working</div>
-              {strengths.map((s,i) => (
-                <div key={i} style={{ display:"flex", gap:8, marginBottom:6, fontSize:12, color:"#FFFFFF", lineHeight:1.5 }}>
-                  <span style={{ color:"#1E8449", marginTop:1 }}>✓</span><span>{s}</span>
-                </div>
-              ))}
-            </div>
-          ) : null}
-          {growth.length ? (
-            <div>
-              <div style={{ fontSize:11, fontWeight:700, color:sc(dept.status), textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>Where Attention is Needed</div>
-              {growth.map((g,i) => (
-                <div key={i} style={{ display:"flex", gap:8, marginBottom:6, fontSize:12, color:"#FFFFFF", lineHeight:1.5 }}>
-                  <span style={{ color:sc(dept.status), marginTop:1 }}>→</span><span>{g}</span>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      )}
-
       {/* Leadership Questions */}
-      {leadershipQs.length ? (
-        <div style={{ background:"#F5F3FF", borderRadius:8, padding:16, marginBottom:20, border:"1px solid #E2DFF5" }}>
-          <div style={{ fontSize:11, fontWeight:700, color:"#3B3882", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>Questions for Leadership</div>
+      {leadershipQs.length > 0 && (
+        <div style={{ background:"#F0EEFF", borderRadius:10, padding:20, marginBottom:24,
+          border:"1px solid #D6D2EF" }}>
+          <div style={{ fontSize:10, fontWeight:700, color:"#3B3882", textTransform:"uppercase",
+            letterSpacing:2, marginBottom:12 }}>Questions for leadership</div>
           {leadershipQs.map((q,i) => (
-            <div key={i} style={{ display:"flex", gap:10, marginBottom:8, fontSize:12, color:"#3B3882" }}>
-              <span style={{ fontWeight:700, minWidth:16 }}>{i+1}</span><span>{q}</span>
+            <div key={i} style={{ display:"flex", gap:12, marginBottom:10, alignItems:"flex-start" }}>
+              <span style={{ background:"#7C6FE0", color:"white", borderRadius:"50%", width:20, height:20,
+                display:"flex", alignItems:"center", justifyContent:"center",
+                fontSize:11, fontWeight:700, flexShrink:0, marginTop:1 }}>{i+1}</span>
+              <span style={{ fontSize:13, color:"#1E1B3A", lineHeight:1.6 }}>{q}</span>
             </div>
           ))}
         </div>
-      ) : null}
+      )}
 
-      {/* Quotes */}
-      {quotes.length ? (
+      {/* Staff Quotes */}
+      {quotes.length > 0 && (
         <div>
-          <div style={{ fontSize:11, fontWeight:700, color:"#7B78A0", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>What Staff Said</div>
-          <div style={{ display:"grid", gridTemplateColumns: quotes.length>1?"1fr 1fr":"1fr", gap:12 }}>
+          <div style={{ fontSize:10, fontWeight:700, color:"#9391B0", textTransform:"uppercase",
+            letterSpacing:2, marginBottom:12 }}>What staff said</div>
+          <div style={{ display:"grid", gridTemplateColumns: quotes.length > 1 ? "1fr 1fr" : "1fr", gap:12 }}>
             {quotes.map((q,i) => (
-              <div key={i} style={{ background:"#FAFAF8", borderLeft:"3px solid #4A476A", borderRadius:"0 8px 8px 0", padding:"12px 14px", fontSize:12, color:"#E2DFF5", lineHeight:1.6, fontStyle:"italic" }}>
+              <div key={i} style={{ background:"#F8F7F4", borderLeft:"3px solid #D6D2EF",
+                borderRadius:"0 8px 8px 0", padding:"12px 16px", fontSize:13,
+                color:"#1E1B3A", lineHeight:1.7, fontStyle:"italic" }}>
                 "{q}"
               </div>
             ))}
           </div>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
