@@ -360,7 +360,7 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const r = (()=>{try{const _v=localStorage.getItem("pulse:runs");return _v?{value:_v}:null}catch{return null}})();
+        let r = null; try { const _v = localStorage.getItem("pulse:runs"); r = _v ? {value:_v} : null; } catch(e) {}
         if (r) setAllRuns(JSON.parse(r.value));
       } catch {}
     })();
@@ -378,8 +378,8 @@ export default function App() {
     };
     const runs = [...allRuns.filter(r => !(r.country===country && r.year===year)), run];
     setAllRuns(runs);
-    try { (()=>{try{localStorage.setItem("pulse:runs",JSON.stringify(runs);return true}catch{return null}})()); } catch {}
-    try { (()=>{try{localStorage.setItem(`pulse:data:${country}:${year}`,JSON.stringify(data);return true}catch{return null}})()); } catch {}
+    try { localStorage.setItem("pulse:runs", JSON.stringify(runs)); } catch(e) {}
+    try { localStorage.setItem(`pulse:data:${country}:${year}`, JSON.stringify(data)); } catch(e) {}
   };
 
   const handleFile = async (file) => {
@@ -418,7 +418,7 @@ export default function App() {
 
   const saveSelections = async () => {
     try {
-      (()=>{try{localStorage.setItem(`pulse:sel:${country}:${year}`,JSON.stringify(selections);return true}catch{return null}})());
+      try { localStorage.setItem(`pulse:sel:${country}:${year}`, JSON.stringify(selections)); } catch(e) {}
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch {}
@@ -572,8 +572,8 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
                   <button style={navBtn} onClick={async () => {
                     setCountry2(run.country); setYear2(run.year);
                     try {
-                      const r = (()=>{try{const _v=localStorage.getItem(`pulse:data:${run.country}:${run.year}`);return _v?{value:_v}:null}catch{return null}})();
-                      const s = (()=>{try{const _v=localStorage.getItem(`pulse:sel:${run.country}:${run.year}`);return _v?{value:_v}:null}catch{return null}})();
+                      let r = null; try { const _v = localStorage.getItem(`pulse:data:${run.country}:${run.year}`); r = _v ? {value:_v} : null; } catch(e) {}
+                      let s = null; try { const _v = localStorage.getItem(`pulse:sel:${run.country}:${run.year}`); s = _v ? {value:_v} : null; } catch(e) {}
                       if (r) setSurveyData(JSON.parse(r.value));
                       if (s) setSelections(JSON.parse(s.value));
                       setView("review");
