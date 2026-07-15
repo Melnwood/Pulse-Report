@@ -955,8 +955,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                     borderRight:"1px solid #E2DFF5" }}>
                     <span style={{ fontSize:10, fontWeight:700,
                       color: q.burden ? "#B45309" : "#7B78A0" }}>
-                      {q.burden ? "Burden
-[inv.]" : "Q"}
+                      {q.burden ? "Burden [inv.]" : "Q"}
                     </span>
                   </div>
                   {/* Score */}
