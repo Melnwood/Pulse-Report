@@ -3,7 +3,6 @@ import SURVEY_BASICS from "./surveyBasics.json";
 
 // ─── AIRTABLE CONFIG ─────────────────────────────────────────────────────────
 const AT_BASE = "appPulseReportBase"; // replace with real base ID
-const AT_KEY = process.env.REACT_APP_ANTHROPIC_KEY || "";                    // injected via Netlify env — leave blank here
 
 // ─── SURVEY STRUCTURE ────────────────────────────────────────────────────────
 // Col indices from SurveyPro Raw Data sheet
@@ -351,14 +350,9 @@ Return ONLY valid JSON (no markdown):
 }
 Select 4-6 of the most representative responses. For non-English responses, provide an accurate English translation. For English responses, set translation to null.`;
 
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/.netlify/functions/claude", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": process.env.REACT_APP_ANTHROPIC_KEY || "",
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
           max_tokens: 800,
