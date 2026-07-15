@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import SURVEY_BASICS from "./surveyBasics.json";
 
 // ─── AIRTABLE CONFIG ─────────────────────────────────────────────────────────
 const AT_BASE = "appPulseReportBase"; // replace with real base ID
@@ -293,53 +294,66 @@ const sc = s => STATUS_COLOR[s] || STATUS_COLOR[null];
 const sb = s => STATUS_BG[s]    || STATUS_BG[null];
 const sbd= s => STATUS_BORDER[s]|| STATUS_BORDER[null];
 
-// ─── AI GENERATION (via Anthropic API) ───────────────────────────────────────
-async function generateDeptContent(dept, country) {
-  const prompt = `You are writing content for the JV (Josiah Venture) Pulse Report — a staff care survey report for ${country}.
+// ─── CONTENT GENERATION ──────────────────────────────────────────────────────
+// Strengths and growth come from Survey Basics (approved source of truth).
+// Leadership questions and quote selection use AI since they require reading open responses.
+async function generateDeptContent(dept) {
+  const basics = SURVEY_BASICS[dept.key] || {};
 
-Department: ${dept.label}
-n = ${dept.n} respondents
-Overall status: ${dept.status} (avg score: ${dept.avg})
+  // Strengths and growth from Survey Basics file — fixed, consistent, approved
+  const strengths = basics.strengths || [];
+  const growth    = basics.growth    || [];
 
-Questions and scores:
-${dept.questions.map(q => `- [${q.status}] ${q.score?.toFixed(2)} — "${q.en}" (${q.burden?'Burden/inverted':'Standard'}, ${q.scale.toUpperCase()} scale)`).join('\n')}
+  // Leadership questions and quote selection via AI
+  let leadershipQs = [];
+  let quotes = dept.openResponses.slice(0, 6); // fallback: first 6 responses
 
-Open responses (sample):
-${dept.openResponses.slice(0,6).map((r,i) => `${i+1}. "${r}"`).join('\n')}
+  if (dept.openResponses.length > 0) {
+    try {
+      const prompt = `You are helping prepare a JV (Josiah Venture) Pulse Report for the ${dept.label} department.
 
-Generate exactly this JSON structure (no markdown, no preamble):
+Department status: ${dept.status} (avg: ${dept.avg}, n=${dept.n})
+
+Concern questions:
+${dept.questions.filter(q=>q.status==='Concern').map(q=>`- ${q.score?.toFixed(2)} "${q.en}"`).join('\n')||'None'}
+
+Watch questions:
+${dept.questions.filter(q=>q.status==='Watch').map(q=>`- ${q.score?.toFixed(2)} "${q.en}"`).join('\n')||'None'}
+
+Open responses (verbatim):
+${dept.openResponses.map((r,i)=>`${i+1}. "${r}"`).join('\n')}
+
+Return ONLY valid JSON (no markdown):
 {
-  "strengths": ["2-4 strength statements, 1 sentence each, grounded in the data"],
-  "growth": ["3-5 growth area statements, 1 sentence each, specific to the scores"],
-  "leadershipQs": ["3-4 leadership questions for the director to reflect on"],
-  "quotes": ["select 4-6 of the most representative open responses verbatim"]
-}
+  "leadershipQs": ["3 specific, practical questions for the director based on the data above"],
+  "quotes": ["select the 4-6 most representative verbatim responses from the list above — copy exactly, do not paraphrase"]
+}`;
 
-Rules:
-- Strength statements describe what IS working based on Healthy/Watch scores
-- Growth statements name the gap directly — no softening, no generic language
-- Leadership questions are practical and specific to this department's data
-- Quotes must be verbatim from the open responses provided — do not paraphrase or invent
-- Write in the same voice as the rest of the report — clear, direct, ministry-focused`;
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": process.env.REACT_APP_ANTHROPIC_KEY || "",
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 800,
+          messages: [{ role: "user", content: prompt }]
+        })
+      });
+      const data = await res.json();
+      const text = data.content?.find(b => b.type === "text")?.text || "{}";
+      const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+      if (parsed.leadershipQs?.length) leadershipQs = parsed.leadershipQs;
+      if (parsed.quotes?.length) quotes = parsed.quotes;
+    } catch(e) {
+      console.warn("AI generation failed for", dept.key, e.message);
+    }
+  }
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": process.env.REACT_APP_ANTHROPIC_KEY || "",
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 1000,
-      messages: [{ role: "user", content: prompt }]
-    })
-  });
-  const data = await res.json();
-  const text = data.content?.find(b => b.type === "text")?.text || "{}";
-  try { return JSON.parse(text.replace(/```json|```/g,"")); }
-  catch { return { strengths:[], growth:[], leadershipQs:[], quotes:[] }; }
+  return { strengths, growth, leadershipQs, quotes };
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
@@ -365,6 +379,15 @@ export default function App() {
       } catch {}
     })();
   }, []);
+
+  // Reload selections when country+year change (e.g. opening a previous run)
+  useEffect(() => {
+    if (!country || !year) return;
+    try {
+      const raw = localStorage.getItem(`pulse:sel:${country}:${year}`);
+      if (raw) setSelections(JSON.parse(raw));
+    } catch(e) {}
+  }, [country, year]);
 
   const saveRun = async (data) => {
     const run = {
@@ -416,12 +439,17 @@ export default function App() {
     }
   };
 
-  const saveSelections = async () => {
-    try {
+  // Persist selections whenever they change
+  useEffect(() => {
+    if (country && year && Object.keys(selections).length > 0) {
       try { localStorage.setItem(`pulse:sel:${country}:${year}`, JSON.stringify(selections)); } catch(e) {}
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch {}
+    }
+  }, [selections, country, year]);
+
+  const saveSelections = async () => {
+    try { localStorage.setItem(`pulse:sel:${country}:${year}`, JSON.stringify(selections)); } catch(e) {}
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
   };
 
   const toggleItem = (deptKey, section, idx) => {
