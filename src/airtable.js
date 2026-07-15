@@ -207,4 +207,100 @@ export async function runExistsInAirtable(country, year) {
   return depts.records.length > 0;
 }
 
+
+// Load all runs from Airtable for the home screen's Previous Runs list.
+// Returns [{ id, country, year, status, overallAvg, respondents, depts:[...] }].
+export async function loadAllRuns() {
+  const runsRes = await call({ action: "list", table: "runs" });
+  const deptsRes = await call({ action: "list", table: "departments" });
+
+  // group departments by run name
+  const deptsByRun = {};
+  for (const d of deptsRes.records) {
+    const key = d.fields["Department Key"] || "";
+    const runName = key.includes("·") ? key.split("·")[0].trim() : "";
+    if (!runName) continue;
+    (deptsByRun[runName] = deptsByRun[runName] || []).push({
+      key: d.fields["Dept Code"]?.name || d.fields["Dept Code"] || "",
+      label: d.fields["Dept Name"] || "",
+      avg: d.fields["Average"] ?? null,
+      status: d.fields["Status"]?.name || d.fields["Status"] || null,
+      n: d.fields["Respondents"] ?? null,
+    });
+  }
+
+  const runs = [];
+  for (const r of runsRes.records) {
+    const country = r.fields["Country"];
+    const year = r.fields["Year"];
+    if (!country || !year) continue;   // skip empty placeholder rows
+    const runName = `${country} ${year}`;
+    runs.push({
+      id: `${country}-${year}-airtable`,
+      country, year,
+      status: r.fields["Status"]?.name || r.fields["Status"] || "In Review",
+      overallAvg: r.fields["Overall Average"] ?? null,
+      respondents: r.fields["Respondents"] ?? null,
+      depts: deptsByRun[runName] || [],
+      fromAirtable: true,
+    });
+  }
+  return runs;
+}
+
+
+// Reassemble a full surveyData object for a run from Airtable, so any device can
+// open a run and see the complete review (scores, questions, heatmap, quotes).
+export async function loadRunSurveyData(country, year) {
+  const runName = `${country} ${year}`;
+  const depts = await call({ action: "list", table: "departments",
+    filterByFormula: `FIND(${q(runName)}, {Department Key}) = 1` });
+  if (!depts.records.length) return null;
+
+  // department code -> record id, for pulling that dept's quotes
+  const recByCode = {};
+  const dd = {};
+  for (const d of depts.records) {
+    const key = d.fields["Department Key"] || "";
+    const code = d.fields["Dept Code"]?.name || d.fields["Dept Code"] ||
+                 key.split("·").pop().trim();
+    if (!code) continue;
+    recByCode[code] = d.id;
+    let questions = [];
+    try { questions = JSON.parse(d.fields["Survey Data JSON"] || "{}").questions || []; } catch {}
+    dd[code] = {
+      key: code,
+      label: d.fields["Dept Name"] || code,
+      group: (code === "JVK1" || code === "JVK2") ? "JVK" : (code === "LC1" || code === "LC2") ? "LC" : code,
+      n: d.fields["Respondents"] ?? (questions[0]?.n ?? 0),
+      avg: d.fields["Average"] ?? null,
+      status: d.fields["Status"]?.name || d.fields["Status"] || null,
+      questions,
+      openResponses: [],   // filled from Selections (quotes) below
+      openQLabel: d.fields["Open Question"] || "",
+    };
+  }
+
+  // Pull all quote selections for this run and attach as openResponses per dept.
+  try {
+    const sels = await call({ action: "list", table: "selections",
+      filterByFormula: `AND(FIND(${q(runName + " ")}, ARRAYJOIN({Department})) = 1, {Section} = 'Quote')` });
+    const codeById = {};
+    Object.entries(recByCode).forEach(([code, id]) => { codeById[id] = code; });
+    sels.records.forEach(r => {
+      const linked = r.fields["Department"];
+      const depRecId = Array.isArray(linked) && linked[0] ? linked[0].id : null;
+      const code = depRecId ? codeById[depRecId] : null;
+      if (!code || !dd[code]) return;
+      dd[code].openResponses.push({
+        text: r.fields["Text"] || "",
+        translation: r.fields["Translation"] || null,
+        isOriginalLang: !!r.fields["Is Original Language"],
+      });
+    });
+  } catch (e) { /* quotes optional — leave empty if unavailable */ }
+
+  return { depts: dd, merged: {}, raw: [] };
+}
+
 export { F as AIRTABLE_FIELDS };

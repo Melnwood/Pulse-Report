@@ -3,16 +3,11 @@
   publish = "build"
   functions = "netlify/functions"
 
-# Let API/function requests pass through to the serverless functions.
-# This MUST come before the SPA catch-all, or /.netlify/functions/* gets
-# swallowed and returns index.html instead of the function response.
-[[redirects]]
-  from = "/.netlify/functions/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
-
-# SPA catch-all — everything else serves the React app.
+# SPA catch-all — serve the React app for all routes. With force = false (the
+# default), Netlify matches real files and serverless functions FIRST, so calls
+# to /.netlify/functions/* reach the functions and are not replaced by index.html.
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+  force = false
