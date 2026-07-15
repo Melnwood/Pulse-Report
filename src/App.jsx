@@ -13,7 +13,7 @@ const getSurveyBasics = (deptKey) => SURVEY_BASICS[SB_KEY[deptKey] || String(dep
 const AT_BASE = "appPulseReportBase"; // replace with real base ID
 
 // ─── SURVEY STRUCTURE ────────────────────────────────────────────────────────
-// Col indices from SurveyPro Raw Data sheet
+// Col indices from QuestionPro Raw Data sheet
 // Routing columns are resolved from the header row at parse time (positions vary
 // by country export), so we match on the header TEXT rather than a fixed index.
 // Fallback indices match the observed Poland layout if a header isn't found.
@@ -528,7 +528,7 @@ async function parseDirectorReview(file, departments) {
 }
 
 // ─── COLOR / STATUS UTILS ─────────────────────────────────────────────────────
-const STATUS_COLOR = { Concern:"#C0392B", Watch:"#D68910", Healthy:"#1E8449", null:"#9391B0" };
+const STATUS_COLOR = { Concern:"#C0392B", Watch:"#D68910", Healthy:"#1E8449", null:"#9C8F82" };
 const STATUS_BG    = { Concern:"#FDF2F2", Watch:"#FFFBEB", Healthy:"#F0FDF4", null:"#FAFAF8" };
 const STATUS_BORDER= { Concern:"#FCA5A5", Watch:"#FCD34D", Healthy:"#86EFAC", null:"#E2E8F0" };
 const sc = s => STATUS_COLOR[s] || STATUS_COLOR[null];
@@ -1020,7 +1020,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
   return (
     <div style={{ minHeight:"100vh", background:"#F8F7F4", fontFamily:"'Inter',system-ui,sans-serif" }}>
       {/* Header */}
-      <div style={{ background:"linear-gradient(135deg,#FFFFFF 0%,#F8F7F4 100%)", borderBottom:"1px solid #EDE9FF", padding:"24px 40px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+      <div style={{ background:"linear-gradient(135deg,#FFFFFF 0%,#F8F7F4 100%)", borderBottom:"1px solid #FFEBDA", padding:"24px 40px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <div>
           <div style={{ fontSize:11, letterSpacing:3, color:"#FF6600", fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>Josiah Venture</div>
           <div style={{ fontSize:22, fontWeight:700, color:"#1E1B3A" }}>Pulse Report Platform</div>
@@ -1033,7 +1033,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
           <button onClick={toggleAdmin}
             title={isAdmin ? "Admin mode ON — click to hide admin tools" : "Admin mode"}
             style={{ background:"transparent", border:"none", cursor:"pointer",
-              fontSize:16, color: isAdmin ? "#7C6FE0" : "#D8D5EC", padding:"4px 8px", lineHeight:1 }}>
+              fontSize:16, color: isAdmin ? "#FF6600" : "#EAD9C9", padding:"4px 8px", lineHeight:1 }}>
             {isAdmin ? "🔓" : "🔒"}
           </button>
         </div>
@@ -1044,7 +1044,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
         {/* Upload card — admin only (survey upload creates/overwrites a run) */}
         {isAdmin && (
         <div style={card}>
-          <div style={{ fontSize:13, fontWeight:700, color:"#7C6FE0", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>New Survey Run</div>
+          <div style={{ fontSize:13, fontWeight:700, color:"#FF6600", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>New Survey Run</div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:24 }}>
             <div>
               <label style={lbl}>Country</label>
@@ -1060,34 +1060,34 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 
           {generating ? (
             <div style={{ background:"#FFFFFF", borderRadius:12, padding:24, textAlign:"center" }}>
-              <div style={{ width:40, height:40, border:"3px solid #7C6FE0", borderTopColor:"transparent", borderRadius:"50%", margin:"0 auto 16px", animation:"spin 1s linear infinite" }} />
+              <div style={{ width:40, height:40, border:"3px solid #FF6600", borderTopColor:"transparent", borderRadius:"50%", margin:"0 auto 16px", animation:"spin 1s linear infinite" }} />
               <div style={{ color:"#1E1B3A", fontWeight:600 }}>{genProgress.step || "Processing…"}</div>
-              <div style={{ color:"#9391B0", fontSize:12, marginTop:8 }}>This may take a minute while AI generates draft content</div>
+              <div style={{ color:"#9C8F82", fontSize:12, marginTop:8 }}>This may take a minute while AI generates draft content</div>
             </div>
           ) : (
             <div
               onClick={() => country && year && fileRef.current?.click()}
-              onDragOver={e => { e.preventDefault(); if(country&&year) e.currentTarget.style.borderColor="#7C6FE0"; }}
-              onDragLeave={e => { e.preventDefault(); e.currentTarget.style.borderColor="#E2DFF5"; }}
+              onDragOver={e => { e.preventDefault(); if(country&&year) e.currentTarget.style.borderColor="#FF6600"; }}
+              onDragLeave={e => { e.preventDefault(); e.currentTarget.style.borderColor="#F5E4D5"; }}
               onDrop={e => {
                 e.preventDefault();
-                e.currentTarget.style.borderColor="#E2DFF5";
+                e.currentTarget.style.borderColor="#F5E4D5";
                 if (!(country && year)) return;
                 const file = e.dataTransfer.files?.[0];
                 if (file) handleFile(file);
               }}
               style={{
-                border:"2px dashed #E2DFF5", borderRadius:12, padding:48,
+                border:"2px dashed #F5E4D5", borderRadius:12, padding:48,
                 textAlign:"center", cursor: country&&year ? "pointer":"not-allowed",
                 opacity: country&&year ? 1 : 0.5,
                 transition:"border-color 0.2s",
               }}
-              onMouseEnter={e => { if(country&&year) e.currentTarget.style.borderColor="#7C6FE0"; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor="#E2DFF5"; }}
+              onMouseEnter={e => { if(country&&year) e.currentTarget.style.borderColor="#FF6600"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor="#F5E4D5"; }}
             >
               <div style={{ fontSize:32, marginBottom:12 }}>📊</div>
-              <div style={{ color:"#1E1B3A", fontWeight:600, marginBottom:4 }}>Drop SurveyPro export here, or click to browse</div>
-              <div style={{ color:"#9391B0", fontSize:13 }}>.xlsx or .csv</div>
+              <div style={{ color:"#1E1B3A", fontWeight:600, marginBottom:4 }}>Drop QuestionPro export here, or click to browse</div>
+              <div style={{ color:"#9C8F82", fontSize:13 }}>.xlsx or .csv</div>
               <input ref={fileRef} type="file" accept=".xlsx,.csv" style={{ display:"none" }}
                 onChange={e => e.target.files[0] && handleFile(e.target.files[0])} />
             </div>
@@ -1098,13 +1098,13 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
         {/* Previous runs */}
         {allRuns.length > 0 && (
           <div style={{ marginTop:32 }}>
-            <div style={{ fontSize:13, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Previous Runs</div>
+            <div style={{ fontSize:13, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Previous Runs</div>
             <div style={{ display:"grid", gap:12 }}>
               {allRuns.slice().reverse().map(run => (
                 <div key={run.id} style={{ ...card, display:"flex", justifyContent:"space-between", alignItems:"center", padding:"16px 20px" }}>
                   <div>
                     <div style={{ color:"#1E1B3A", fontWeight:600 }}>{run.country} — {run.year}</div>
-                    <div style={{ color:"#9391B0", fontSize:12, marginTop:2 }}>{run.depts?.length} departments · {new Date(run.savedAt).toLocaleDateString()}</div>
+                    <div style={{ color:"#9C8F82", fontSize:12, marginTop:2 }}>{run.depts?.length} departments · {new Date(run.savedAt).toLocaleDateString()}</div>
                   </div>
                   <div style={{ display:"flex", gap:8 }}>
                     {run.depts?.slice(0,5).map(d => (
@@ -1157,7 +1157,16 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
   const [genQs, setGenQs] = useState(false);
   const [importMsg, setImportMsg] = useState(null);
   const importInputRef = useRef(null);
-  const depts = surveyData ? Object.values(surveyData.depts).filter(d=>d.n>0) : [];
+  // Order departments by concern: Concern (red) first, then Watch (yellow), then
+  // Healthy (green); within each band, lowest score first. Same order every report.
+  const STATUS_ORDER = { Concern: 0, Watch: 1, Healthy: 2 };
+  const depts = surveyData
+    ? Object.values(surveyData.depts).filter(d=>d.n>0).sort((a,b) => {
+        const sa = STATUS_ORDER[a.status] ?? 3, sb = STATUS_ORDER[b.status] ?? 3;
+        if (sa !== sb) return sa - sb;
+        return (parseFloat(a.avg)||0) - (parseFloat(b.avg)||0); // worst score first within a band
+      })
+    : [];
 
   useEffect(() => { if (depts.length && !activeDept) setActiveDept(depts[0].key); }, [depts.length]);
 
@@ -1166,14 +1175,14 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
   return (
     <div style={{ height:"100vh", background:"#F8F7F4", fontFamily:"'Inter',system-ui,sans-serif", display:"flex", flexDirection:"column", overflow:"hidden" }}>
       {/* Top bar — stays fixed at the top; only the content pane below scrolls so the action buttons (Translate, Import, Save, Generate) stay visible while scrolling */}
-      <div style={{ background:"#FFFFFF", borderBottom:"1px solid #E2DFF5", padding:"14px 24px", display:"flex", alignItems:"center", gap:16, flexShrink:0, zIndex:100, flexWrap:"wrap" }}>
-        <button onClick={()=>setView("home")} style={{ ...navBtn, background:"transparent", border:"1px solid #E2DFF5" }}>← Home</button>
+      <div style={{ background:"#FFFFFF", borderBottom:"1px solid #F5E4D5", padding:"14px 24px", display:"flex", alignItems:"center", gap:16, flexShrink:0, zIndex:100, flexWrap:"wrap" }}>
+        <button onClick={()=>setView("home")} style={{ ...navBtn, background:"transparent", border:"1px solid #F5E4D5" }}>← Home</button>
         <div style={{ flex:1 }}>
           <span style={{ color:"#FF6600", fontWeight:700, fontSize:13 }}>{country} {year}</span>
-          <span style={{ color:"#9391B0", marginLeft:8, fontSize:13 }}>Director Review</span>
+          <span style={{ color:"#9C8F82", marginLeft:8, fontSize:13 }}>Director Review</span>
         </div>
         <button onClick={()=>setShowHelp(true)} style={{ ...navBtn, background:"white",
-          border:"1px solid #E2DFF5", color:"#7C6FE0", fontWeight:700 }}>
+          border:"1px solid #F5E4D5", color:"#FF6600", fontWeight:700 }}>
           ? How scoring works
         </button>
         <input ref={importInputRef} type="file" accept=".xlsx" style={{ display:"none" }}
@@ -1198,7 +1207,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
           }} />
         {isAdmin && (<>
         <button onClick={() => importInputRef.current?.click()}
-          style={{ ...navBtn, background:"white", border:"1px solid #E2DFF5", color:"#1E1B3A" }}>
+          style={{ ...navBtn, background:"white", border:"1px solid #F5E4D5", color:"#1E1B3A" }}>
           ⬆ Import director review (Excel)
         </button>
         <button
@@ -1220,8 +1229,8 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
             }
             setTranslating(false);
           }}
-          style={{ ...navBtn, background:"white", border:"1px solid #E2DFF5",
-            color: translating ? "#9391B0" : "#1E1B3A", cursor: translating ? "wait" : "pointer" }}>
+          style={{ ...navBtn, background:"white", border:"1px solid #F5E4D5",
+            color: translating ? "#9C8F82" : "#1E1B3A", cursor: translating ? "wait" : "pointer" }}>
           {translating ? "Translating…" : "🌐 Translate quotes"}
         </button>
         <button
@@ -1249,16 +1258,16 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
             }
             setGenQs(false);
           }}
-          style={{ ...navBtn, background:"white", border:"1px solid #E2DFF5",
-            color: genQs ? "#9391B0" : "#1E1B3A", cursor: genQs ? "wait" : "pointer" }}>
+          style={{ ...navBtn, background:"white", border:"1px solid #F5E4D5",
+            color: genQs ? "#9C8F82" : "#1E1B3A", cursor: genQs ? "wait" : "pointer" }}>
           {genQs ? "Generating…" : "✦ Generate leadership questions"}
         </button>
         </>)}
-        <button onClick={saveSelections} style={{ ...navBtn, background: saved?"#1E8449":"#7C6FE0" }}>
+        <button onClick={saveSelections} style={{ ...navBtn, background: saved?"#1E8449":"#FF6600" }}>
           {saved ? "✓ Saved" : "Save Progress"}
         </button>
         {isAdmin && (
-        <button onClick={()=>setView("report")} style={{ ...navBtn, background:"#9B8FE8" }}>
+        <button onClick={()=>setView("report")} style={{ ...navBtn, background:"#FF7A1A" }}>
           Generate Report →
         </button>
         )}
@@ -1267,7 +1276,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
           onClick={toggleAdmin}
           title={isAdmin ? "Admin mode ON — click to hide admin tools" : "Admin mode"}
           style={{ marginLeft:"auto", background:"transparent", border:"none", cursor:"pointer",
-            fontSize:14, color: isAdmin ? "#7C6FE0" : "#D8D5EC", padding:"4px 8px", lineHeight:1 }}>
+            fontSize:14, color: isAdmin ? "#FF6600" : "#EAD9C9", padding:"4px 8px", lineHeight:1 }}>
           {isAdmin ? "🔓" : "🔒"}
         </button>
       </div>
@@ -1277,8 +1286,8 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
       {importMsg && (
         <div style={{ margin:"12px 20px", padding:"12px 16px", borderRadius:8, flexShrink:0,
           maxHeight:"30vh", overflowY:"auto",
-          background: importMsg.status==="error" ? "#FDF2F2" : importMsg.status==="done" ? "#F0FDF4" : "#F5F3FF",
-          border: `1px solid ${importMsg.status==="error" ? "#FCA5A5" : importMsg.status==="done" ? "#86EFAC" : "#E2DFF5"}` }}>
+          background: importMsg.status==="error" ? "#FDF2F2" : importMsg.status==="done" ? "#F0FDF4" : "#FFF4EC",
+          border: `1px solid ${importMsg.status==="error" ? "#FCA5A5" : importMsg.status==="done" ? "#86EFAC" : "#F5E4D5"}` }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
             <div style={{ fontSize:12, lineHeight:1.6, color:"#1E1B3A" }}>
               {importMsg.lines.map((l,i) => (
@@ -1286,7 +1295,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
               ))}
             </div>
             <button onClick={()=>setImportMsg(null)} style={{ background:"none", border:"none",
-              cursor:"pointer", color:"#9391B0", fontSize:16, lineHeight:1 }}>×</button>
+              cursor:"pointer", color:"#9C8F82", fontSize:16, lineHeight:1 }}>×</button>
           </div>
           {importMsg.status==="done" && (
             <div style={{ fontSize:11, color:"#166534", marginTop:8 }}>
@@ -1298,20 +1307,20 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
 
       <div style={{ display:"flex", flex:1, overflow:"hidden" }}>
         {/* Sidebar */}
-        <div style={{ width:220, background:"#FFFFFF", borderRight:"1px solid #E2DFF5", overflowY:"auto", flexShrink:0 }}>
+        <div style={{ width:220, background:"#FFFFFF", borderRight:"1px solid #F5E4D5", overflowY:"auto", flexShrink:0 }}>
           {depts.map(d => (
             <button key={d.key} onClick={()=>setActiveDept(d.key)}
               style={{
                 display:"block", width:"100%", textAlign:"left",
                 padding:"12px 16px", background: activeDept===d.key ? "#F8F7F4" : "transparent",
-                border:"none", borderLeft: activeDept===d.key ? "3px solid #7C6FE0" : "3px solid transparent",
+                border:"none", borderLeft: activeDept===d.key ? "3px solid #FF6600" : "3px solid transparent",
                 cursor:"pointer",
               }}>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                 <span style={{ width:8, height:8, borderRadius:"50%", background:sc(d.status), flexShrink:0 }} />
-                <span style={{ color: activeDept===d.key ? "#1E1B3A":"#6B6894", fontSize:13, fontWeight: activeDept===d.key?600:400 }}>{d.label}</span>
+                <span style={{ color: activeDept===d.key ? "#1E1B3A":"#7A6E62", fontSize:13, fontWeight: activeDept===d.key?600:400 }}>{d.label}</span>
               </div>
-              <div style={{ color:"#7B78A0", fontSize:11, marginLeft:16, marginTop:2 }}>{d.avg} · {d.n} respondents</div>
+              <div style={{ color:"#8A7A6B", fontSize:11, marginLeft:16, marginTop:2 }}>{d.avg} · {d.n} respondents</div>
             </button>
           ))}
         </div>
@@ -1349,11 +1358,11 @@ function ScoringHelpPanel({ onClose }) {
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
           <div style={{ fontSize:16, fontWeight:700, color:"#1E1B3A" }}>How scoring works</div>
           <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer",
-            fontSize:20, color:"#9391B0", lineHeight:1, padding:"0 4px" }}>✕</button>
+            fontSize:20, color:"#9C8F82", lineHeight:1, padding:"0 4px" }}>✕</button>
         </div>
 
         {/* MEAN vs DIST */}
-        <div style={{ fontSize:11, fontWeight:700, color:"#9391B0", textTransform:"uppercase",
+        <div style={{ fontSize:11, fontWeight:700, color:"#9C8F82", textTransform:"uppercase",
           letterSpacing:1.5, marginBottom:12 }}>Two ways to measure a question</div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:20 }}>
           {[
@@ -1380,7 +1389,7 @@ function ScoringHelpPanel({ onClose }) {
         {/* Real example */}
         <div style={{ background:"#F9FAFB", borderRadius:10, padding:14, marginBottom:20,
           border:"1px solid #E5E7EB" }}>
-          <div style={{ fontSize:11, fontWeight:700, color:"#9391B0", textTransform:"uppercase",
+          <div style={{ fontSize:11, fontWeight:700, color:"#9C8F82", textTransform:"uppercase",
             letterSpacing:1.5, marginBottom:10 }}>Why it matters — the same responses, two different answers</div>
           <div style={{ fontSize:12, color:"#1E1B3A", fontWeight:600, marginBottom:10 }}>
             9 single staff respond to: "My practical needs are adequately supported."
@@ -1417,7 +1426,7 @@ function ScoringHelpPanel({ onClose }) {
         </div>
 
         {/* Three factors */}
-        <div style={{ fontSize:11, fontWeight:700, color:"#9391B0", textTransform:"uppercase",
+        <div style={{ fontSize:11, fontWeight:700, color:"#9C8F82", textTransform:"uppercase",
           letterSpacing:1.5, marginBottom:12 }}>Three things that determine a department's status</div>
         {[
           { num:"1", color:"#166534", bg:"#F0FDF4", bd:"#86EFAC",
@@ -1445,14 +1454,14 @@ function ScoringHelpPanel({ onClose }) {
         {/* Status thresholds */}
         <div style={{ background:"#F9FAFB", border:"1px solid #E5E7EB", borderRadius:10,
           padding:14, marginTop:4 }}>
-          <div style={{ fontSize:11, fontWeight:700, color:"#9391B0", textTransform:"uppercase",
+          <div style={{ fontSize:11, fontWeight:700, color:"#9C8F82", textTransform:"uppercase",
             letterSpacing:1.5, marginBottom:10 }}>Status thresholds</div>
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
             <thead>
               <tr style={{ borderBottom:"1px solid #E5E7EB" }}>
                 {["Status","Mean","Dist"].map(h=>(
                   <th key={h} style={{ textAlign:"left", padding:"4px 8px", fontSize:10,
-                    fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:.5 }}>{h}</th>
+                    fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:.5 }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -1473,7 +1482,7 @@ function ScoringHelpPanel({ onClose }) {
         </div>
 
         <button onClick={onClose} style={{ marginTop:20, width:"100%", padding:"10px 0",
-          background:"#7C6FE0", color:"white", border:"none", borderRadius:8,
+          background:"#FF6600", color:"white", border:"none", borderRadius:8,
           fontSize:13, fontWeight:700, cursor:"pointer" }}>
           Got it — back to the review
         </button>
@@ -1497,17 +1506,17 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
         <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:8 }}>
           <div style={{ fontSize:20, fontWeight:700, color:"#1E1B3A" }}>{dept.label}</div>
           <span style={{ fontSize:12, fontWeight:700, color:sc(dept.status), background:sb(dept.status), border:`1px solid ${sbd(dept.status)}`, borderRadius:6, padding:"3px 10px" }}>{dept.status}</span>
-          <span style={{ color:"#9391B0", fontSize:13 }}>{dept.avg} avg · n={dept.n}</span>
+          <span style={{ color:"#9C8F82", fontSize:13 }}>{dept.avg} avg · n={dept.n}</span>
         </div>
 
 
 
         {/* Heatmap — Question Scores */}
-        <div style={{ background:"#FFFFFF", border:"1px solid #E2DFF5", borderRadius:10, overflow:"hidden", marginBottom:0 }}>
+        <div style={{ background:"#FFFFFF", border:"1px solid #F5E4D5", borderRadius:10, overflow:"hidden", marginBottom:0 }}>
           {/* Column headers */}
           <div style={{ display:"grid", gridTemplateColumns:"90px 52px 60px 1fr 52px 290px", gap:0,
-            background:"#F5F3FF", borderBottom:"2px solid #E2DFF5", padding:"7px 12px",
-            fontSize:10, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:1.5 }}>
+            background:"#FFF4EC", borderBottom:"2px solid #F5E4D5", padding:"7px 12px",
+            fontSize:10, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:1.5 }}>
             <span>Section</span>
             <span>Score</span>
             <span>Status</span>
@@ -1536,34 +1545,34 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
             const statusRowBg = {Concern:"#FDF2F2", Watch:"#FFFBEB", Healthy:"#F0FDF4"}[q.status] || "#F8F8F8";
 
             return (
-              <div key={i} style={{ borderBottom:"1px solid #F0EEFF" }}>
+              <div key={i} style={{ borderBottom:"1px solid #FFF1E6" }}>
                 {/* Main row */}
                 <div style={{ display:"grid", gridTemplateColumns:"90px 52px 60px 1fr 52px 290px",
                   gap:0, alignItems:"stretch", background: i%2===0?"#FFFFFF":"#FAFAF8" }}>
                   {/* Section type (Q or Burden) */}
                   <div style={{ padding:"10px 8px", display:"flex", alignItems:"center",
-                    background: q.burden ? "#FFF8E1" : "#F5F3FF",
-                    borderRight:"1px solid #E2DFF5" }}>
+                    background: q.burden ? "#FFF8E1" : "#FFF4EC",
+                    borderRight:"1px solid #F5E4D5" }}>
                     <span style={{ fontSize:10, fontWeight:700,
-                      color: q.burden ? "#B45309" : "#7B78A0" }}>
+                      color: q.burden ? "#B45309" : "#8A7A6B" }}>
                       {q.burden ? "Burden [inv.]" : "Q"}
                     </span>
                   </div>
                   {/* Score */}
                   <div style={{ padding:"10px 8px", display:"flex", alignItems:"center",
-                    background:statusRowBg, borderRight:"1px solid #E2DFF5" }}>
+                    background:statusRowBg, borderRight:"1px solid #F5E4D5" }}>
                     <span style={{ fontSize:13, fontWeight:800, color:sc(q.status) }}>{q.score?.toFixed(2)}</span>
                   </div>
                   {/* Status */}
                   <div style={{ padding:"10px 6px", display:"flex", alignItems:"center", justifyContent:"center",
-                    background:statusRowBg, borderRight:"1px solid #E2DFF5" }}>
+                    background:statusRowBg, borderRight:"1px solid #F5E4D5" }}>
                     <span style={{ fontSize:9, fontWeight:700, color:sc(q.status),
                       background:sb(q.status), border:`1px solid ${sbd(q.status)}`,
                       borderRadius:4, padding:"2px 5px", textAlign:"center" }}>{q.status}</span>
                   </div>
                   {/* Question text + Survey Basics inline */}
                   <div style={{ padding:"10px 12px", verticalAlign:"top",
-                    borderRight:"1px solid #E2DFF5" }}>
+                    borderRight:"1px solid #F5E4D5" }}>
                     <div style={{ fontSize:12, color:"#1E1B3A", lineHeight:1.5, marginBottom:6 }}>
                       {q.en}{q.burden ? <span style={{ color:"#B45309", fontSize:10, marginLeft:4 }}>[Burden]</span> : ""}
                     </div>
@@ -1583,18 +1592,18 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                         <div>
                           <div style={{ display:"flex", alignItems:"flex-start", gap:6,
                             background:"#F8F7F4", borderRadius:5, padding:"5px 8px" }}>
-                            <span style={{ fontSize:9, fontWeight:700, color:"#9391B0",
+                            <span style={{ fontSize:9, fontWeight:700, color:"#9C8F82",
                               textTransform:"uppercase", letterSpacing:.5,
                               whiteSpace:"nowrap", paddingTop:1, flexShrink:0 }}>Survey Basics</span>
-                            <span style={{ fontSize:11, color:"#6B6894", fontStyle:"italic",
+                            <span style={{ fontSize:11, color:"#7A6E62", fontStyle:"italic",
                               lineHeight:1.4, flex:1 }}>{sbText}</span>
                             <button
                               onClick={() => {
                                 const el = document.getElementById(editId);
                                 if (el) el.style.display = el.style.display === "block" ? "none" : "block";
                               }}
-                              style={{ fontSize:10, color:"#7C6FE0", background:"#EDE9FF",
-                                border:"0.5px solid #AFA9EC", borderRadius:4, padding:"2px 8px",
+                              style={{ fontSize:10, color:"#FF6600", background:"#FFEBDA",
+                                border:"0.5px solid #FFA766", borderRadius:4, padding:"2px 8px",
                                 cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
                               Edit
                             </button>
@@ -1602,7 +1611,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                           <div id={editId} style={{ display:"none", marginTop:5 }}>
                             <textarea
                               placeholder="Type your own interpretation if this doesn't match what you see on your team."
-                              style={{ width:"100%", border:"0.5px solid #D6D2EF", borderRadius:5,
+                              style={{ width:"100%", border:"0.5px solid #F0DFCE", borderRadius:5,
                                 padding:"6px 8px", fontSize:11, color:"#1E1B3A",
                                 background:"white", resize:"vertical", minHeight:44,
                                 fontFamily:"inherit", lineHeight:1.5 }}
@@ -1614,9 +1623,9 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                   </div>
                   {/* Scale */}
                   <div style={{ padding:"10px 6px", display:"flex", alignItems:"center", justifyContent:"center",
-                    borderRight:"1px solid #E2DFF5" }}>
-                    <span style={{ fontSize:10, fontWeight:700, color:"#7B78A0",
-                      background:"#F5F3FF", borderRadius:4, padding:"2px 6px" }}>
+                    borderRight:"1px solid #F5E4D5" }}>
+                    <span style={{ fontSize:10, fontWeight:700, color:"#8A7A6B",
+                      background:"#FFF4EC", borderRadius:4, padding:"2px 6px" }}>
                       {q.scale.toUpperCase()}
                     </span>
                   </div>
@@ -1628,17 +1637,17 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                         {/* Coloured cell — fixed height so zeros don't shift labels */}
                         <div style={{
                           width:"100%", height:32,
-                          background: c > 0 ? CELL_COLORS[ci] : "#F5F3FF",
+                          background: c > 0 ? CELL_COLORS[ci] : "#FFF4EC",
                           borderRadius:5, flexShrink:0,
                           display:"flex", alignItems:"center", justifyContent:"center",
                           fontSize:13, fontWeight:700,
                           color: c > 0 ? "white" : "#C8C4E8",
-                          border: c > 0 ? "none" : "1px solid #E2DFF5",
+                          border: c > 0 ? "none" : "1px solid #F5E4D5",
                         }}>
                           {c}
                         </div>
                         {/* Full label — fixed two-line height */}
-                        <div style={{ fontSize:8, fontWeight:600, color:"#9391B0",
+                        <div style={{ fontSize:8, fontWeight:600, color:"#9C8F82",
                           textAlign:"center", lineHeight:1.25, height:22 }}>
                           {ci===0 && <><span>Strongly</span><br/><span>Disagree</span></>}
                           {ci===1 && <span>Disagree</span>}
@@ -1647,7 +1656,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                           {ci===4 && <><span>Strongly</span><br/><span>Agree</span></>}
                         </div>
                         {/* Percentage — fixed height so row stays aligned */}
-                        <div style={{ fontSize:8, color:"#B0ADCC", textAlign:"center", height:12 }}>
+                        <div style={{ fontSize:8, color:"#C9BCAF", textAlign:"center", height:12 }}>
                           {c > 0 ? Math.round(c/n*100)+"%" : ""}
                         </div>
                       </div>
@@ -1664,29 +1673,29 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
       {/* Sections */}
       {sections.map(sec => (
         <div key={sec.key} style={{ marginBottom:20, background:"#FFFFFF", borderRadius:10, overflow:"hidden" }}>
-          <div style={{ padding:"12px 16px", borderBottom:"1px solid #E2DFF5" }}>
+          <div style={{ padding:"12px 16px", borderBottom:"1px solid #F5E4D5" }}>
             <div style={{ color:sec.color, fontWeight:700, fontSize:13 }}>{sec.label}</div>
             {sec.key === "quotes" && dept.openQLabel && (
               <div style={{ marginTop:6, marginBottom:2, padding:"6px 10px",
-                background:"#F5F3FF", borderLeft:"3px solid #9B8FE8", borderRadius:4 }}>
-                <span style={{ fontSize:9, fontWeight:700, color:"#7C6FE0",
+                background:"#FFF4EC", borderLeft:"3px solid #FF7A1A", borderRadius:4 }}>
+                <span style={{ fontSize:9, fontWeight:700, color:"#FF6600",
                   textTransform:"uppercase", letterSpacing:.5, marginRight:6 }}>Responding to</span>
-                <span style={{ fontSize:12, color:"#4A476A", fontStyle:"italic" }}>"{dept.openQLabel}"</span>
+                <span style={{ fontSize:12, color:"#5C5048", fontStyle:"italic" }}>"{dept.openQLabel}"</span>
               </div>
             )}
-            <div style={{ color:"#9391B0", fontSize:11, marginTop:2 }}>{sec.instruction}</div>
+            <div style={{ color:"#9C8F82", fontSize:11, marginTop:2 }}>{sec.instruction}</div>
           </div>
           {(sel[sec.key] || []).map((item, idx) => {
             const editId = `item-edit-${dept.key}-${sec.key}-${idx}`;
             return (
-              <div key={idx} style={{ borderBottom:"1px solid #F0EEFF",
+              <div key={idx} style={{ borderBottom:"1px solid #FFF1E6",
                 background: item.include ? "white" : "#FAF9FE",
                 opacity: item.include ? 1 : 0.6 }}>
                 {/* Main row — tight, single line */}
                 <div style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 14px" }}>
                   <input type="checkbox" checked={item.include}
                     onChange={() => toggleItem(dept.key, sec.key, idx)}
-                    style={{ flexShrink:0, cursor:"pointer", accentColor:"#7C6FE0",
+                    style={{ flexShrink:0, cursor:"pointer", accentColor:"#FF6600",
                       width:15, height:15 }} />
                   <div style={{ flex:1 }}>
                     {(() => {
@@ -1695,28 +1704,28 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                       return (
                         <>
                           <div style={{ fontSize:12, lineHeight:1.5,
-                            color: item.include ? "#1E1B3A" : "#9391B0",
+                            color: item.include ? "#1E1B3A" : "#9C8F82",
                             textDecoration: item.include ? "none" : "line-through",
                             fontStyle: nonEng ? "italic" : "normal" }}>
                             {displayText}
                             {item.isRefined && !item.rewrite && (
-                              <span style={{ marginLeft:8, fontSize:9, color:"#8B85E8",
-                                fontWeight:600, background:"#EDE9FF", borderRadius:4,
+                              <span style={{ marginLeft:8, fontSize:9, color:"#FF7A1A",
+                                fontWeight:600, background:"#FFEBDA", borderRadius:4,
                                 padding:"1px 5px" }}>✦ refined</span>
                             )}
                           </div>
                           {nonEng && (
                       <div style={{ marginTop:4, fontSize:11, lineHeight:1.4,
-                        borderLeft:"2px solid #D6D2EF", paddingLeft:8 }}>
+                        borderLeft:"2px solid #F0DFCE", paddingLeft:8 }}>
                         {item.translation ? (
                           <>
-                            <span style={{ fontSize:9, fontWeight:700, color:"#9391B0",
+                            <span style={{ fontSize:9, fontWeight:700, color:"#9C8F82",
                               textTransform:"uppercase", letterSpacing:.5,
                               marginRight:6 }}>English translation</span>
-                            <span style={{ color:"#4A476A" }}>{item.translation}</span>
+                            <span style={{ color:"#5C5048" }}>{item.translation}</span>
                           </>
                         ) : (
-                          <span style={{ fontSize:10, color:"#B0ADCC", fontStyle:"italic" }}>
+                          <span style={{ fontSize:10, color:"#C9BCAF", fontStyle:"italic" }}>
                             Original language response — translation not yet available
                           </span>
                         )}
@@ -1734,8 +1743,8 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                         const opening = el.style.display !== "block";
                         el.style.display = opening ? "block" : "none";
                       }}
-                      style={{ fontSize:10, color:"#7C6FE0", background:"#EDE9FF",
-                        border:"0.5px solid #AFA9EC", borderRadius:5, padding:"3px 9px",
+                      style={{ fontSize:10, color:"#FF6600", background:"#FFEBDA",
+                        border:"0.5px solid #FFA766", borderRadius:5, padding:"3px 9px",
                         cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
                       {item.rewrite.trim() ? "Edited ✓" : "Edit"}
                     </button>
@@ -1754,7 +1763,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                       placeholder={sec.key==="quotes"
                         ? "Leave blank to use as-is. Edit only if correcting a translation."
                         : "Type here to override wording exactly as it will appear in the report. Saves for future countries."}
-                      style={{ width:"100%", background:"#F5F3FF", border:"0.5px solid #D6D2EF",
+                      style={{ width:"100%", background:"#FFF4EC", border:"0.5px solid #F0DFCE",
                         borderRadius:6, padding:"7px 10px", color:"#1E1B3A", fontSize:12,
                         resize:"vertical", minHeight:52, fontFamily:"inherit",
                         lineHeight:1.5, boxSizing:"border-box" }}
@@ -1765,7 +1774,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
             );
           })}
           {(!sel[sec.key]?.length) && (
-            <div style={{ padding:"16px", color:"#7B78A0", fontSize:13, fontStyle:"italic" }}>No items generated for this section.</div>
+            <div style={{ padding:"16px", color:"#8A7A6B", fontSize:13, fontStyle:"italic" }}>No items generated for this section.</div>
           )}
         </div>
       ))}
@@ -1776,9 +1785,15 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
 // ─── REPORT VIEW ──────────────────────────────────────────────────────────────
 function ReportView({ country, year, surveyData, getApproved, setView }) {
   const [activeDept, setActiveDept] = useState(null);
+  // Same ordering as the review sidebar: Concern → Watch → Healthy, worst score first.
+  const STATUS_ORDER = { Concern: 0, Watch: 1, Healthy: 2 };
   const depts = surveyData ? Object.values(surveyData.depts)
     .filter(d=>d.n>0)
-    .sort((a,b) => a.avg-b.avg) : [];
+    .sort((a,b) => {
+      const sa = STATUS_ORDER[a.status] ?? 3, sb = STATUS_ORDER[b.status] ?? 3;
+      if (sa !== sb) return sa - sb;
+      return (parseFloat(a.avg)||0) - (parseFloat(b.avg)||0);
+    }) : [];
 
   const concerns = depts.filter(d=>d.status==="Concern");
   const watches  = depts.filter(d=>d.status==="Watch");
@@ -1791,8 +1806,8 @@ function ReportView({ country, year, surveyData, getApproved, setView }) {
   return (
     <div style={{ minHeight:"100vh", background:"#F8F7F4", fontFamily:"'Inter',system-ui,sans-serif" }}>
       {/* Toolbar */}
-      <div className="no-print" style={{ background:"white", borderBottom:"1px solid #E2DFF5", padding:"12px 24px", display:"flex", gap:12, alignItems:"center", position:"sticky", top:0, zIndex:10 }}>
-        <button onClick={()=>setView("review")} style={{ ...navBtn, background:"transparent", border:"1px solid #E2DFF5" }}>← Director Review</button>
+      <div className="no-print" style={{ background:"white", borderBottom:"1px solid #F5E4D5", padding:"12px 24px", display:"flex", gap:12, alignItems:"center", position:"sticky", top:0, zIndex:10 }}>
+        <button onClick={()=>setView("review")} style={{ ...navBtn, background:"transparent", border:"1px solid #F5E4D5" }}>← Director Review</button>
         <div style={{ flex:1, color:"#FF6600", fontWeight:700, fontSize:13, letterSpacing:1 }}>
           JOSIAH VENTURE · {country.toUpperCase()} {year}
         </div>
@@ -1802,24 +1817,24 @@ function ReportView({ country, year, surveyData, getApproved, setView }) {
       <div style={{ maxWidth:960, margin:"0 auto", padding:"40px 24px" }}>
 
         {/* ── SUMMARY PAGE ── */}
-        <div style={{ background:"white", borderRadius:16, padding:40, marginBottom:32, border:"1px solid #E2DFF5", boxShadow:"0 2px 8px rgba(124,111,224,0.08)" }}>
+        <div style={{ background:"white", borderRadius:16, padding:40, marginBottom:32, border:"1px solid #F5E4D5", boxShadow:"0 2px 8px rgba(124,111,224,0.08)" }}>
 
           {/* Header */}
-          <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:32, paddingBottom:24, borderBottom:"2px solid #F5F3FF" }}>
+          <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:32, paddingBottom:24, borderBottom:"2px solid #FFF4EC" }}>
             <div>
               <div style={{ fontSize:11, fontWeight:700, color:"#FF6600", letterSpacing:3, textTransform:"uppercase", marginBottom:8 }}>Josiah Venture</div>
               <div style={{ fontSize:32, fontWeight:800, color:"#1E1B3A", marginBottom:4 }}>{country} Staff Pulse Report</div>
-              <div style={{ fontSize:15, color:"#9391B0" }}>{year} · {totalN} respondents across {depts.length} departments</div>
+              <div style={{ fontSize:15, color:"#9C8F82" }}>{year} · {totalN} respondents across {depts.length} departments</div>
             </div>
             <div style={{ textAlign:"right" }}>
               <div style={{ fontSize:42, fontWeight:800, color:sc(overallAvg>=3.5?"Healthy":overallAvg>=2.5?"Watch":"Concern") }}>{overallAvg}</div>
-              <div style={{ fontSize:11, color:"#9391B0", marginTop:2 }}>Overall avg</div>
+              <div style={{ fontSize:11, color:"#9C8F82", marginTop:2 }}>Overall avg</div>
             </div>
           </div>
 
           {/* Score bar chart — all departments */}
           <div style={{ marginBottom:32 }}>
-            <div style={{ fontSize:11, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Department Scores</div>
+            <div style={{ fontSize:11, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Department Scores</div>
             {depts.map(d => (
               <div key={d.key} onClick={()=>setActiveDept(d.key===activeDept?null:d.key)}
                 style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 12px", marginBottom:4,
@@ -1833,7 +1848,7 @@ function ReportView({ country, year, surveyData, getApproved, setView }) {
                 </div>
                 <div style={{ fontWeight:800, color:sc(d.status), fontSize:15, width:40, textAlign:"right" }}>{d.avg}</div>
                 <span style={{ fontSize:10, fontWeight:700, color:sc(d.status), background:sb(d.status), border:`1px solid ${sbd(d.status)}`, borderRadius:4, padding:"2px 7px", width:60, textAlign:"center", flexShrink:0 }}>{d.status}</span>
-                <div style={{ color:"#9391B0", fontSize:11, width:40, textAlign:"right" }}>n={d.n}</div>
+                <div style={{ color:"#9C8F82", fontSize:11, width:40, textAlign:"right" }}>n={d.n}</div>
               </div>
             ))}
           </div>
@@ -1857,7 +1872,7 @@ function ReportView({ country, year, surveyData, getApproved, setView }) {
           {depts.map(d=>(
             <button key={d.key} onClick={()=>setActiveDept(d.key===activeDept?null:d.key)}
               style={{ padding:"8px 14px", borderRadius:8, fontSize:12, fontWeight:600,
-                cursor:"pointer", border:`1px solid ${activeDept===d.key ? sbd(d.status) : "#E2DFF5"}`,
+                cursor:"pointer", border:`1px solid ${activeDept===d.key ? sbd(d.status) : "#F5E4D5"}`,
                 background: activeDept===d.key ? sb(d.status) : "white",
                 color: activeDept===d.key ? sc(d.status) : "#1E1B3A" }}>
               {d.label}
@@ -1872,7 +1887,7 @@ function ReportView({ country, year, surveyData, getApproved, setView }) {
         ) : (
           // No tab selected — show all for print
           <div>
-            <div className="no-print" style={{ textAlign:"center", color:"#9391B0", fontSize:13, padding:"16px 0 32px" }}>
+            <div className="no-print" style={{ textAlign:"center", color:"#9C8F82", fontSize:13, padding:"16px 0 32px" }}>
               Select a department above to focus, or download PDF to get the full report.
             </div>
             <div className="print-only">
@@ -1908,7 +1923,7 @@ function DeptReportPage({ dept, getApproved }) {
 
   return (
     <div style={{ background:"white", borderRadius:16, padding:36, marginBottom:28,
-      border:"1px solid #E2DFF5", boxShadow:"0 2px 8px rgba(124,111,224,0.07)",
+      border:"1px solid #F5E4D5", boxShadow:"0 2px 8px rgba(124,111,224,0.07)",
       pageBreakInside:"avoid" }}>
 
       {/* Dept header */}
@@ -1916,7 +1931,7 @@ function DeptReportPage({ dept, getApproved }) {
         paddingBottom:20, marginBottom:24, borderBottom:`2px solid ${statusBd}` }}>
         <div>
           <div style={{ fontSize:22, fontWeight:800, color:"#1E1B3A", marginBottom:4 }}>{dept.label}</div>
-          <div style={{ fontSize:13, color:"#9391B0" }}>n = {dept.n} respondents</div>
+          <div style={{ fontSize:13, color:"#9C8F82" }}>n = {dept.n} respondents</div>
         </div>
         <div style={{ textAlign:"right" }}>
           <div style={{ fontSize:36, fontWeight:800, color:statusColor, lineHeight:1 }}>{dept.avg}</div>
@@ -1959,15 +1974,15 @@ function DeptReportPage({ dept, getApproved }) {
 
       {/* Question scores table */}
       <div style={{ marginBottom:24 }}>
-        <div style={{ fontSize:10, fontWeight:700, color:"#9391B0", textTransform:"uppercase",
+        <div style={{ fontSize:10, fontWeight:700, color:"#9C8F82", textTransform:"uppercase",
           letterSpacing:2, marginBottom:10 }}>Question Scores — Concern · Watch · Healthy</div>
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
           <thead>
-            <tr style={{ background:"#F5F3FF", borderRadius:6 }}>
-              <th style={{ textAlign:"left", padding:"8px 10px", color:"#9391B0", fontWeight:600, borderRadius:"6px 0 0 6px" }}>Question</th>
-              <th style={{ textAlign:"center", padding:"8px 10px", color:"#9391B0", fontWeight:600, width:55 }}>Score</th>
-              <th style={{ textAlign:"center", padding:"8px 10px", color:"#9391B0", fontWeight:600, width:75 }}>Status</th>
-              <th style={{ textAlign:"center", padding:"8px 10px", color:"#9391B0", fontWeight:600, width:45, borderRadius:"0 6px 6px 0" }}>Scale</th>
+            <tr style={{ background:"#FFF4EC", borderRadius:6 }}>
+              <th style={{ textAlign:"left", padding:"8px 10px", color:"#9C8F82", fontWeight:600, borderRadius:"6px 0 0 6px" }}>Question</th>
+              <th style={{ textAlign:"center", padding:"8px 10px", color:"#9C8F82", fontWeight:600, width:55 }}>Score</th>
+              <th style={{ textAlign:"center", padding:"8px 10px", color:"#9C8F82", fontWeight:600, width:75 }}>Status</th>
+              <th style={{ textAlign:"center", padding:"8px 10px", color:"#9C8F82", fontWeight:600, width:45, borderRadius:"0 6px 6px 0" }}>Scale</th>
             </tr>
           </thead>
           <tbody>
@@ -1975,16 +1990,16 @@ function DeptReportPage({ dept, getApproved }) {
               const o={Concern:0,Watch:1,Healthy:2};
               return (o[a.status]??1)-(o[b.status]??1) || a.score-b.score;
             }).map((q,i)=>(
-              <tr key={i} style={{ borderBottom:"1px solid #F5F3FF" }}>
+              <tr key={i} style={{ borderBottom:"1px solid #FFF4EC" }}>
                 <td style={{ padding:"8px 10px", color:"#1E1B3A", lineHeight:1.5 }}>
-                  {q.en}{q.burden ? <span style={{ color:"#9391B0", fontSize:10 }}> [Burden]</span> : ""}
+                  {q.en}{q.burden ? <span style={{ color:"#9C8F82", fontSize:10 }}> [Burden]</span> : ""}
                 </td>
                 <td style={{ textAlign:"center", padding:"8px 10px", fontWeight:700, color:sc(q.status) }}>{q.score?.toFixed(2)}</td>
                 <td style={{ textAlign:"center", padding:"8px 10px" }}>
                   <span style={{ fontSize:10, fontWeight:700, color:sc(q.status), background:sb(q.status),
                     border:`1px solid ${sbd(q.status)}`, borderRadius:4, padding:"2px 6px" }}>{q.status}</span>
                 </td>
-                <td style={{ textAlign:"center", padding:"8px 10px", color:"#9391B0", fontSize:10 }}>{q.scale.toUpperCase()}</td>
+                <td style={{ textAlign:"center", padding:"8px 10px", color:"#9C8F82", fontSize:10 }}>{q.scale.toUpperCase()}</td>
               </tr>
             ))}
           </tbody>
@@ -1993,13 +2008,13 @@ function DeptReportPage({ dept, getApproved }) {
 
       {/* Leadership Questions */}
       {leadershipQs.length > 0 && (
-        <div style={{ background:"#F0EEFF", borderRadius:10, padding:20, marginBottom:24,
-          border:"1px solid #D6D2EF" }}>
+        <div style={{ background:"#FFF1E6", borderRadius:10, padding:20, marginBottom:24,
+          border:"1px solid #F0DFCE" }}>
           <div style={{ fontSize:10, fontWeight:700, color:"#3B3882", textTransform:"uppercase",
             letterSpacing:2, marginBottom:12 }}>Questions for leadership</div>
           {leadershipQs.map((q,i) => (
             <div key={i} style={{ display:"flex", gap:12, marginBottom:10, alignItems:"flex-start" }}>
-              <span style={{ background:"#7C6FE0", color:"white", borderRadius:"50%", width:20, height:20,
+              <span style={{ background:"#FF6600", color:"white", borderRadius:"50%", width:20, height:20,
                 display:"flex", alignItems:"center", justifyContent:"center",
                 fontSize:11, fontWeight:700, flexShrink:0, marginTop:1 }}>{i+1}</span>
               <span style={{ fontSize:13, color:"#1E1B3A", lineHeight:1.6 }}>{q}</span>
@@ -2011,10 +2026,10 @@ function DeptReportPage({ dept, getApproved }) {
       {/* Staff Quotes */}
       {quotes.length > 0 && (
         <div>
-          <div style={{ fontSize:10, fontWeight:700, color:"#9391B0", textTransform:"uppercase",
+          <div style={{ fontSize:10, fontWeight:700, color:"#9C8F82", textTransform:"uppercase",
             letterSpacing:2, marginBottom:4 }}>What staff said</div>
           {dept.openQLabel && (
-            <div style={{ fontSize:12, color:"#6B6894", fontStyle:"italic", marginBottom:12 }}>
+            <div style={{ fontSize:12, color:"#7A6E62", fontStyle:"italic", marginBottom:12 }}>
               In response to: "{dept.openQLabel}"
             </div>
           )}
@@ -2025,17 +2040,17 @@ function DeptReportPage({ dept, getApproved }) {
               const trans = isObj ? q.translation : null;
               const isOrig = (isObj ? q.isOriginalLang : false) || looksNonEnglish(orig);
               return (
-                <div key={i} style={{ background:"#F8F7F4", borderLeft:"3px solid #D6D2EF",
+                <div key={i} style={{ background:"#F8F7F4", borderLeft:"3px solid #F0DFCE",
                   borderRadius:"0 8px 8px 0", padding:"12px 16px" }}>
                   <div style={{ fontSize:13, color:"#1E1B3A", lineHeight:1.7,
                     fontStyle: isOrig ? "italic" : "normal" }}>
                     "{orig}"
                   </div>
                   {isOrig && trans && (
-                    <div style={{ marginTop:6, fontSize:11, color:"#7B78A0",
+                    <div style={{ marginTop:6, fontSize:11, color:"#8A7A6B",
                       fontStyle:"normal", lineHeight:1.4,
-                      borderLeft:"2px solid #D6D2EF", paddingLeft:8, marginLeft:0 }}>
-                      <span style={{ fontSize:9, fontWeight:700, color:"#9391B0",
+                      borderLeft:"2px solid #F0DFCE", paddingLeft:8, marginLeft:0 }}>
+                      <span style={{ fontSize:9, fontWeight:700, color:"#9C8F82",
                         textTransform:"uppercase", letterSpacing:.5, marginRight:6 }}>
                         Translation
                       </span>
@@ -2077,11 +2092,11 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
 
   return (
     <div style={{ minHeight:"100vh", background:"#F8F7F4", fontFamily:"'Inter',system-ui,sans-serif" }}>
-      <div style={{ background:"#FFFFFF", borderBottom:"1px solid #E2DFF5", padding:"14px 24px", display:"flex", alignItems:"center", gap:16 }}>
-        <button onClick={()=>setView("home")} style={{ ...navBtn, background:"transparent", border:"1px solid #E2DFF5" }}>← Home</button>
+      <div style={{ background:"#FFFFFF", borderBottom:"1px solid #F5E4D5", padding:"14px 24px", display:"flex", alignItems:"center", gap:16 }}>
+        <button onClick={()=>setView("home")} style={{ ...navBtn, background:"transparent", border:"1px solid #F5E4D5" }}>← Home</button>
         <div style={{ flex:1, color:"#1E1B3A", fontWeight:700 }}>P&C Dashboard</div>
         <select value={dashCountry} onChange={e=>setDashCountry(e.target.value)}
-          style={{ background:"#F8F7F4", border:"1px solid #E2DFF5", borderRadius:6, color:"#1E1B3A", padding:"6px 12px", fontSize:13 }}>
+          style={{ background:"#F8F7F4", border:"1px solid #F5E4D5", borderRadius:6, color:"#1E1B3A", padding:"6px 12px", fontSize:13 }}>
           <option value="all">All Countries</option>
           {countries.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
@@ -2092,7 +2107,7 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
         {/* JV-wide overview grid */}
         {dashCountry === "all" && (
           <>
-            <div style={{ fontSize:13, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Latest Results by Country</div>
+            <div style={{ fontSize:13, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Latest Results by Country</div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:16, marginBottom:40 }}>
               {Object.values(latestByCountry).map(run => {
                 const concern = run.depts?.filter(d=>d.status==="Concern").length||0;
@@ -2104,7 +2119,7 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16 }}>
                       <div>
                         <div style={{ color:"#1E1B3A", fontWeight:700, fontSize:16 }}>{run.country}</div>
-                        <div style={{ color:"#9391B0", fontSize:12 }}>{run.year}</div>
+                        <div style={{ color:"#9C8F82", fontSize:12 }}>{run.year}</div>
                       </div>
                       <span style={{ fontSize:11, fontWeight:700, color:sc(overallStatus), background:sb(overallStatus), border:`1px solid ${sbd(overallStatus)}`, borderRadius:6, padding:"3px 10px" }}>{overallStatus}</span>
                     </div>
@@ -2112,7 +2127,7 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
                       {[["Concern",concern,"#C0392B"],["Watch",watch,"#D68910"],["Healthy",healthy,"#1E8449"]].map(([l,n,c])=>(
                         <div key={l} style={{ flex:1, textAlign:"center", background:"#FFFFFF", borderRadius:8, padding:"10px 4px" }}>
                           <div style={{ fontSize:22, fontWeight:800, color:c }}>{n}</div>
-                          <div style={{ fontSize:10, color:"#9391B0" }}>{l}</div>
+                          <div style={{ fontSize:10, color:"#9C8F82" }}>{l}</div>
                         </div>
                       ))}
                     </div>
@@ -2122,28 +2137,28 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
             </div>
 
             {/* Cross-country dept heatmap */}
-            <div style={{ fontSize:13, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Department Health — All Countries</div>
+            <div style={{ fontSize:13, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Department Health — All Countries</div>
             <div style={{ background:"#FFFFFF", borderRadius:12, overflow:"hidden", marginBottom:40 }}>
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
                 <thead>
-                  <tr style={{ borderBottom:"1px solid #E2DFF5" }}>
-                    <th style={{ textAlign:"left", padding:"12px 16px", color:"#9391B0" }}>Department</th>
+                  <tr style={{ borderBottom:"1px solid #F5E4D5" }}>
+                    <th style={{ textAlign:"left", padding:"12px 16px", color:"#9C8F82" }}>Department</th>
                     {Object.keys(latestByCountry).map(c => (
-                      <th key={c} style={{ textAlign:"center", padding:"12px 10px", color:"#9391B0", fontWeight:600 }}>{c}</th>
+                      <th key={c} style={{ textAlign:"center", padding:"12px 10px", color:"#9C8F82", fontWeight:600 }}>{c}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {DEPTS_ORDER.map(dk => (
-                    <tr key={dk} style={{ borderBottom:"1px solid #E2DFF5" }}>
-                      <td style={{ padding:"10px 16px", color:"#6B6894", fontWeight:500 }}>{dk}</td>
+                    <tr key={dk} style={{ borderBottom:"1px solid #F5E4D5" }}>
+                      <td style={{ padding:"10px 16px", color:"#7A6E62", fontWeight:500 }}>{dk}</td>
                       {Object.values(latestByCountry).map(run => {
                         const d = run.depts?.find(dep=>dep.key===dk||dep.group===dk);
                         return (
                           <td key={run.country} style={{ textAlign:"center", padding:"10px" }}>
                             {d ? (
                               <span style={{ fontSize:11, fontWeight:700, color:sc(d.status), background:sb(d.status), borderRadius:4, padding:"2px 8px" }}>{d.avg}</span>
-                            ) : <span style={{ color:"#E2DFF5" }}>—</span>}
+                            ) : <span style={{ color:"#F5E4D5" }}>—</span>}
                           </td>
                         );
                       })}
@@ -2158,19 +2173,24 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
         {/* Single country trend view */}
         {dashCountry !== "all" && (
           <>
-            <div style={{ fontSize:13, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>{dashCountry} — Department Health</div>
+            <div style={{ fontSize:13, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>{dashCountry} — Department Health</div>
             {(runsByCountry[dashCountry]||[]).map(run => (
               <div key={run.id} style={{ marginBottom:32 }}>
-                <div style={{ color:"#7C6FE0", fontWeight:700, fontSize:13, marginBottom:12 }}>{run.year}</div>
+                <div style={{ color:"#FF6600", fontWeight:700, fontSize:13, marginBottom:12 }}>{run.year}</div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))", gap:12 }}>
-                  {(run.depts||[]).sort((a,b)=>a.avg-b.avg).map(d => (
+                  {(run.depts||[]).slice().sort((a,b)=>{
+                    const o={Concern:0,Watch:1,Healthy:2};
+                    const sa=o[a.status]??3, sb=o[b.status]??3;
+                    if (sa!==sb) return sa-sb;
+                    return (parseFloat(a.avg)||0)-(parseFloat(b.avg)||0);
+                  }).map(d => (
                     <div key={d.key} style={{ background:"#FFFFFF", borderRadius:10, padding:"14px 16px", border:`1px solid ${sbd(d.status)}` }}>
-                      <div style={{ color:"#6B6894", fontSize:11, marginBottom:6 }}>{d.label}</div>
+                      <div style={{ color:"#7A6E62", fontSize:11, marginBottom:6 }}>{d.label}</div>
                       <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
                         <span style={{ fontSize:22, fontWeight:800, color:sc(d.status) }}>{d.avg}</span>
                         <span style={{ fontSize:10, fontWeight:700, color:sc(d.status) }}>{d.status}</span>
                       </div>
-                      <div style={{ color:"#7B78A0", fontSize:10, marginTop:4 }}>n={d.n}</div>
+                      <div style={{ color:"#8A7A6B", fontSize:10, marginTop:4 }}>n={d.n}</div>
                     </div>
                   ))}
                 </div>
@@ -2180,13 +2200,13 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
             {/* Trend chart (text-based for now) */}
             {(runsByCountry[dashCountry]||[]).length > 1 && (
               <div style={{ background:"#FFFFFF", borderRadius:12, padding:20, marginTop:24 }}>
-                <div style={{ fontSize:11, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:1.5, marginBottom:16 }}>Trend — Year over Year</div>
+                <div style={{ fontSize:11, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:1.5, marginBottom:16 }}>Trend — Year over Year</div>
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
                   <thead>
-                    <tr style={{ borderBottom:"1px solid #E2DFF5" }}>
-                      <th style={{ textAlign:"left", padding:"8px 12px", color:"#9391B0" }}>Department</th>
+                    <tr style={{ borderBottom:"1px solid #F5E4D5" }}>
+                      <th style={{ textAlign:"left", padding:"8px 12px", color:"#9C8F82" }}>Department</th>
                       {[...(runsByCountry[dashCountry]||[])].sort((a,b)=>a.year-b.year).map(r=>(
-                        <th key={r.year} style={{ textAlign:"center", padding:"8px 12px", color:"#9391B0" }}>{r.year}</th>
+                        <th key={r.year} style={{ textAlign:"center", padding:"8px 12px", color:"#9C8F82" }}>{r.year}</th>
                       ))}
                     </tr>
                   </thead>
@@ -2196,13 +2216,13 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
                         .map(r => r.depts?.find(d=>d.key===dk||d.group===dk));
                       if (rows.every(r=>!r)) return null;
                       return (
-                        <tr key={dk} style={{ borderBottom:"1px solid #E2DFF5" }}>
-                          <td style={{ padding:"8px 12px", color:"#6B6894" }}>{dk}</td>
+                        <tr key={dk} style={{ borderBottom:"1px solid #F5E4D5" }}>
+                          <td style={{ padding:"8px 12px", color:"#7A6E62" }}>{dk}</td>
                           {rows.map((d,i)=>(
                             <td key={i} style={{ textAlign:"center", padding:"8px 12px" }}>
                               {d ? (
                                 <span style={{ fontWeight:700, color:sc(d.status) }}>{d.avg}</span>
-                              ) : <span style={{ color:"#E2DFF5" }}>—</span>}
+                              ) : <span style={{ color:"#F5E4D5" }}>—</span>}
                             </td>
                           ))}
                         </tr>
@@ -2214,16 +2234,16 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
             )}
 
             {/* OKR placeholder */}
-            <div style={{ background:"#FFFFFF", borderRadius:12, padding:24, marginTop:24, border:"1px dashed #E2DFF5" }}>
-              <div style={{ fontSize:11, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:1.5, marginBottom:8 }}>OKR Integration</div>
-              <div style={{ color:"#7B78A0", fontSize:13 }}>Key Results tied to staff health metrics will appear here once OKR system integration is connected.</div>
+            <div style={{ background:"#FFFFFF", borderRadius:12, padding:24, marginTop:24, border:"1px dashed #F5E4D5" }}>
+              <div style={{ fontSize:11, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:1.5, marginBottom:8 }}>OKR Integration</div>
+              <div style={{ color:"#8A7A6B", fontSize:13 }}>Key Results tied to staff health metrics will appear here once OKR system integration is connected.</div>
             </div>
           </>
         )}
       {/* Refinements manager — always visible in P&C view */}
       <div style={{ marginTop:32 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-          <div style={{ fontSize:13, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:2 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:2 }}>
             Saved Refinements ({Object.keys(refinements).length})
           </div>
           {Object.keys(refinements).length > 0 && (
@@ -2236,7 +2256,7 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
           )}
         </div>
         {Object.keys(refinements).length === 0 ? (
-          <div style={{ color:"#7B78A0", fontSize:13, fontStyle:"italic" }}>
+          <div style={{ color:"#8A7A6B", fontSize:13, fontStyle:"italic" }}>
             No refinements saved yet. When directors edit wording in the Director Review, those edits are saved here and pre-filled in future country reports.
           </div>
         ) : (
@@ -2247,19 +2267,19 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
                 <div key={key} style={{ background:"#FFFFFF", borderRadius:8, padding:"12px 16px", display:"flex", alignItems:"flex-start", gap:12 }}>
                   <div style={{ flex:1 }}>
                     <div style={{ display:"flex", gap:8, marginBottom:4 }}>
-                      <span style={{ fontSize:10, fontWeight:700, color:"#8B85E8", background:"#EDE9FF", borderRadius:4, padding:"2px 8px" }}>{deptKey}</span>
-                      <span style={{ fontSize:10, fontWeight:700, color:"#9391B0", background:"#F8F7F4", borderRadius:4, padding:"2px 8px" }}>{section}</span>
-                      <span style={{ fontSize:10, color:"#7B78A0" }}>#{parseInt(idx)+1}</span>
+                      <span style={{ fontSize:10, fontWeight:700, color:"#FF7A1A", background:"#FFEBDA", borderRadius:4, padding:"2px 8px" }}>{deptKey}</span>
+                      <span style={{ fontSize:10, fontWeight:700, color:"#9C8F82", background:"#F8F7F4", borderRadius:4, padding:"2px 8px" }}>{section}</span>
+                      <span style={{ fontSize:10, color:"#8A7A6B" }}>#{parseInt(idx)+1}</span>
                     </div>
                     <div style={{ color:"#1E1B3A", fontSize:13, lineHeight:1.5 }}>{val.text}</div>
-                    <div style={{ color:"#7B78A0", fontSize:10, marginTop:4 }}>Saved {new Date(val.savedAt).toLocaleDateString()}</div>
+                    <div style={{ color:"#8A7A6B", fontSize:10, marginTop:4 }}>Saved {new Date(val.savedAt).toLocaleDateString()}</div>
                   </div>
                   <button onClick={() => {
                     const updated = { ...refinements };
                     delete updated[key];
                     setRefinements(updated);
                     try { localStorage.setItem("pulse:refinements", JSON.stringify(updated)); } catch {}
-                  }} style={{ color:"#9391B0", background:"none", border:"none", cursor:"pointer", fontSize:16, lineHeight:1 }}>×</button>
+                  }} style={{ color:"#9C8F82", background:"none", border:"none", cursor:"pointer", fontSize:16, lineHeight:1 }}>×</button>
                 </div>
               );
             })}
@@ -2274,13 +2294,13 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
 // ─── SHARED STYLES ────────────────────────────────────────────────────────────
 const card = {
   background:"#FFFFFF", borderRadius:12, padding:24,
-  border:"1px solid #E2DFF5",
+  border:"1px solid #F5E4D5",
   boxShadow:"0 1px 4px rgba(124,111,224,0.07)",
 };
 const navBtn = {
-  background:"#EDE9FF", border:"none", borderRadius:8,
+  background:"#FFEBDA", border:"none", borderRadius:8,
   color:"#1E1B3A", padding:"8px 16px", fontSize:13, fontWeight:600,
   cursor:"pointer",
 };
-const lbl = { display:"block", fontSize:11, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:1, marginBottom:6 };
-const inp = { width:"100%", background:"#F8F7F4", border:"1px solid #E2DFF5", borderRadius:8, padding:"10px 14px", color:"#1E1B3A", fontSize:14, boxSizing:"border-box" };
+const lbl = { display:"block", fontSize:11, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:1, marginBottom:6 };
+const inp = { width:"100%", background:"#F8F7F4", border:"1px solid #F5E4D5", borderRadius:8, padding:"10px 14px", color:"#1E1B3A", fontSize:14, boxSizing:"border-box" };
