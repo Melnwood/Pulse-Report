@@ -19,7 +19,7 @@ REACT_APP_ANTHROPIC_KEY = sk-ant-...
 
 For local development, create `.env`:
 ```
-REACT_APP_ANTHROPIC_KEY=sk-ant-...
+REACT_APP_ANTHROPIC_KEY=your-key-here
 ```
 
 ### 3. Deploy

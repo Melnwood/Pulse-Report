@@ -6,3 +6,6 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+[build.environment]
+  SECRETS_SCAN_OMIT_PATHS = ".env.example,README.md"

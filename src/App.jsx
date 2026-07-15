@@ -540,7 +540,14 @@ export default function App() {
   const getApproved = (deptKey, section) =>
     (selections[deptKey]?.[section] || [])
       .filter(i => i.include)
-      .map(i => i.rewrite.trim() || i.text);
+      .map(i => {
+        const text = i.rewrite.trim() || i.text;
+        // For quotes, preserve translation metadata so display can show both languages
+        if (section === 'quotes') {
+          return { text, translation: i.translation || null, isOriginalLang: !!i.isOriginalLang };
+        }
+        return text;
+      });
 
   // ── VIEWS ──────────────────────────────────────────────────────────────────
 
@@ -826,7 +833,7 @@ function ScoringHelpPanel({ onClose }) {
             9 single staff respond to: "My practical needs are adequately supported."
           </div>
           <div style={{ display:"flex", gap:6, marginBottom:12, alignItems:"flex-end", height:44 }}>
-            {[[0,"#E5E7EB"],[1,"#E24B4A"],[5,"#D4A0B0"],[3,"#639922"],[0,"#E5E7EB"]].map(([c,col],i)=>(
+            {[[0,"#E5E7EB"],[1,"#E24B4A"],[5,"#F2C4CE"],[3,"#639922"],[0,"#E5E7EB"]].map(([c,col],i)=>(
               <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:2 }}>
                 <div style={{ width:"100%", height:`${Math.max(c/5*36,c>0?6:2)}px`,
                   background:col, borderRadius:"3px 3px 0 0", display:"flex",
@@ -966,10 +973,10 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
             // Heatmap colours matching the Excel workbook
             // For burden (inverted): high SA = bad outcome, so colours flip
             const CELL_COLORS = q.burden
-              ? ["#1E8449","#5DBB8A","#BEBEBE","#E87F7F","#C0392B"] // SD=green, SA=red (burden inverted)
-              : ["#C0392B","#E87F7F","#BEBEBE","#5DBB8A","#1E8449"]; // SD=red, SA=green
+              ? ["#1E8449","#5DBB8A","#F2C4CE","#E87F7F","#C0392B"] // SD=green, SA=red (burden inverted)
+              : ["#C0392B","#E87F7F","#F2C4CE","#5DBB8A","#1E8449"]; // SD=red, SA=green
             const CELL_TEXT   = q.burden
-              ? ["white","white","white","white","white"]
+              ? ["white","white","#7B2D3E","white","white"]
               : ["white","white","white","white","white"];
             const LABELS = ["SD","D","U","A","SA"];
             // Status row background
@@ -1127,14 +1134,21 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                           padding:"1px 5px" }}>✦ refined</span>
                       )}
                     </div>
-                    {item.isOriginalLang && item.translation && (
-                      <div style={{ marginTop:4, fontSize:11, color:"#7B78A0",
-                        fontStyle:"normal", lineHeight:1.4,
+                    {item.isOriginalLang && (
+                      <div style={{ marginTop:4, fontSize:11, lineHeight:1.4,
                         borderLeft:"2px solid #D6D2EF", paddingLeft:8 }}>
-                        <span style={{ fontSize:9, fontWeight:700, color:"#9391B0",
-                          textTransform:"uppercase", letterSpacing:.5,
-                          marginRight:6 }}>Translation</span>
-                        {item.translation}
+                        {item.translation ? (
+                          <>
+                            <span style={{ fontSize:9, fontWeight:700, color:"#9391B0",
+                              textTransform:"uppercase", letterSpacing:.5,
+                              marginRight:6 }}>English translation</span>
+                            <span style={{ color:"#4A476A" }}>{item.translation}</span>
+                          </>
+                        ) : (
+                          <span style={{ fontSize:10, color:"#B0ADCC", fontStyle:"italic" }}>
+                            Original language response — translation not yet available
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
