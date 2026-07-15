@@ -259,8 +259,18 @@ async function parseSurveyFile(file) {
       return { ...q, vals, counts, score: score ? +score.toFixed(2) : null, status, n: vals.length };
     });
 
+    // Collect open responses with language detection
+    // Store as {text, isOriginalLang} — isOriginalLang=true means non-English (needs translation shown)
     const openResponses = eligible
-      .map(r => (r[dept.openQ] || "").toString().trim())
+      .map(r => {
+        const raw = (r[dept.openQ] || "").toString().trim();
+        if (!raw || raw === ".") return null;
+        // Simple heuristic: if majority of chars are ASCII letters, it's likely English
+        const letters = raw.replace(/[^a-zA-ZÀ-ɏ]/g,'');
+        const ascii = raw.replace(/[^a-zA-Z]/g,'');
+        const isOriginalLang = letters.length > 4 && (ascii.length / letters.length) < 0.6;
+        return { text: raw, isOriginalLang };
+      })
       .filter(Boolean);
 
     const avg = qResults.filter(q=>q.score).reduce((a,b,_,arr)=>a+b.score/arr.length,0);
@@ -306,7 +316,12 @@ async function generateDeptContent(dept) {
 
   // Leadership questions and quote selection via AI
   let leadershipQs = [];
-  let quotes = dept.openResponses.slice(0, 6); // fallback: first 6 responses
+  // Fallback: first 6 responses as bilingual objects
+  let quotes = dept.openResponses.slice(0, 6).map(r =>
+    typeof r === 'string'
+      ? { original: r, translation: null, isOriginalLang: false }
+      : { original: r.text, translation: null, isOriginalLang: r.isOriginalLang }
+  );
 
   if (dept.openResponses.length > 0) {
     try {
@@ -320,14 +335,21 @@ ${dept.questions.filter(q=>q.status==='Concern').map(q=>`- ${q.score?.toFixed(2)
 Watch questions:
 ${dept.questions.filter(q=>q.status==='Watch').map(q=>`- ${q.score?.toFixed(2)} "${q.en}"`).join('\n')||'None'}
 
-Open responses (verbatim):
-${dept.openResponses.map((r,i)=>`${i+1}. "${r}"`).join('\n')}
+Open responses (verbatim — some are in the local language, some in English):
+${dept.openResponses.map((r,i)=>`${i+1}. [${r.isOriginalLang?'NON-ENGLISH':'ENGLISH'}] "${r.text}"`).join('\n')}
 
 Return ONLY valid JSON (no markdown):
 {
   "leadershipQs": ["3 specific, practical questions for the director based on the data above"],
-  "quotes": ["select the 4-6 most representative verbatim responses from the list above — copy exactly, do not paraphrase"]
-}`;
+  "quotes": [
+    {
+      "original": "the verbatim response exactly as written",
+      "translation": "English translation if the response is non-English, otherwise null",
+      "isOriginalLang": true or false
+    }
+  ]
+}
+Select 4-6 of the most representative responses. For non-English responses, provide an accurate English translation. For English responses, set translation to null.`;
 
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -347,7 +369,14 @@ Return ONLY valid JSON (no markdown):
       const text = data.content?.find(b => b.type === "text")?.text || "{}";
       const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
       if (parsed.leadershipQs?.length) leadershipQs = parsed.leadershipQs;
-      if (parsed.quotes?.length) quotes = parsed.quotes;
+      if (parsed.quotes?.length) {
+        // Normalise — handle both old string format and new object format
+        quotes = parsed.quotes.map(q =>
+          typeof q === 'string'
+            ? { original: q, translation: null, isOriginalLang: false }
+            : q
+        );
+      }
     } catch(e) {
       console.warn("AI generation failed for", dept.key, e.message);
     }
@@ -449,12 +478,14 @@ export default function App() {
           items.map((t, idx) => {
             const key = `${d.key}:${section}:${idx}`;
             const refined = currentRefinements[key];
+            // quotes are objects {original, translation, isOriginalLang}; others are strings
+            const textVal = (section === 'quotes' && typeof t === 'object') ? t.original : t;
             return {
-              text: t,
+              text: textVal,
+              translation: (section === 'quotes' && typeof t === 'object') ? t.translation : null,
+              isOriginalLang: (section === 'quotes' && typeof t === 'object') ? t.isOriginalLang : false,
               include: true,
-              // Pre-fill rewrite with refined version if it exists
               rewrite: refined ? refined.text : "",
-              // Flag so UI can show "refined from previous country"
               isRefined: !!refined,
             };
           });
@@ -1025,29 +1056,33 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                     </span>
                   </div>
                   {/* Heatmap cells — one per response option */}
-                  <div style={{ display:"flex", alignItems:"center", padding:"8px 10px", gap:6 }}>
+                  <div style={{ display:"flex", alignItems:"flex-start", padding:"8px 10px", gap:5 }}>
                     {counts.map((c, ci) => (
                       <div key={ci} style={{ flex:1, display:"flex", flexDirection:"column",
-                        alignItems:"center", gap:2 }}>
-                        {/* Coloured cell with count */}
+                        alignItems:"center", gap:3 }}>
+                        {/* Coloured cell — fixed height so zeros don't shift labels */}
                         <div style={{
-                          width:"100%", minHeight:32,
-                          background: c > 0 ? CELL_COLORS[ci] : "#F0EEFF",
-                          borderRadius:5,
+                          width:"100%", height:32,
+                          background: c > 0 ? CELL_COLORS[ci] : "#F5F3FF",
+                          borderRadius:5, flexShrink:0,
                           display:"flex", alignItems:"center", justifyContent:"center",
-                          fontSize:14, fontWeight:800,
-                          color: c > 0 ? "white" : "#D6D2EF",
+                          fontSize:13, fontWeight:700,
+                          color: c > 0 ? "white" : "#C8C4E8",
                           border: c > 0 ? "none" : "1px solid #E2DFF5",
-                          transition:"background 0.2s",
                         }}>
                           {c}
                         </div>
-                        {/* Label */}
-                        <div style={{ fontSize:9, fontWeight:700, color:"#9391B0", textAlign:"center" }}>
-                          {LABELS[ci]}
+                        {/* Full label — fixed two-line height */}
+                        <div style={{ fontSize:8, fontWeight:600, color:"#9391B0",
+                          textAlign:"center", lineHeight:1.25, height:22 }}>
+                          {ci===0 && <><span>Strongly</span><br/><span>Disagree</span></>}
+                          {ci===1 && <span>Disagree</span>}
+                          {ci===2 && <span>Unsure</span>}
+                          {ci===3 && <span>Agree</span>}
+                          {ci===4 && <><span>Strongly</span><br/><span>Agree</span></>}
                         </div>
-                        {/* Percentage */}
-                        <div style={{ fontSize:9, color:"#B0ADCC", textAlign:"center" }}>
+                        {/* Percentage — fixed height so row stays aligned */}
+                        <div style={{ fontSize:8, color:"#B0ADCC", textAlign:"center", height:12 }}>
                           {c > 0 ? Math.round(c/n*100)+"%" : ""}
                         </div>
                       </div>
@@ -1080,16 +1115,29 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                     onChange={() => toggleItem(dept.key, sec.key, idx)}
                     style={{ flexShrink:0, cursor:"pointer", accentColor:"#7C6FE0",
                       width:15, height:15 }} />
-                  <span style={{ flex:1, fontSize:12, lineHeight:1.5,
-                    color: item.include ? "#1E1B3A" : "#9391B0",
-                    textDecoration: item.include ? "none" : "line-through" }}>
-                    {item.rewrite.trim() || item.text}
-                    {item.isRefined && !item.rewrite && (
-                      <span style={{ marginLeft:8, fontSize:9, color:"#8B85E8",
-                        fontWeight:600, background:"#EDE9FF", borderRadius:4,
-                        padding:"1px 5px" }}>✦ refined</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:12, lineHeight:1.5,
+                      color: item.include ? "#1E1B3A" : "#9391B0",
+                      textDecoration: item.include ? "none" : "line-through",
+                      fontStyle: item.isOriginalLang ? "italic" : "normal" }}>
+                      {item.rewrite.trim() || item.text}
+                      {item.isRefined && !item.rewrite && (
+                        <span style={{ marginLeft:8, fontSize:9, color:"#8B85E8",
+                          fontWeight:600, background:"#EDE9FF", borderRadius:4,
+                          padding:"1px 5px" }}>✦ refined</span>
+                      )}
+                    </div>
+                    {item.isOriginalLang && item.translation && (
+                      <div style={{ marginTop:4, fontSize:11, color:"#7B78A0",
+                        fontStyle:"normal", lineHeight:1.4,
+                        borderLeft:"2px solid #D6D2EF", paddingLeft:8 }}>
+                        <span style={{ fontSize:9, fontWeight:700, color:"#9391B0",
+                          textTransform:"uppercase", letterSpacing:.5,
+                          marginRight:6 }}>Translation</span>
+                        {item.translation}
+                      </div>
                     )}
-                  </span>
+                  </div>
                   {item.include && (
                     <button
                       onClick={() => {
@@ -1378,13 +1426,32 @@ function DeptReportPage({ dept, getApproved }) {
           <div style={{ fontSize:10, fontWeight:700, color:"#9391B0", textTransform:"uppercase",
             letterSpacing:2, marginBottom:12 }}>What staff said</div>
           <div style={{ display:"grid", gridTemplateColumns: quotes.length > 1 ? "1fr 1fr" : "1fr", gap:12 }}>
-            {quotes.map((q,i) => (
-              <div key={i} style={{ background:"#F8F7F4", borderLeft:"3px solid #D6D2EF",
-                borderRadius:"0 8px 8px 0", padding:"12px 16px", fontSize:13,
-                color:"#1E1B3A", lineHeight:1.7, fontStyle:"italic" }}>
-                "{q}"
-              </div>
-            ))}
+            {quotes.map((q,i) => {
+              const isObj = typeof q === 'object' && q !== null;
+              const orig = isObj ? (q.rewrite?.trim() || q.text || q.original) : q;
+              const trans = isObj ? q.translation : null;
+              const isOrig = isObj ? q.isOriginalLang : false;
+              return (
+                <div key={i} style={{ background:"#F8F7F4", borderLeft:"3px solid #D6D2EF",
+                  borderRadius:"0 8px 8px 0", padding:"12px 16px" }}>
+                  <div style={{ fontSize:13, color:"#1E1B3A", lineHeight:1.7,
+                    fontStyle: isOrig ? "italic" : "normal" }}>
+                    "{orig}"
+                  </div>
+                  {isOrig && trans && (
+                    <div style={{ marginTop:6, fontSize:11, color:"#7B78A0",
+                      fontStyle:"normal", lineHeight:1.4,
+                      borderLeft:"2px solid #D6D2EF", paddingLeft:8, marginLeft:0 }}>
+                      <span style={{ fontSize:9, fontWeight:700, color:"#9391B0",
+                        textTransform:"uppercase", letterSpacing:.5, marginRight:6 }}>
+                        Translation
+                      </span>
+                      {trans}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
