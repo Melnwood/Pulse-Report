@@ -380,6 +380,19 @@ export default function App() {
     })();
   }, []);
 
+  // Load refinements (cross-country learned rewrites) on startup
+  const [refinements, setRefinements] = useState(() => {
+    try { const r = localStorage.getItem("pulse:refinements"); return r ? JSON.parse(r) : {}; }
+    catch { return {}; }
+  });
+
+  const saveRefinement = (deptKey, section, idx, text) => {
+    const key = `${deptKey}:${section}:${idx}`;
+    const updated = { ...refinements, [key]: { text, savedAt: new Date().toISOString() } };
+    setRefinements(updated);
+    try { localStorage.setItem("pulse:refinements", JSON.stringify(updated)); } catch(e) {}
+  };
+
   // Reload selections when country+year change (e.g. opening a previous run)
   useEffect(() => {
     if (!country || !year) return;
@@ -417,15 +430,34 @@ export default function App() {
       // Generate AI content for each dept
       const sels = {};
       const depts = Object.values(data.depts).filter(d => d.n > 0);
+      // Read current refinements from localStorage
+      let currentRefinements = {};
+      try { const r = localStorage.getItem("pulse:refinements"); currentRefinements = r ? JSON.parse(r) : {}; } catch {}
+
       for (let i=0; i<depts.length; i++) {
         const d = depts[i];
         setGenProgress({ step: `Generating content for ${d.label} (${i+1}/${depts.length})…` });
         const gen = await generateDeptContent(d, country);
+
+        const applyRefinements = (section, items) =>
+          items.map((t, idx) => {
+            const key = `${d.key}:${section}:${idx}`;
+            const refined = currentRefinements[key];
+            return {
+              text: t,
+              include: true,
+              // Pre-fill rewrite with refined version if it exists
+              rewrite: refined ? refined.text : "",
+              // Flag so UI can show "refined from previous country"
+              isRefined: !!refined,
+            };
+          });
+
         sels[d.key] = {
-          strengths:     (gen.strengths    || []).map(t => ({ text:t, include:true,  rewrite:"" })),
-          growth:        (gen.growth       || []).map(t => ({ text:t, include:true,  rewrite:"" })),
-          leadershipQs:  (gen.leadershipQs || []).map(t => ({ text:t, include:true,  rewrite:"" })),
-          quotes:        (gen.quotes       || []).map(t => ({ text:t, include:true,  rewrite:"" })),
+          strengths:    applyRefinements("strengths",    gen.strengths    || []),
+          growth:       applyRefinements("growth",       gen.growth       || []),
+          leadershipQs: applyRefinements("leadershipQs", gen.leadershipQs || []),
+          quotes:       applyRefinements("quotes",       gen.quotes       || []),
         };
       }
       setSelections(sels);
@@ -493,6 +525,7 @@ export default function App() {
       surveyData={surveyData} selections={selections}
       toggleItem={toggleItem} setRewrite={setRewrite}
       saveSelections={saveSelections} saved={saved}
+      saveRefinement={saveRefinement} refinements={refinements}
       setView={setView}
     />
   );
@@ -510,6 +543,7 @@ export default function App() {
       allRuns={allRuns} dashCountry={dashCountry}
       setDashCountry={setDashCountry} setView={setView}
       country={country} year={year} surveyData={surveyData}
+      refinements={refinements} setRefinements={setRefinements}
     />
   );
 }
@@ -597,16 +631,26 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
                       </span>
                     ))}
                   </div>
-                  <button style={navBtn} onClick={async () => {
-                    setCountry2(run.country); setYear2(run.year);
-                    try {
-                      let r = null; try { const _v = localStorage.getItem(`pulse:data:${run.country}:${run.year}`); r = _v ? {value:_v} : null; } catch(e) {}
-                      let s = null; try { const _v = localStorage.getItem(`pulse:sel:${run.country}:${run.year}`); s = _v ? {value:_v} : null; } catch(e) {}
-                      if (r) setSurveyData(JSON.parse(r.value));
-                      if (s) setSelections(JSON.parse(s.value));
-                      setView("review");
-                    } catch {}
-                  }}>Open</button>
+                  <div style={{ display:"flex", gap:8 }}>
+                    <button style={navBtn} onClick={() => {
+                      setCountry2(run.country); setYear2(run.year);
+                      try {
+                        let r = null; try { const _v = localStorage.getItem(`pulse:data:${run.country}:${run.year}`); r = _v ? {value:_v} : null; } catch(e) {}
+                        let s = null; try { const _v = localStorage.getItem(`pulse:sel:${run.country}:${run.year}`); s = _v ? {value:_v} : null; } catch(e) {}
+                        if (r) setSurveyData(JSON.parse(r.value));
+                        if (s) setSelections(JSON.parse(s.value));
+                        setView("review");
+                      } catch {}
+                    }}>Open</button>
+                    <button style={{ ...navBtn, background:"#7F1D1D" }} onClick={() => {
+                      if (!window.confirm(`Delete ${run.country} ${run.year}? This cannot be undone.`)) return;
+                      const updated = allRuns.filter(r => r.id !== run.id);
+                      setAllRuns(updated);
+                      try { localStorage.setItem("pulse:runs", JSON.stringify(updated)); } catch {}
+                      try { localStorage.removeItem(`pulse:data:${run.country}:${run.year}`); } catch {}
+                      try { localStorage.removeItem(`pulse:sel:${run.country}:${run.year}`); } catch {}
+                    }}>Delete</button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -619,7 +663,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 }
 
 // ─── REVIEW VIEW ──────────────────────────────────────────────────────────────
-function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, setView }) {
+function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView }) {
   const [activeDept, setActiveDept] = useState(null);
   const depts = surveyData ? Object.values(surveyData.depts).filter(d=>d.n>0) : [];
 
@@ -670,6 +714,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
             <DeptReviewPanel
               dept={dept} sel={selections[dept.key]}
               toggleItem={toggleItem} setRewrite={setRewrite}
+              saveRefinement={saveRefinement} refinements={refinements}
             />
           )}
         </div>
@@ -678,7 +723,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
   );
 }
 
-function DeptReviewPanel({ dept, sel, toggleItem, setRewrite }) {
+function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, refinements }) {
   const sections = [
     { key:"strengths",    label:"✓ Strengths",           color:"#166534", bg:"#F0FDF4", instruction:"Check items to include. Uncheck to exclude. Type a rewrite to change wording — it will appear exactly as written." },
     { key:"growth",       label:"→ Growth Areas",        color:"#B45309", bg:"#FFFBEB", instruction:"Check items to include." },
@@ -728,11 +773,20 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite }) {
                   style={{ marginTop:3, cursor:"pointer", accentColor:"#3B82F6" }} />
                 <div style={{ flex:1 }}>
                   <div style={{ color: item.include?"white":"#64748B", fontSize:13, lineHeight:1.5 }}>{item.text}</div>
+                  {item.isRefined && !item.rewrite && (
+                    <div style={{ marginTop:6, fontSize:10, color:"#6366F1", fontWeight:600 }}>
+                      ✦ Refined from a previous country — using improved wording
+                    </div>
+                  )}
                   {item.include && (
                     <textarea
                       value={item.rewrite}
                       onChange={e => setRewrite(dept.key, sec.key, idx, e.target.value)}
-                      placeholder={sec.key==="quotes" ? "Leave blank to use as-is. Edit only if correcting a translation." : "Leave blank to use as-is. Type here to override wording exactly."}
+                      onBlur={e => {
+                        const val = e.target.value.trim();
+                        if (val) saveRefinement(dept.key, sec.key, idx, val);
+                      }}
+                      placeholder={sec.key==="quotes" ? "Leave blank to use as-is. Edit only if correcting a translation." : "Leave blank to use as-is. Type here to save improved wording for future countries."}
                       style={{ marginTop:8, width:"100%", background:"#0B1220", border:"1px solid #334155", borderRadius:6, padding:"8px 10px", color:"#93C5FD", fontSize:12, resize:"vertical", minHeight:56, fontFamily:"inherit", boxSizing:"border-box" }}
                     />
                   )}
@@ -933,7 +987,7 @@ function DeptReportPage({ dept, getApproved }) {
 }
 
 // ─── DASHBOARD VIEW ───────────────────────────────────────────────────────────
-function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country, year, surveyData }) {
+function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country, year, surveyData, refinements, setRefinements }) {
   const countries = [...new Set(allRuns.map(r=>r.country))].sort();
   const DEPTS_ORDER = ["HR","LD","LC","MPD","Counseling","Women","Singles","Marriages","JVK"];
 
@@ -1100,6 +1154,52 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
             </div>
           </>
         )}
+      {/* Refinements manager — always visible in P&C view */}
+      <div style={{ marginTop:32 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:2 }}>
+            Saved Refinements ({Object.keys(refinements).length})
+          </div>
+          {Object.keys(refinements).length > 0 && (
+            <button onClick={() => {
+              if (window.confirm("Clear all saved refinements? This cannot be undone.")) {
+                setRefinements({});
+                try { localStorage.removeItem("pulse:refinements"); } catch {}
+              }
+            }} style={{ ...navBtn, background:"#7F1D1D", fontSize:12 }}>Clear All</button>
+          )}
+        </div>
+        {Object.keys(refinements).length === 0 ? (
+          <div style={{ color:"#475569", fontSize:13, fontStyle:"italic" }}>
+            No refinements saved yet. When directors edit wording in the Director Review, those edits are saved here and pre-filled in future country reports.
+          </div>
+        ) : (
+          <div style={{ display:"grid", gap:8 }}>
+            {Object.entries(refinements).map(([key, val]) => {
+              const [deptKey, section, idx] = key.split(":");
+              return (
+                <div key={key} style={{ background:"#1E293B", borderRadius:8, padding:"12px 16px", display:"flex", alignItems:"flex-start", gap:12 }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ display:"flex", gap:8, marginBottom:4 }}>
+                      <span style={{ fontSize:10, fontWeight:700, color:"#6366F1", background:"#1E1B4B", borderRadius:4, padding:"2px 8px" }}>{deptKey}</span>
+                      <span style={{ fontSize:10, fontWeight:700, color:"#64748B", background:"#0F172A", borderRadius:4, padding:"2px 8px" }}>{section}</span>
+                      <span style={{ fontSize:10, color:"#475569" }}>#{parseInt(idx)+1}</span>
+                    </div>
+                    <div style={{ color:"white", fontSize:13, lineHeight:1.5 }}>{val.text}</div>
+                    <div style={{ color:"#475569", fontSize:10, marginTop:4 }}>Saved {new Date(val.savedAt).toLocaleDateString()}</div>
+                  </div>
+                  <button onClick={() => {
+                    const updated = { ...refinements };
+                    delete updated[key];
+                    setRefinements(updated);
+                    try { localStorage.setItem("pulse:refinements", JSON.stringify(updated)); } catch {}
+                  }} style={{ color:"#64748B", background:"none", border:"none", cursor:"pointer", fontSize:16, lineHeight:1 }}>×</button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
       </div>
     </div>
   );
