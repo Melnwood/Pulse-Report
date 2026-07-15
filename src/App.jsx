@@ -14,7 +14,31 @@ const AT_BASE = "appPulseReportBase"; // replace with real base ID
 
 // ─── SURVEY STRUCTURE ────────────────────────────────────────────────────────
 // Col indices from SurveyPro Raw Data sheet
-const ROUTING = { marital: 18, kids: 19, crossCultural: 20, culture: 21 };
+// Routing columns are resolved from the header row at parse time (positions vary
+// by country export), so we match on the header TEXT rather than a fixed index.
+// Fallback indices match the observed Poland layout if a header isn't found.
+const ROUTING_HEADERS = {
+  marital: [/marital status/i, /stan cywilny/i],
+  kids:    [/children living in your household/i, /mieszkaj.* dzieci/i],
+  culture: [/serving cross-?culturally/i, /środowisku międzykulturowym/i],
+};
+const ROUTING_FALLBACK = { marital: 19, kids: 20, culture: 21 };
+
+// Resolve routing column indices from a header row (array of header strings).
+function resolveRouting(headerRow) {
+  const find = (patterns, fallback) => {
+    for (let i = 0; i < headerRow.length; i++) {
+      const h = String(headerRow[i] || "");
+      if (patterns.some(p => p.test(h))) return i;
+    }
+    return fallback;
+  };
+  return {
+    marital: find(ROUTING_HEADERS.marital, ROUTING_FALLBACK.marital),
+    kids:    find(ROUTING_HEADERS.kids,    ROUTING_FALLBACK.kids),
+    culture: find(ROUTING_HEADERS.culture, ROUTING_FALLBACK.culture),
+  };
+}
 
 const DEPARTMENTS = [
   {
@@ -54,7 +78,7 @@ const DEPARTMENTS = [
   {
     key: "LC1", label: "Language & Culture (1st Culture)", group: "LC",
     cols: [43,44,45,46], openQ: 47,
-    route: (r) => r[ROUTING.culture] == 1,
+    route: (r) => [43,44,45,46].some(c => !isNaN(parseFloat(r[c]))),
     questions: [
       { col:43, en:"I can switch to English and still communicate effectively in team contexts.", burden:false, scale:"dist" },
       { col:44, en:"I am aware of cultural differences on my team and intentionally try to understand them.", burden:false, scale:"mean" },
@@ -66,7 +90,7 @@ const DEPARTMENTS = [
   {
     key: "LC2", label: "Language & Culture (2nd Culture)", group: "LC",
     cols: [48,49,50,51,52,53,54,55], openQ: 56,
-    route: (r) => r[ROUTING.culture] == 2,
+    route: (r) => [48,49,50,51,52,53,54,55].some(c => !isNaN(parseFloat(r[c]))),
     questions: [
       { col:48, en:"I clearly understand the expectations for my progress in language and culture learning.", burden:false, scale:"dist" },
       { col:49, en:"My team helps me with my language and cultural adaptation needs.", burden:false, scale:"dist" },
@@ -116,7 +140,7 @@ const DEPARTMENTS = [
   {
     key: "Women", label: "JV Women",
     cols: [77,78,79,80,81,82,83], openQ: 84,
-    route: (r) => r[ROUTING.marital] == 1 || r[ROUTING.marital] == 2, // all women — filtered by gender field if available
+    route: (r) => [77,78,79,80,81,82,83].some(c => !isNaN(parseFloat(r[c]))),
     questions: [
       { col:77, en:"I sometimes feel isolated in ministry and lack women I can turn to.", burden:true,  scale:"dist" },
       { col:78, en:"I have clarity and alignment with my spouse, team, and leadership about my ministry role and responsibilities.", burden:false, scale:"dist" },
@@ -131,7 +155,7 @@ const DEPARTMENTS = [
   {
     key: "Singles", label: "Singles",
     cols: [85,86,87,88,89,90,91,92,93], openQ: 95,
-    route: (r) => r[ROUTING.marital] == 1,
+    route: (r) => [85,86,87,88,89,90,91,92,93].some(c => !isNaN(parseFloat(r[c]))),
     questions: [
       { col:85, en:"I have access to resources that address the unique needs of single missionaries.", burden:false, scale:"dist" },
       { col:86, en:"I have a clear understanding of what is expected of me in ministry, team, and community life as a single staff member.", burden:false, scale:"dist" },
@@ -148,7 +172,7 @@ const DEPARTMENTS = [
   {
     key: "Marriages", label: "Marriages",
     cols: [96,97,98,99,100,101], openQ: 102,
-    route: (r) => r[ROUTING.marital] == 2,
+    route: (r) => [96,97,98,99,100,101].some(c => !isNaN(parseFloat(r[c]))),
     questions: [
       { col:96,  en:"I know where to go for help if our marriage faces challenges.", burden:false, scale:"dist" },
       { col:97,  en:"I feel supported and encouraged by JV and my team culture to prioritize my marriage.", burden:false, scale:"dist" },
@@ -162,7 +186,8 @@ const DEPARTMENTS = [
   {
     key: "JVK2", label: "JVK — 2nd Culture Parents", group: "JVK",
     cols: [103,104,105,106,107], openQ: 117,
-    route: (r) => r[ROUTING.kids] == 1 && r[ROUTING.culture] == 2,
+    // 2nd-culture parents answer cols 103-107 (exclusive to this group).
+    route: (r) => [103,104,105,106,107].some(c => !isNaN(parseFloat(r[c]))),
     questions: [
       { col:103, en:"I'm aware of available resources to support my children in cross-cultural life.", burden:false, scale:"dist" },
       { col:104, en:"I clearly understand JV's approach to caring for kids.", burden:false, scale:"dist" },
@@ -175,7 +200,9 @@ const DEPARTMENTS = [
   {
     key: "JVK1", label: "JVK — 1st Culture Parents", group: "JVK",
     cols: [108,109,110,111,112,113,114,115,116], openQ: 117,
-    route: (r) => r[ROUTING.kids] == 1 && r[ROUTING.culture] == 1,
+    // 1st-culture parents are identified by cols 108-111 (exclusive to this group;
+    // cols 112-116 are shared with 2nd-culture parents, so we don't route on those).
+    route: (r) => [108,109,110,111].some(c => !isNaN(parseFloat(r[c]))),
     questions: [
       { col:108, en:"I clearly understand JV's approach to caring for kids.", burden:false, scale:"dist" },
       { col:109, en:"I have someone to turn to for help when my kids face challenges.", burden:false, scale:"dist" },
@@ -247,13 +274,27 @@ async function parseSurveyFile(file) {
   const ws  = wb.Sheets["Raw Data"] || wb.Sheets[wb.SheetNames[0]];
   const raw = utils.sheet_to_json(ws, { header:1, defval:null });
 
+  const headerRow = raw[0] || [];
+  const routing = resolveRouting(headerRow);   // resolves marital/kids/culture column indices from headers
+
   const dataRows = raw.slice(2).filter(r => r[1] === "Completed" || r[1] === "Complete");
 
   const results = {};
 
+  // A respondent "answered" a set of columns if at least one has a numeric value.
+  const answered = (r, cols) => cols.some(c => {
+    const v = parseFloat(r[c]); return !isNaN(v);
+  });
+
   for (const dept of DEPARTMENTS) {
+    // Route by ANSWER PRESENCE (most robust — a person is in a department iff they
+    // answered its questions), with the resolved culture column disambiguating the
+    // 1st/2nd culture split for grouped departments.
     const eligible = dataRows.filter(r => {
-      try { return dept.route(r); } catch { return true; }
+      try {
+        if (dept.route) return dept.route(r, routing);   // custom route wins if defined
+        return answered(r, dept.cols);
+      } catch { return answered(r, dept.cols); }
     });
 
     const qResults = dept.questions.map(q => {
@@ -738,6 +779,21 @@ function looksNonEnglish(text) {
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [view, setView]           = useState("home");   // home | review | report | dashboard
+  // Admin mode (Mel & Chris only) — shared across screens, remembered per device.
+  const [isAdmin, setIsAdmin] = useState(() => {
+    try { return localStorage.getItem("pulse:admin") === "1"; } catch { return false; }
+  });
+  const toggleAdmin = () => {
+    setIsAdmin(prev => {
+      if (!prev) {
+        const ok = window.confirm("Turn on admin tools? (Survey upload, Import, Generate Report, and AI tools.) These are for the People & Culture admins — Mel & Chris.");
+        if (!ok) return prev;
+      }
+      const next = !prev;
+      try { localStorage.setItem("pulse:admin", next ? "1" : "0"); } catch {}
+      return next;
+    });
+  };
   const [country, setCountry]     = useState("");
   const [year, setYear]           = useState(new Date().getFullYear().toString());
   const [surveyData, setSurveyData] = useState(null);
@@ -911,6 +967,7 @@ export default function App() {
       allRuns={allRuns} setAllRuns={setAllRuns} setView={setView}
       setSurveyData={setSurveyData} setSelections={setSelections}
       setCountry2={setCountry} setYear2={setYear}
+      isAdmin={isAdmin} toggleAdmin={toggleAdmin}
     />
   );
 
@@ -922,6 +979,7 @@ export default function App() {
       saveSelections={saveSelections} saved={saved}
       saveRefinement={saveRefinement} refinements={refinements}
       setView={setView} setSelections={setSelections}
+      isAdmin={isAdmin} toggleAdmin={toggleAdmin}
     />
   );
 
@@ -946,7 +1004,7 @@ export default function App() {
 // ─── HOME VIEW ────────────────────────────────────────────────────────────────
 function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
   generating, genProgress, allRuns, setAllRuns, setView, setSurveyData, setSelections,
-  setCountry2, setYear2 }) {
+  setCountry2, setYear2, isAdmin, toggleAdmin }) {
 
   const countries = [...new Set(allRuns.map(r=>r.country))].sort();
 
@@ -958,14 +1016,24 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
           <div style={{ fontSize:11, letterSpacing:3, color:"#FF6600", fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>Josiah Venture</div>
           <div style={{ fontSize:22, fontWeight:700, color:"#1E1B3A" }}>Pulse Report Platform</div>
         </div>
-        <button onClick={() => setView("dashboard")} style={navBtn}>
-          P&C Dashboard
-        </button>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <button onClick={() => setView("dashboard")} style={navBtn}>
+            P&C Dashboard
+          </button>
+          {/* Discreet admin toggle — only Mel & Chris use this. */}
+          <button onClick={toggleAdmin}
+            title={isAdmin ? "Admin mode ON — click to hide admin tools" : "Admin mode"}
+            style={{ background:"transparent", border:"none", cursor:"pointer",
+              fontSize:16, color: isAdmin ? "#7C6FE0" : "#D8D5EC", padding:"4px 8px", lineHeight:1 }}>
+            {isAdmin ? "🔓" : "🔒"}
+          </button>
+        </div>
       </div>
 
       <div style={{ maxWidth:900, margin:"0 auto", padding:"48px 24px" }}>
 
-        {/* Upload card */}
+        {/* Upload card — admin only (survey upload creates/overwrites a run) */}
+        {isAdmin && (
         <div style={card}>
           <div style={{ fontSize:13, fontWeight:700, color:"#7C6FE0", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>New Survey Run</div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:24 }}>
@@ -1016,6 +1084,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
             </div>
           )}
         </div>
+        )}
 
         {/* Previous runs */}
         {allRuns.length > 0 && (
@@ -1046,7 +1115,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
                         setView("review");
                       } catch {}
                     }}>Open</button>
-                    <button style={{ ...navBtn, background:"#C0392B", color:"white" }} onClick={() => {
+                    {isAdmin && <button style={{ ...navBtn, background:"#C0392B", color:"white" }} onClick={() => {
                       const rc = run.country;
                       const ry = run.year;
                       const ri = run.id;
@@ -1058,7 +1127,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
                       });
                       try { localStorage.removeItem(`pulse:data:${rc}:${ry}`); } catch(e) {}
                       try { localStorage.removeItem(`pulse:sel:${rc}:${ry}`); } catch(e) {}
-                    }}>Delete</button>
+                    }}>Delete</button>}
                   </div>
                 </div>
               ))}
@@ -1072,10 +1141,9 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 }
 
 // ─── REVIEW VIEW ──────────────────────────────────────────────────────────────
-function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView, setSelections }) {
+function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin }) {
   const [activeDept, setActiveDept] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
-  const [regenerating, setRegenerating] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [genQs, setGenQs] = useState(false);
   const [importMsg, setImportMsg] = useState(null);
@@ -1099,45 +1167,6 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
           border:"1px solid #E2DFF5", color:"#7C6FE0", fontWeight:700 }}>
           ? How scoring works
         </button>
-        <button
-          disabled={regenerating}
-          onClick={async () => {
-            if (!surveyData) return;
-            setRegenerating(true);
-            try {
-              let currentRefinements = {};
-              try { const r = localStorage.getItem("pulse:refinements"); currentRefinements = r ? JSON.parse(r) : {}; } catch {}
-              const depts = Object.values(surveyData.depts).filter(d => d.n > 0);
-              const sels = {};
-              for (let i = 0; i < depts.length; i++) {
-                const d = depts[i];
-                const gen = await generateDeptContent(d, country);
-                const applyRef = (section, items) => items.map((t, idx) => {
-                  const key = `${d.key}:${section}:${idx}`;
-                  const refined = currentRefinements[key];
-                  const isObj = section === 'quotes' && typeof t === 'object' && t !== null;
-                  const textVal = isObj ? (t.original ?? t.text ?? '') : t;
-                  return { text: textVal,
-                    translation: isObj ? (t.translation ?? null) : null,
-                    isOriginalLang: isObj ? !!t.isOriginalLang : false,
-                    include: true, rewrite: refined ? refined.text : "", isRefined: !!refined };
-                });
-                sels[d.key] = {
-                  strengths: applyRef("strengths", gen.strengths || []),
-                  growth: applyRef("growth", gen.growth || []),
-                  leadershipQs: applyRef("leadershipQs", gen.leadershipQs || []),
-                  quotes: applyRef("quotes", gen.quotes || []),
-                };
-              }
-              setSelections(sels);
-              try { localStorage.setItem(`pulse:sel:${country}:${year}`, JSON.stringify(sels)); } catch {}
-            } catch(e) { console.error(e); }
-            finally { setRegenerating(false); }
-          }}
-          style={{ ...navBtn, background:"white", border:"1px solid #E2DFF5",
-            color: regenerating ? "#9391B0" : "#1E1B3A", cursor: regenerating ? "wait" : "pointer" }}>
-          {regenerating ? "Regenerating…" : "↺ Regenerate content"}
-        </button>
         <input ref={importInputRef} type="file" accept=".xlsx" style={{ display:"none" }}
           onChange={async (e) => {
             const file = e.target.files?.[0];
@@ -1158,6 +1187,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
             }
             e.target.value = ""; // allow re-import of same file
           }} />
+        {isAdmin && (<>
         <button onClick={() => importInputRef.current?.click()}
           style={{ ...navBtn, background:"white", border:"1px solid #E2DFF5", color:"#1E1B3A" }}>
           ⬆ Import director review (Excel)
@@ -1214,11 +1244,22 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
             color: genQs ? "#9391B0" : "#1E1B3A", cursor: genQs ? "wait" : "pointer" }}>
           {genQs ? "Generating…" : "✦ Generate leadership questions"}
         </button>
+        </>)}
         <button onClick={saveSelections} style={{ ...navBtn, background: saved?"#1E8449":"#7C6FE0" }}>
           {saved ? "✓ Saved" : "Save Progress"}
         </button>
+        {isAdmin && (
         <button onClick={()=>setView("report")} style={{ ...navBtn, background:"#9B8FE8" }}>
           Generate Report →
+        </button>
+        )}
+        {/* Discreet admin toggle — only Mel & Chris use this. Small lock at the far right. */}
+        <button
+          onClick={toggleAdmin}
+          title={isAdmin ? "Admin mode ON — click to hide admin tools" : "Admin mode"}
+          style={{ marginLeft:"auto", background:"transparent", border:"none", cursor:"pointer",
+            fontSize:14, color: isAdmin ? "#7C6FE0" : "#D8D5EC", padding:"4px 8px", lineHeight:1 }}>
+          {isAdmin ? "🔓" : "🔒"}
         </button>
       </div>
 
