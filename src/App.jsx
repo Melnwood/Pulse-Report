@@ -488,6 +488,70 @@ const sbd= s => STATUS_BORDER[s]|| STATUS_BORDER[null];
 // ─── CONTENT GENERATION ──────────────────────────────────────────────────────
 // Strengths and growth come from Survey Basics (approved source of truth).
 // Leadership questions and quote selection use AI since they require reading open responses.
+// Translate any non-English quotes that are missing a translation.
+// Works on the app's quote-item shape {text, translation, isOriginalLang, ...}.
+// Returns the same array with translations filled where possible. Resilient:
+// if the API is unavailable it returns the quotes unchanged.
+async function translateMissingQuotes(quotes) {
+  // Find quotes that look non-English AND have no translation yet
+  const needing = [];
+  quotes.forEach((q, i) => {
+    const text = (q.text || q.original || "").trim();
+    const hasTrans = q.translation && String(q.translation).trim();
+    const nonEng = q.isOriginalLang || looksNonEnglish(text);
+    if (text && nonEng && !hasTrans) needing.push({ i, text });
+  });
+  if (!needing.length) return quotes;
+
+  const prompt = `Translate each of the following survey responses into natural English. ` +
+    `They may be in Polish, Romanian, Hungarian, Czech, or another language. ` +
+    `Return ONLY a JSON array of objects, no markdown, in the same order:\n` +
+    `[{"i": <the number>, "translation": "<English translation>"}]\n\n` +
+    needing.map(n => `${n.i}. "${n.text}"`).join("\n");
+
+  const res = await fetch("/.netlify/functions/claude", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 3000,
+      messages: [{ role: "user", content: prompt }]
+    })
+  });
+
+  // Read the raw response so we can report exactly what went wrong.
+  const rawBody = await res.text();
+  if (!res.ok) {
+    // Surface the real HTTP error (e.g. 500 API key not configured, 404 function missing)
+    throw new Error(`Function returned HTTP ${res.status}: ${rawBody.slice(0, 300)}`);
+  }
+
+  let data;
+  try { data = JSON.parse(rawBody); }
+  catch { throw new Error(`Function response was not JSON: ${rawBody.slice(0, 300)}`); }
+
+  if (data.error) {
+    throw new Error(`API error: ${typeof data.error === "string" ? data.error : JSON.stringify(data.error).slice(0,300)}`);
+  }
+
+  const text = data.content?.find(b => b.type === "text")?.text;
+  if (!text) {
+    throw new Error(`Unexpected response shape: ${JSON.stringify(data).slice(0, 300)}`);
+  }
+
+  let arr;
+  try { arr = JSON.parse(text.replace(/```json|```/g, "").trim()); }
+  catch { throw new Error(`Translation JSON parse failed. Model returned: ${text.slice(0, 300)}`); }
+
+  const byIdx = {};
+  for (const item of arr) if (item && typeof item.i === "number") byIdx[item.i] = item.translation;
+
+  return quotes.map((q, i) => {
+    if (byIdx[i]) return { ...q, translation: byIdx[i], isOriginalLang: true };
+    return q;
+  });
+}
+
 async function generateDeptContent(dept) {
   const deptSBList = getSurveyBasics(dept.key);
 
@@ -514,8 +578,21 @@ async function generateDeptContent(dept) {
     .map(q => getSBText(q.en, q.status))
     .filter(Boolean);
 
-  // Leadership questions and quote selection via AI
-  let leadershipQs = [];
+  // Leadership questions: build a deterministic fallback from the department's
+  // weakest questions so there are ALWAYS options — the AI (if reachable) can
+  // replace these with sharper ones, but we never show an empty section.
+  const weakQs = dept.questions
+    .filter(q => q.status === 'Concern' || q.status === 'Watch')
+    .sort((a,b) => a.score - b.score)
+    .slice(0, 4);
+  let leadershipQs = weakQs.map(q =>
+    `Looking at "${q.en.replace(/\.$/, '')}" — what do you think is driving this, and what would help your team here?`
+  );
+  // Always include solid generic prompts as backup options so the section is never empty
+  leadershipQs.push(
+    `What is one change that would most improve staff experience in ${dept.label} this year?`,
+    `Where do you see the biggest gap between what staff need and what they currently receive?`
+  );
   // Fallback: first 6 responses as bilingual objects
   let quotes = dept.openResponses.slice(0, 6).map(r =>
     typeof r === 'string'
@@ -556,7 +633,7 @@ Select 4-6 of the most representative responses. For non-English responses, prov
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
-          max_tokens: 800,
+          max_tokens: 3000,
           messages: [{ role: "user", content: prompt }]
         })
       });
@@ -934,6 +1011,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
   const [activeDept, setActiveDept] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [translating, setTranslating] = useState(false);
   const [importMsg, setImportMsg] = useState(null);
   const importInputRef = useRef(null);
   const depts = surveyData ? Object.values(surveyData.depts).filter(d=>d.n>0) : [];
@@ -1017,6 +1095,29 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
         <button onClick={() => importInputRef.current?.click()}
           style={{ ...navBtn, background:"white", border:"1px solid #E2DFF5", color:"#1E1B3A" }}>
           ⬆ Import director review (Excel)
+        </button>
+        <button
+          disabled={translating}
+          onClick={async () => {
+            setTranslating(true);
+            try {
+              const updated = {};
+              for (const dk of Object.keys(selections)) {
+                const secs = selections[dk];
+                const newQuotes = await translateMissingQuotes(secs.quotes || []);
+                updated[dk] = { ...secs, quotes: newQuotes };
+              }
+              setSelections(updated);
+              try { localStorage.setItem(`pulse:sel:${country}:${year}`, JSON.stringify(updated)); } catch {}
+              setImportMsg({ status:"done", lines:["Translations updated for all non-English quotes."] });
+            } catch(e) {
+              setImportMsg({ status:"error", lines:["Translation failed: " + e.message] });
+            }
+            setTranslating(false);
+          }}
+          style={{ ...navBtn, background:"white", border:"1px solid #E2DFF5",
+            color: translating ? "#9391B0" : "#1E1B3A", cursor: translating ? "wait" : "pointer" }}>
+          {translating ? "Translating…" : "🌐 Translate quotes"}
         </button>
         <button onClick={saveSelections} style={{ ...navBtn, background: saved?"#1E8449":"#7C6FE0" }}>
           {saved ? "✓ Saved" : "Save Progress"}
