@@ -375,7 +375,13 @@ export default function App() {
     (async () => {
       try {
         let r = null; try { const _v = localStorage.getItem("pulse:runs"); r = _v ? {value:_v} : null; } catch(e) {}
-        if (r) setAllRuns(JSON.parse(r.value));
+        if (r) {
+          const loaded = JSON.parse(r.value).map((run, i) => ({
+            ...run,
+            id: run.id || `${run.country}-${run.year}-${i}`
+          }));
+          setAllRuns(loaded);
+        }
       } catch {}
     })();
   }, []);
@@ -642,18 +648,18 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
                         setView("review");
                       } catch {}
                     }}>Open</button>
-                    <button style={{ ...navBtn, background:"#C0392B" }} onClick={() => {
-                      if (!window.confirm(`Delete ${run.country} ${run.year}? This cannot be undone.`)) return;
-                      const runId = run.id;
-                      const runCountry = run.country;
-                      const runYear = run.year;
+                    <button style={{ ...navBtn, background:"#C0392B", color:"white" }} onClick={() => {
+                      const rc = run.country;
+                      const ry = run.year;
+                      const ri = run.id;
+                      if (!window.confirm(`Delete ${rc} ${ry}? This cannot be undone.`)) return;
                       setAllRuns(prev => {
-                        const updated = prev.filter(r => r.id !== runId);
-                        try { localStorage.setItem("pulse:runs", JSON.stringify(updated)); } catch {}
-                        return updated;
+                        const updated = prev.filter(r => !(r.country === rc && r.year === ry));
+                        try { localStorage.setItem("pulse:runs", JSON.stringify(updated)); } catch(e) { console.error(e); }
+                        return [...updated];
                       });
-                      try { localStorage.removeItem(`pulse:data:${runCountry}:${runYear}`); } catch {}
-                      try { localStorage.removeItem(`pulse:sel:${runCountry}:${runYear}`); } catch {}
+                      try { localStorage.removeItem(`pulse:data:${rc}:${ry}`); } catch(e) {}
+                      try { localStorage.removeItem(`pulse:sel:${rc}:${ry}`); } catch(e) {}
                     }}>Delete</button>
                   </div>
                 </div>
@@ -670,6 +676,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 // ─── REVIEW VIEW ──────────────────────────────────────────────────────────────
 function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView }) {
   const [activeDept, setActiveDept] = useState(null);
+  const [showHelp, setShowHelp] = useState(false);
   const depts = surveyData ? Object.values(surveyData.depts).filter(d=>d.n>0) : [];
 
   useEffect(() => { if (depts.length && !activeDept) setActiveDept(depts[0].key); }, [depts.length]);
@@ -685,6 +692,10 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
           <span style={{ color:"#FF6600", fontWeight:700, fontSize:13 }}>{country} {year}</span>
           <span style={{ color:"#9391B0", marginLeft:8, fontSize:13 }}>Director Review</span>
         </div>
+        <button onClick={()=>setShowHelp(true)} style={{ ...navBtn, background:"white",
+          border:"1px solid #E2DFF5", color:"#7C6FE0", fontWeight:700 }}>
+          ? How scoring works
+        </button>
         <button onClick={saveSelections} style={{ ...navBtn, background: saved?"#1E8449":"#7C6FE0" }}>
           {saved ? "✓ Saved" : "Save Progress"}
         </button>
@@ -693,6 +704,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
         </button>
       </div>
 
+      {showHelp && <ScoringHelpPanel onClose={()=>setShowHelp(false)} />}
       <div style={{ display:"flex", flex:1, overflow:"hidden" }}>
         {/* Sidebar */}
         <div style={{ width:220, background:"#FFFFFF", borderRight:"1px solid #E2DFF5", overflowY:"auto", flexShrink:0 }}>
@@ -728,12 +740,163 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
   );
 }
 
+
+// ─── SCORING HELP PANEL ───────────────────────────────────────────────────────
+function ScoringHelpPanel({ onClose }) {
+  return (
+    <div style={{
+      position:"fixed", top:0, left:0, right:0, bottom:0,
+      background:"rgba(0,0,0,0.4)", zIndex:1000,
+      display:"flex", alignItems:"flex-start", justifyContent:"center",
+      paddingTop:60, overflow:"auto",
+    }} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{
+        background:"white", borderRadius:14, padding:32, maxWidth:680, width:"calc(100% - 48px)",
+        marginBottom:40, fontFamily:"'Inter',system-ui,sans-serif",
+      }}>
+        {/* Header */}
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
+          <div style={{ fontSize:16, fontWeight:700, color:"#1E1B3A" }}>How scoring works</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer",
+            fontSize:20, color:"#9391B0", lineHeight:1, padding:"0 4px" }}>✕</button>
+        </div>
+
+        {/* MEAN vs DIST */}
+        <div style={{ fontSize:11, fontWeight:700, color:"#9391B0", textTransform:"uppercase",
+          letterSpacing:1.5, marginBottom:12 }}>Two ways to measure a question</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:20 }}>
+          {[
+            { label:"Mean", title:"The average score", color:"#166534", bg:"#F0FDF4", bd:"#86EFAC",
+              desc:"Add up all responses and divide by how many people answered. Simple and reliable when most people are somewhere in the middle.",
+              when:"Used for questions about personal experience or attitude — growth, connection, confidence — where one or two outliers won't distort the picture." },
+            { label:"Dist", title:"The response distribution", color:"#1E3A8A", bg:"#EFF6FF", bd:"#93C5FD",
+              desc:"Instead of averaging, it asks: are enough people on the positive side? An average can hide a divided team. DIST catches that.",
+              when:"Used for questions about access, clarity, or concrete experience — things that should be true for everyone. If even a third of your team can't say yes, that matters." },
+          ].map(f => (
+            <div key={f.label} style={{ background:f.bg, border:`1px solid ${f.bd}`, borderRadius:10, padding:14 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:f.color, textTransform:"uppercase",
+                letterSpacing:1.5, marginBottom:4 }}>{f.label} scale</div>
+              <div style={{ fontSize:13, fontWeight:700, color:"#1E1B3A", marginBottom:8 }}>{f.title}</div>
+              <div style={{ fontSize:12, color:"#374151", lineHeight:1.6, marginBottom:8 }}>{f.desc}</div>
+              <div style={{ fontSize:11, color:"#6B7280", lineHeight:1.5, background:"white",
+                borderRadius:6, padding:"8px 10px" }}>
+                <strong style={{ color:"#374151" }}>Used when:</strong> {f.when}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Real example */}
+        <div style={{ background:"#F9FAFB", borderRadius:10, padding:14, marginBottom:20,
+          border:"1px solid #E5E7EB" }}>
+          <div style={{ fontSize:11, fontWeight:700, color:"#9391B0", textTransform:"uppercase",
+            letterSpacing:1.5, marginBottom:10 }}>Why it matters — the same responses, two different answers</div>
+          <div style={{ fontSize:12, color:"#1E1B3A", fontWeight:600, marginBottom:10 }}>
+            9 single staff respond to: "My practical needs are adequately supported."
+          </div>
+          <div style={{ display:"flex", gap:6, marginBottom:12, alignItems:"flex-end", height:44 }}>
+            {[[0,"#E5E7EB"],[1,"#E24B4A"],[5,"#D4A0B0"],[3,"#639922"],[0,"#E5E7EB"]].map(([c,col],i)=>(
+              <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:2 }}>
+                <div style={{ width:"100%", height:`${Math.max(c/5*36,c>0?6:2)}px`,
+                  background:col, borderRadius:"3px 3px 0 0", display:"flex",
+                  alignItems:"center", justifyContent:"center" }}>
+                  {c>0 && <span style={{ fontSize:10, fontWeight:700, color:"white" }}>{c}</span>}
+                </div>
+                <span style={{ fontSize:9, color:"#9CA3AF" }}>{["SD","D","U","A","SA"][i]}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            <div style={{ background:"#FFFBEB", borderRadius:8, padding:10, textAlign:"center" }}>
+              <div style={{ fontSize:10, fontWeight:700, color:"#92400E", textTransform:"uppercase", letterSpacing:1 }}>Mean scale says</div>
+              <div style={{ fontSize:18, fontWeight:800, color:"#B45309", margin:"4px 0" }}>3.22</div>
+              <div style={{ fontSize:11, color:"#B45309" }}>→ Watch</div>
+            </div>
+            <div style={{ background:"#FEF2F2", borderRadius:8, padding:10, textAlign:"center" }}>
+              <div style={{ fontSize:10, fontWeight:700, color:"#991B1B", textTransform:"uppercase", letterSpacing:1 }}>Dist scale says</div>
+              <div style={{ fontSize:18, fontWeight:800, color:"#B91C1C", margin:"4px 0" }}>33% positive</div>
+              <div style={{ fontSize:11, color:"#B91C1C" }}>→ Concern</div>
+            </div>
+          </div>
+          <div style={{ marginTop:8, fontSize:11, color:"#6B7280", lineHeight:1.6 }}>
+            The average of 3.22 looks like a mild Watch. But only 3 out of 9 people agreed their
+            needs are met. DIST flags this as Concern because for a question about whether staff
+            feel supported, "most people aren't sure" is not a Watch result.
+          </div>
+        </div>
+
+        {/* Three factors */}
+        <div style={{ fontSize:11, fontWeight:700, color:"#9391B0", textTransform:"uppercase",
+          letterSpacing:1.5, marginBottom:12 }}>Three things that determine a department's status</div>
+        {[
+          { num:"1", color:"#166534", bg:"#F0FDF4", bd:"#86EFAC",
+            title:"Individual question scoring",
+            desc:"Each question gets its own status (Concern, Watch, or Healthy) using either MEAN or DIST. This is what the heatmap helps you verify — does the distribution match what you see on your team?" },
+          { num:"2", color:"#B45309", bg:"#FFFBEB", bd:"#FCD34D",
+            title:"Burden questions are flipped",
+            desc:'Some questions are worded negatively — "I feel alone," "I feel overwhelmed." For these, agreeing is a bad sign. Responses are inverted before scoring so the math always reads correctly. The heatmap colours flip to match: red on the right (Strongly Agree = bad), green on the left.' },
+          { num:"3", color:"#B91C1C", bg:"#FEF2F2", bd:"#FCA5A5",
+            title:"Concern-count override — the most important rule",
+            desc:"If 3 or more individual questions score Concern, the whole department is automatically flagged as Concern — regardless of its average. An average can hide real problems. Poland HR averaged 3.24 (normally Watch) but had 4 Concern questions, so it correctly shows Concern. This is the rule that protects against averages hiding what's actually happening." },
+        ].map(f => (
+          <div key={f.num} style={{ display:"flex", gap:12, marginBottom:12,
+            background:f.bg, border:`1px solid ${f.bd}`, borderRadius:10, padding:14 }}>
+            <div style={{ width:28, height:28, borderRadius:"50%", background:"white",
+              border:`1.5px solid ${f.bd}`, display:"flex", alignItems:"center",
+              justifyContent:"center", fontSize:13, fontWeight:700, color:f.color, flexShrink:0 }}>{f.num}</div>
+            <div>
+              <div style={{ fontSize:13, fontWeight:700, color:"#1E1B3A", marginBottom:5 }}>{f.title}</div>
+              <div style={{ fontSize:12, color:"#374151", lineHeight:1.6 }}>{f.desc}</div>
+            </div>
+          </div>
+        ))}
+
+        {/* Status thresholds */}
+        <div style={{ background:"#F9FAFB", border:"1px solid #E5E7EB", borderRadius:10,
+          padding:14, marginTop:4 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:"#9391B0", textTransform:"uppercase",
+            letterSpacing:1.5, marginBottom:10 }}>Status thresholds</div>
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+            <thead>
+              <tr style={{ borderBottom:"1px solid #E5E7EB" }}>
+                {["Status","Mean","Dist"].map(h=>(
+                  <th key={h} style={{ textAlign:"left", padding:"4px 8px", fontSize:10,
+                    fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:.5 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ["Healthy","#166534","3.50 or above","75%+ agreed, fewer than 15% disagreed"],
+                ["Watch","#B45309","2.50 – 3.49","50%+ agreed, fewer than 30% disagreed"],
+                ["Concern","#B91C1C","Below 2.50","Fewer than 50% agreed, or too many disagreed"],
+              ].map(([s,c,m,d])=>(
+                <tr key={s} style={{ borderBottom:"1px solid #F3F4F6" }}>
+                  <td style={{ padding:"7px 8px", fontWeight:700, color:c, fontSize:12 }}>{s}</td>
+                  <td style={{ padding:"7px 8px", color:"#374151", fontSize:12 }}>{m}</td>
+                  <td style={{ padding:"7px 8px", color:"#374151", fontSize:12 }}>{d}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <button onClick={onClose} style={{ marginTop:20, width:"100%", padding:"10px 0",
+          background:"#7C6FE0", color:"white", border:"none", borderRadius:8,
+          fontSize:13, fontWeight:700, cursor:"pointer" }}>
+          Got it — back to the review
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, refinements }) {
   const sections = [
-    { key:"strengths",    label:"✓ Strengths",           color:"#1E8449", bg:"#F0FDF4", instruction:"Check items to include. Uncheck to exclude. Type a rewrite to change wording — it will appear exactly as written." },
-    { key:"growth",       label:"→ Growth Areas",        color:"#D68910", bg:"#FFFBEB", instruction:"Check items to include." },
-    { key:"leadershipQs", label:"? Leadership Questions",color:"#3B3882", bg:"#F0EEFF", instruction:"Select 1–2 questions to carry into the final report." },
-    { key:"quotes",       label:"\" Staff Quotes",        color:"#4B5563", bg:"#F9FAFB", instruction:"Select up to 4 quotes. These appear verbatim — do not edit unless correcting a translation." },
+    { key:"strengths",    label:"✓ Strengths",            color:"#1E8449", instruction:"Check to include. Uncheck to exclude. Click Edit to revise wording — it will appear exactly as written in the report." },
+    { key:"growth",       label:"→ Growth areas",         color:"#D68910", instruction:"Check to include. Click Edit to revise wording." },
+    { key:"leadershipQs", label:"? Leadership questions", color:"#3B3882", instruction:"Check to include. Select 1–2 maximum. Click Edit to revise." },
+    { key:"quotes",       label:"" Staff quotes",         color:"#4B5563", instruction:"Check to include. Up to 4 quotes appear verbatim. Edit only to correct a translation." },
   ];
 
   return (
@@ -746,92 +909,153 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
           <span style={{ color:"#9391B0", fontSize:13 }}>{dept.avg} avg · n={dept.n}</span>
         </div>
 
-        {/* Director instruction */}
-        <div style={{ background:"#FFF8F5", border:"1px solid #FFD4B3", borderRadius:8,
-          padding:"10px 14px", marginBottom:12, fontSize:12, color:"#994400", lineHeight:1.6 }}>
-          <strong>Section 1 — Question Scores.</strong> Review each question, its score, status, and scale (MEAN or DIST).
-          The heatmap shows the response distribution (SD · D · U · A · SA). Burden questions are inverted —
-          high agreement = negative outcome. If the heatmap doesn't match what you see on your team, note it below in the rewrite field.
-          Survey Basics text shows what the score means at this level.
-        </div>
 
-        {/* Question scores + heatmap */}
+
+        {/* Heatmap — Question Scores */}
         <div style={{ background:"#FFFFFF", border:"1px solid #E2DFF5", borderRadius:10, overflow:"hidden", marginBottom:0 }}>
-          {/* Header row */}
-          <div style={{ display:"grid", gridTemplateColumns:"60px 50px 1fr 220px 50px", gap:0,
-            background:"#F5F3FF", borderBottom:"1px solid #E2DFF5", padding:"8px 12px",
+          {/* Column headers */}
+          <div style={{ display:"grid", gridTemplateColumns:"90px 52px 60px 1fr 52px 290px", gap:0,
+            background:"#F5F3FF", borderBottom:"2px solid #E2DFF5", padding:"7px 12px",
             fontSize:10, fontWeight:700, color:"#9391B0", textTransform:"uppercase", letterSpacing:1.5 }}>
-            <span>Status</span>
+            <span>Section</span>
             <span>Score</span>
-            <span>Question</span>
-            <span style={{ textAlign:"center" }}>Response Distribution</span>
-            <span style={{ textAlign:"center" }}>Scale</span>
+            <span>Status</span>
+            <span>Full Question Text</span>
+            <span style={{textAlign:"center"}}>Scale</span>
+            <span style={{textAlign:"center"}}>Heatmap — SD · D · U · A · SA</span>
           </div>
+
           {[...dept.questions].sort((a,b) => {
             const o = {Concern:0,Watch:1,Healthy:2};
             return (o[a.status]??1)-(o[b.status]??1) || a.score-b.score;
           }).map((q,i) => {
-            const counts = q.counts || [0,0,0,0,0]; // [SD,D,U,A,SA]
+            // counts = [SD=1, D=2, U=3, A=4, SA=5]
+            const counts = q.counts || [0,0,0,0,0];
             const n = counts.reduce((a,b)=>a+b,0) || 1;
-            // For burden questions, display inverted (SA=bad, SD=good)
-            const displayCounts = q.burden ? [...counts].reverse() : counts;
-            const HCOLS = q.burden
-              ? ["#C0392B","#E74C3C","#9391B0","#27AE60","#1E8449"]  // inverted: SA→red, SD→green
-              : ["#C0392B","#E74C3C","#9391B0","#27AE60","#1E8449"]; // SD→red, SA→green
-            const HLABELS = q.burden
-              ? ["SA","A","U","D","SD"]
-              : ["SD","D","U","A","SA"];
+            // Heatmap colours matching the Excel workbook
+            // For burden (inverted): high SA = bad outcome, so colours flip
+            const CELL_COLORS = q.burden
+              ? ["#1E8449","#5DBB8A","#BEBEBE","#E87F7F","#C0392B"] // SD=green, SA=red (burden inverted)
+              : ["#C0392B","#E87F7F","#BEBEBE","#5DBB8A","#1E8449"]; // SD=red, SA=green
+            const CELL_TEXT   = q.burden
+              ? ["white","white","white","white","white"]
+              : ["white","white","white","white","white"];
+            const LABELS = ["SD","D","U","A","SA"];
+            // Status row background
+            const statusRowBg = {Concern:"#FDF2F2", Watch:"#FFFBEB", Healthy:"#F0FDF4"}[q.status] || "#F8F8F8";
+
             return (
-              <div key={i} style={{ borderBottom:"1px solid #F0EEFF", padding:"10px 12px" }}>
-                <div style={{ display:"grid", gridTemplateColumns:"60px 50px 1fr 220px 50px", gap:0, alignItems:"center" }}>
-                  {/* Status */}
-                  <span style={{ fontSize:10, fontWeight:700, color:sc(q.status) }}>{q.status}</span>
+              <div key={i} style={{ borderBottom:"1px solid #F0EEFF" }}>
+                {/* Main row */}
+                <div style={{ display:"grid", gridTemplateColumns:"90px 52px 60px 1fr 52px 290px",
+                  gap:0, alignItems:"stretch", background: i%2===0?"#FFFFFF":"#FAFAF8" }}>
+                  {/* Section type (Q or Burden) */}
+                  <div style={{ padding:"10px 8px", display:"flex", alignItems:"center",
+                    background: q.burden ? "#FFF8E1" : "#F5F3FF",
+                    borderRight:"1px solid #E2DFF5" }}>
+                    <span style={{ fontSize:10, fontWeight:700,
+                      color: q.burden ? "#B45309" : "#7B78A0" }}>
+                      {q.burden ? "Burden
+[inv.]" : "Q"}
+                    </span>
+                  </div>
                   {/* Score */}
-                  <span style={{ fontSize:13, fontWeight:800, color:sc(q.status) }}>{q.score?.toFixed(2)}</span>
-                  {/* Question text */}
-                  <span style={{ fontSize:12, color:"#1E1B3A", lineHeight:1.5, paddingRight:12 }}>
-                    {q.en}{q.burden ? <span style={{ color:"#9391B0", fontSize:10 }}> [Burden]</span> : ""}
-                  </span>
-                  {/* Heatmap */}
-                  <div>
-                    {/* Stacked bar */}
-                    <div style={{ display:"flex", height:14, borderRadius:4, overflow:"hidden", marginBottom:4 }}>
-                      {displayCounts.map((c,ci) => (
-                        <div key={ci} title={`${HLABELS[ci]}: ${c} (${Math.round(c/n*100)}%)`}
-                          style={{ width:`${c/n*100}%`, background:HCOLS[ci], transition:"width 0.3s",
-                            minWidth: c>0 ? 2 : 0 }} />
-                      ))}
+                  <div style={{ padding:"10px 8px", display:"flex", alignItems:"center",
+                    background:statusRowBg, borderRight:"1px solid #E2DFF5" }}>
+                    <span style={{ fontSize:13, fontWeight:800, color:sc(q.status) }}>{q.score?.toFixed(2)}</span>
+                  </div>
+                  {/* Status */}
+                  <div style={{ padding:"10px 6px", display:"flex", alignItems:"center", justifyContent:"center",
+                    background:statusRowBg, borderRight:"1px solid #E2DFF5" }}>
+                    <span style={{ fontSize:9, fontWeight:700, color:sc(q.status),
+                      background:sb(q.status), border:`1px solid ${sbd(q.status)}`,
+                      borderRadius:4, padding:"2px 5px", textAlign:"center" }}>{q.status}</span>
+                  </div>
+                  {/* Question text + Survey Basics inline */}
+                  <div style={{ padding:"10px 12px", verticalAlign:"top",
+                    borderRight:"1px solid #E2DFF5" }}>
+                    <div style={{ fontSize:12, color:"#1E1B3A", lineHeight:1.5, marginBottom:6 }}>
+                      {q.en}{q.burden ? <span style={{ color:"#B45309", fontSize:10, marginLeft:4 }}>[Burden]</span> : ""}
                     </div>
-                    {/* Count labels */}
-                    <div style={{ display:"flex", gap:6 }}>
-                      {displayCounts.map((c,ci) => (
-                        <div key={ci} style={{ flex:1, textAlign:"center" }}>
-                          <div style={{ fontSize:11, fontWeight:700, color:HCOLS[ci] }}>{c}</div>
-                          <div style={{ fontSize:9, color:"#9391B0" }}>{HLABELS[ci]}</div>
+                    {(() => {
+                      const basics = SURVEY_BASICS[dept.key] || {};
+                      const interps = basics.q_interpretations || {};
+                      const match = Object.entries(interps).find(([k]) =>
+                        q.en.toLowerCase().startsWith(k.toLowerCase().slice(0,40)));
+                      if (!match) return null;
+                      const editId = `sbedit-${dept.key}-${i}`;
+                      return (
+                        <div>
+                          <div style={{ display:"flex", alignItems:"flex-start", gap:6,
+                            background:"#F8F7F4", borderRadius:5, padding:"5px 8px" }}>
+                            <span style={{ fontSize:9, fontWeight:700, color:"#9391B0",
+                              textTransform:"uppercase", letterSpacing:.5,
+                              whiteSpace:"nowrap", paddingTop:1, flexShrink:0 }}>Survey Basics</span>
+                            <span style={{ fontSize:11, color:"#6B6894", fontStyle:"italic",
+                              lineHeight:1.4, flex:1 }}>{match[1].interpretation}</span>
+                            <button
+                              onClick={() => {
+                                const el = document.getElementById(editId);
+                                if (el) el.style.display = el.style.display === "block" ? "none" : "block";
+                              }}
+                              style={{ fontSize:10, color:"#7C6FE0", background:"#EDE9FF",
+                                border:"0.5px solid #AFA9EC", borderRadius:4, padding:"2px 8px",
+                                cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
+                              Edit
+                            </button>
+                          </div>
+                          <div id={editId} style={{ display:"none", marginTop:5 }}>
+                            <textarea
+                              placeholder="Type your own interpretation if this doesn't match what you see on your team."
+                              style={{ width:"100%", border:"0.5px solid #D6D2EF", borderRadius:5,
+                                padding:"6px 8px", fontSize:11, color:"#1E1B3A",
+                                background:"white", resize:"vertical", minHeight:44,
+                                fontFamily:"inherit", lineHeight:1.5 }}
+                            />
+                          </div>
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })()}
                   </div>
                   {/* Scale */}
-                  <span style={{ textAlign:"center", fontSize:10, fontWeight:700,
-                    color:"#7B78A0", background:"#F5F3FF", borderRadius:4, padding:"2px 6px" }}>
-                    {q.scale.toUpperCase()}
-                  </span>
+                  <div style={{ padding:"10px 6px", display:"flex", alignItems:"center", justifyContent:"center",
+                    borderRight:"1px solid #E2DFF5" }}>
+                    <span style={{ fontSize:10, fontWeight:700, color:"#7B78A0",
+                      background:"#F5F3FF", borderRadius:4, padding:"2px 6px" }}>
+                      {q.scale.toUpperCase()}
+                    </span>
+                  </div>
+                  {/* Heatmap cells — one per response option */}
+                  <div style={{ display:"flex", alignItems:"center", padding:"8px 10px", gap:6 }}>
+                    {counts.map((c, ci) => (
+                      <div key={ci} style={{ flex:1, display:"flex", flexDirection:"column",
+                        alignItems:"center", gap:2 }}>
+                        {/* Coloured cell with count */}
+                        <div style={{
+                          width:"100%", minHeight:32,
+                          background: c > 0 ? CELL_COLORS[ci] : "#F0EEFF",
+                          borderRadius:5,
+                          display:"flex", alignItems:"center", justifyContent:"center",
+                          fontSize:14, fontWeight:800,
+                          color: c > 0 ? "white" : "#D6D2EF",
+                          border: c > 0 ? "none" : "1px solid #E2DFF5",
+                          transition:"background 0.2s",
+                        }}>
+                          {c}
+                        </div>
+                        {/* Label */}
+                        <div style={{ fontSize:9, fontWeight:700, color:"#9391B0", textAlign:"center" }}>
+                          {LABELS[ci]}
+                        </div>
+                        {/* Percentage */}
+                        <div style={{ fontSize:9, color:"#B0ADCC", textAlign:"center" }}>
+                          {c > 0 ? Math.round(c/n*100)+"%" : ""}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                {/* Survey Basics interpretation */}
-                {(() => {
-                  const basics = SURVEY_BASICS[dept.key] || {};
-                  const interps = basics.q_interpretations || {};
-                  const match = Object.entries(interps).find(([k]) => q.en.toLowerCase().startsWith(k.toLowerCase().slice(0,40)));
-                  return match ? (
-                    <div style={{ marginTop:8, marginLeft:110, padding:"6px 10px",
-                      background:"#F8F7F4", borderLeft:"3px solid #D6D2EF",
-                      borderRadius:"0 6px 6px 0", fontSize:11, color:"#6B6894", lineHeight:1.5 }}>
-                      <span style={{ fontWeight:700, color:"#9391B0", marginRight:6 }}>Survey Basics:</span>
-                      {match[1].interpretation}
-                    </div>
-                  ) : null;
-                })()}
+
               </div>
             );
           })}
@@ -845,20 +1069,46 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
             <div style={{ color:sec.color, fontWeight:700, fontSize:13 }}>{sec.label}</div>
             <div style={{ color:"#9391B0", fontSize:11, marginTop:2 }}>{sec.instruction}</div>
           </div>
-          {(sel[sec.key] || []).map((item, idx) => (
-            <div key={idx} style={{ padding:"12px 16px", borderBottom:"1px solid #FFFFFF", background: item.include ? "#F8F7F4" : "#F5F3FF", opacity: item.include ? 1 : 0.55 }}>
-              <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
-                <input type="checkbox" checked={item.include}
-                  onChange={() => toggleItem(dept.key, sec.key, idx)}
-                  style={{ marginTop:3, cursor:"pointer", accentColor:"#7C6FE0" }} />
-                <div style={{ flex:1 }}>
-                  <div style={{ color: item.include?"#1E1B3A":"#9391B0", fontSize:13, lineHeight:1.5 }}>{item.text}</div>
-                  {item.isRefined && !item.rewrite && (
-                    <div style={{ marginTop:6, fontSize:10, color:"#8B85E8", fontWeight:600 }}>
-                      ✦ Refined from a previous country — using improved wording
-                    </div>
-                  )}
+          {(sel[sec.key] || []).map((item, idx) => {
+            const editId = `item-edit-${dept.key}-${sec.key}-${idx}`;
+            return (
+              <div key={idx} style={{ borderBottom:"1px solid #F0EEFF",
+                background: item.include ? "white" : "#FAF9FE",
+                opacity: item.include ? 1 : 0.6 }}>
+                {/* Main row — tight, single line */}
+                <div style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 14px" }}>
+                  <input type="checkbox" checked={item.include}
+                    onChange={() => toggleItem(dept.key, sec.key, idx)}
+                    style={{ flexShrink:0, cursor:"pointer", accentColor:"#7C6FE0",
+                      width:15, height:15 }} />
+                  <span style={{ flex:1, fontSize:12, lineHeight:1.5,
+                    color: item.include ? "#1E1B3A" : "#9391B0",
+                    textDecoration: item.include ? "none" : "line-through" }}>
+                    {item.rewrite.trim() || item.text}
+                    {item.isRefined && !item.rewrite && (
+                      <span style={{ marginLeft:8, fontSize:9, color:"#8B85E8",
+                        fontWeight:600, background:"#EDE9FF", borderRadius:4,
+                        padding:"1px 5px" }}>✦ refined</span>
+                    )}
+                  </span>
                   {item.include && (
+                    <button
+                      onClick={() => {
+                        const el = document.getElementById(editId);
+                        if (!el) return;
+                        const opening = el.style.display !== "block";
+                        el.style.display = opening ? "block" : "none";
+                      }}
+                      style={{ fontSize:10, color:"#7C6FE0", background:"#EDE9FF",
+                        border:"0.5px solid #AFA9EC", borderRadius:5, padding:"3px 9px",
+                        cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
+                      {item.rewrite.trim() ? "Edited ✓" : "Edit"}
+                    </button>
+                  )}
+                </div>
+                {/* Edit area — hidden by default */}
+                {item.include && (
+                  <div id={editId} style={{ display:"none", padding:"0 14px 10px 38px" }}>
                     <textarea
                       value={item.rewrite}
                       onChange={e => setRewrite(dept.key, sec.key, idx, e.target.value)}
@@ -866,14 +1116,19 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                         const val = e.target.value.trim();
                         if (val) saveRefinement(dept.key, sec.key, idx, val);
                       }}
-                      placeholder={sec.key==="quotes" ? "Leave blank to use as-is. Edit only if correcting a translation." : "Leave blank to use as-is. Type here to save improved wording for future countries."}
-                      style={{ marginTop:8, width:"100%", background:"#F1EFF9", border:"1px solid #E2DFF5", borderRadius:6, padding:"8px 10px", color:"#9B8FE8", fontSize:12, resize:"vertical", minHeight:56, fontFamily:"inherit", boxSizing:"border-box" }}
+                      placeholder={sec.key==="quotes"
+                        ? "Leave blank to use as-is. Edit only if correcting a translation."
+                        : "Type here to override wording exactly as it will appear in the report. Saves for future countries."}
+                      style={{ width:"100%", background:"#F5F3FF", border:"0.5px solid #D6D2EF",
+                        borderRadius:6, padding:"7px 10px", color:"#1E1B3A", fontSize:12,
+                        resize:"vertical", minHeight:52, fontFamily:"inherit",
+                        lineHeight:1.5, boxSizing:"border-box" }}
                     />
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
           {(!sel[sec.key]?.length) && (
             <div style={{ padding:"16px", color:"#7B78A0", fontSize:13, fontStyle:"italic" }}>No items generated for this section.</div>
           )}
