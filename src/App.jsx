@@ -1448,6 +1448,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 // ─── REVIEW VIEW ──────────────────────────────────────────────────────────────
 function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, sbMaster, promoteSbToMaster, cloudLoading, syncStatus, me, saveMe, isPCLead }) {
   const [activeDept, setActiveDept] = useState(null);
+  const [deptTab, setDeptTab] = useState("review");   // "review" | "notes" — which tab of the department page
   const [showHelp, setShowHelp] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [genQs, setGenQs] = useState(false);
@@ -1646,16 +1647,35 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
           ))}
         </div>
 
-        {/* Main panel */}
+        {/* Main panel — a department PAGE with tabs (Review · Notes) */}
         <div style={{ flex:1, overflowY:"auto", padding:24 }}>
-          {dept && !selections[dept.key] && (
+          {dept && (
+            <div style={{ marginBottom:18, borderBottom:"1px solid #EFE3D6" }}>
+              <div style={{ display:"flex", alignItems:"baseline", gap:12, marginBottom:12 }}>
+                <span style={{ fontSize:20, fontWeight:700, color:"#1E1B3A" }}>{dept.label}</span>
+                <span style={{ fontSize:12, color:"#9C8F82" }}>{country} {year}</span>
+              </div>
+              <div style={{ display:"flex", gap:4 }}>
+                {["review","notes"].map(tab => (
+                  <button key={tab} onClick={() => setDeptTab(tab)}
+                    style={{ fontSize:13, fontWeight:600, padding:"8px 16px", border:"none", cursor:"pointer",
+                      background:"transparent", color: deptTab===tab ? "#FF6600" : "#8A7A6B",
+                      borderBottom: deptTab===tab ? "2px solid #FF6600" : "2px solid transparent" }}>
+                    {tab === "review" ? "Review" : "Notes"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {dept && deptTab === "review" && !selections[dept.key] && (
             <div style={{ textAlign:"center", color:"#9C8F82", padding:"60px 24px" }}>
               {cloudLoading
                 ? "☁ Loading this department's review from the shared workspace…"
                 : "No review content is loaded for this department on this device yet. If it shows on another device, the shared sync hasn't completed here — try reloading. (You can still Generate Report.)"}
             </div>
           )}
-          {dept && selections[dept.key] && (
+          {dept && deptTab === "review" && selections[dept.key] && (
             <DeptReviewPanel
               dept={dept} sel={selections[dept.key]}
               toggleItem={toggleItem} setRewrite={setRewrite}
@@ -1663,6 +1683,12 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
               country={country} year={year}
               sbOverrides={sbOverrides} saveSbOverride={saveSbOverride}
               sbMaster={sbMaster} promoteSbToMaster={promoteSbToMaster} isAdmin={isAdmin}
+              me={me} saveMe={saveMe} isPCLead={isPCLead}
+            />
+          )}
+          {dept && deptTab === "notes" && (
+            <DeptNotesTab
+              dept={dept} country={country} year={year}
               me={me} saveMe={saveMe} isPCLead={isPCLead}
             />
           )}
@@ -1826,6 +1852,18 @@ function ScoringHelpPanel({ onClose }) {
 // Department meeting-notes panel: a timestamped running log with a Private/Public
 // toggle. Private notes are visible only to their author and to P&C leadership
 // (Mel & Chris). Saves to Airtable so notes persist across devices and meetings.
+// The "Notes" tab of a department page. Hosts notes at every level for this
+// department + survey. Department-level log first (verified), with section- and
+// question-level notes added as the next build increment.
+function DeptNotesTab({ dept, country, year, me, saveMe, isPCLead }) {
+  return (
+    <div>
+      <NotesPanel country={country} year={year} deptKey={dept.key} deptLabel={dept.label}
+        me={me} saveMe={saveMe} isPCLead={isPCLead} />
+    </div>
+  );
+}
+
 function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead }) {
   const [notes, setNotes] = useState(null);      // null = loading
   const [draft, setDraft] = useState("");
@@ -1901,14 +1939,28 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
           rows={3}
           style={{ width: "100%", boxSizing: "border-box", fontSize: 13, padding: 10,
             border: "1px solid #E2D3C2", borderRadius: 8, resize: "vertical", fontFamily: "inherit" }} />
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
-          <label style={{ fontSize: 12, color: "#7A6E62", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
-            <input type="checkbox" checked={visibility === "Public"}
-              onChange={e => setVisibility(e.target.checked ? "Public" : "Private")} />
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: "#7A6E62" }}>Who can see this:</span>
+          <div style={{ display: "inline-flex", border: "1px solid #E2D3C2", borderRadius: 8, overflow: "hidden" }}>
+            <button type="button" onClick={() => setVisibility("Private")}
+              style={{ fontSize: 12, fontWeight: 600, padding: "5px 12px", border: "none", cursor: "pointer",
+                background: visibility === "Private" ? "#5A4A3B" : "transparent",
+                color: visibility === "Private" ? "#fff" : "#8A7A6B" }}>
+              Private
+            </button>
+            <button type="button" onClick={() => setVisibility("Public")}
+              style={{ fontSize: 12, fontWeight: 600, padding: "5px 12px", border: "none", cursor: "pointer",
+                borderLeft: "1px solid #E2D3C2",
+                background: visibility === "Public" ? "#2E7D32" : "transparent",
+                color: visibility === "Public" ? "#fff" : "#8A7A6B" }}>
+              Public
+            </button>
+          </div>
+          <span style={{ fontSize: 11, color: "#9C8F82" }}>
             {visibility === "Public"
-              ? <>Public <span style={{ color: "#9C8F82" }}>— country leader & team can see</span></>
-              : <>Private <span style={{ color: "#9C8F82" }}>— just you & P&C leadership</span></>}
-          </label>
+              ? "country leader & team can see this"
+              : "only you & P&C leadership (Mel & Chris)"}
+          </span>
           <button onClick={save} disabled={saving || !draft.trim()}
             style={{ ...navBtn, marginLeft: "auto", background: (saving || !draft.trim()) ? "#E7DDD2" : "#FF6600",
               color: (saving || !draft.trim()) ? "#9C8F82" : "#fff" }}>
@@ -2324,9 +2376,6 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
         </div>
       ))}
 
-      {/* Department meeting notes — timestamped log with Private/Public toggle. */}
-      <NotesPanel country={country} year={year} deptKey={dept.key} deptLabel={dept.label}
-        me={me} saveMe={saveMe} isPCLead={isPCLead} />
     </div>
   );
 }
