@@ -341,7 +341,7 @@ export async function loadRunSurveyData(country, year) {
 export async function addDepartmentNote({ country, year, deptKey, author, title, body, visibility }) {
   const run = `${country} ${year}`;
   const fields = {
-    "Note": (title || body || "").slice(0, 120),
+    "Name": (title || body || "").slice(0, 120),
     "Body": body || "",
     "Run": run,
     "Department": deptKey,
@@ -363,7 +363,7 @@ export async function loadDepartmentNotes(country, year, deptKey) {
   return (res.records || [])
     .map(r => ({
       id: r.id,
-      title: r.fields["Note"] || "",
+      title: r.fields["Name"] || "",
       body: r.fields["Body"] || "",
       author: r.fields["Author"] || "",
       created: r.fields["Created"] || null,
@@ -382,7 +382,7 @@ export async function setDepartmentNoteVisibility(noteId, visibility) {
 export async function addQuestionNote({ country, year, deptKey, question, author, title, body, visibility }) {
   const run = `${country} ${year}`;
   const fields = {
-    "Note": (title || body || "").slice(0, 120),
+    "Name": (title || body || "").slice(0, 120),
     "Body": body || "",
     "Run": run,
     "Department": deptKey,
@@ -410,7 +410,7 @@ export async function loadQuestionNotes(country, year, deptKey, question) {
   return (res.records || [])
     .map(r => ({
       id: r.id,
-      title: r.fields["Note"] || "",
+      title: r.fields["Name"] || "",
       body: r.fields["Body"] || "",
       run: r.fields["Run"] || "",
       question: r.fields["Question"] || "",
