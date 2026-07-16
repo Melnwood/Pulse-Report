@@ -1272,6 +1272,15 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
                             try { localStorage.setItem(`pulse:data:${run.country}:${run.year}`, JSON.stringify(sd)); } catch {}
                           }
                         } catch (e) { console.warn("Airtable surveyData load failed:", e.message); }
+                        // ALSO load the selections (review content) from Airtable, so the main
+                        // review panel isn't blank on a device that didn't create the run.
+                        try {
+                          const shared = await loadRunSelections(run.country, run.year);
+                          if (shared && Object.keys(shared).length) {
+                            setSelections(shared);
+                            try { localStorage.setItem(`pulse:sel:${run.country}:${run.year}`, JSON.stringify(shared)); } catch {}
+                          }
+                        } catch (e) { console.warn("Airtable selections load failed:", e.message); }
                       }
                     }}>Open</button>
                     {isAdmin && <button style={{ ...navBtn, background:"#C0392B", color:"white" }} onClick={() => {
@@ -1529,6 +1538,13 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
 
         {/* Main panel */}
         <div style={{ flex:1, overflowY:"auto", padding:24 }}>
+          {dept && !selections[dept.key] && (
+            <div style={{ textAlign:"center", color:"#9C8F82", padding:"60px 24px" }}>
+              {cloudLoading
+                ? "☁ Loading this department's review from the shared workspace…"
+                : "No review content is loaded for this department on this device yet. If it shows on another device, the shared sync hasn't completed here — try reloading. (You can still Generate Report.)"}
+            </div>
+          )}
           {dept && selections[dept.key] && (
             <DeptReviewPanel
               dept={dept} sel={selections[dept.key]}
