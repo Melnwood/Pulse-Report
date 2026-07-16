@@ -14,6 +14,7 @@ const F = {
     average: "fld2T9dJ5YF4dbd51", status: "fldRFtULXR26afEno", respondents: "fldejOT4HCHvWA7cB",
     openQuestion: "fldCHcHldlZeE1Krj", reviewStatus: "fldtb8tiiIkb3S7pw",
     surveyData: "fld3Wh12t2T8jvGXU", run: "fldqIzzYgH4rFEgFX",
+    sbOverrides: "fldrMavYHDwp3fcWv",
   },
   selections: {
     item: "fldJisxHvmDIK4yGC", section: "fldGViHWpebqdgjDx", text: "fldD4bJvQ3FavY575",
@@ -83,6 +84,7 @@ export async function upsertDepartment(runId, runName, dept) {
     [F.departments.respondents]: dept.n != null ? Number(dept.n) : undefined,
     [F.departments.openQuestion]: dept.openQLabel || undefined,
     [F.departments.surveyData]: dept.surveyDataJSON || undefined,
+    [F.departments.sbOverrides]: dept.sbOverridesJSON || undefined,
     [F.departments.run]: [runId],
   };
   if (existing.records.length) {
@@ -270,6 +272,7 @@ export async function loadRunSurveyData(country, year) {
   // department code -> record id, for pulling that dept's quotes
   const recByCode = {};
   const dd = {};
+  const sbOverrides = {};   // merged Survey Basics edits across all depts in this run
   for (const d of depts.records) {
     const key = d.fields["Department Key"] || "";
     const code = d.fields["Dept Code"]?.name || d.fields["Dept Code"] ||
@@ -289,6 +292,11 @@ export async function loadRunSurveyData(country, year) {
       openResponses: [],   // filled from Selections (quotes) below
       openQLabel: d.fields["Open Question"] || "",
     };
+    // Merge this department's shared Survey Basics edits (if any) into the run-wide map.
+    try {
+      const ov = JSON.parse(d.fields["SB Overrides"] || "{}");
+      if (ov && typeof ov === "object") Object.assign(sbOverrides, ov);
+    } catch {}
   }
 
   // Pull all quote selections and attach as openResponses per dept — matched
@@ -319,7 +327,103 @@ export async function loadRunSurveyData(country, year) {
     });
   } catch (e) { /* quotes optional — leave empty if unavailable */ }
 
-  return { depts: dd, merged: {}, raw: [] };
+  return { depts: dd, merged: {}, raw: [], sbOverrides };
+}
+
+
+// ─── NOTES ────────────────────────────────────────────────────────────────────
+// Department-level meeting notes and question-level notes, stored in the
+// "Department Notes" and "Question Notes" tables (addressed by name via the proxy).
+// Fields are referenced by name to match the hand-created tables:
+//   Note, Body, Run, Department, [Question], Author, Created, Visibility
+
+// Add a department meeting note. Returns the created record id.
+export async function addDepartmentNote({ country, year, deptKey, author, title, body, visibility }) {
+  const run = `${country} ${year}`;
+  const fields = {
+    "Note": (title || body || "").slice(0, 120),
+    "Body": body || "",
+    "Run": run,
+    "Department": deptKey,
+    "Author": author || "Unknown",
+    "Created": new Date().toISOString(),
+    "Visibility": visibility === "Public" ? "Public" : "Private",
+  };
+  const res = await call({ action: "create", table: "deptNotes", records: [{ fields }] });
+  return res.records?.[0]?.id || null;
+}
+
+// Load all department meeting notes for a run+department, newest first.
+// Visibility filtering (private vs public) is applied by the caller, which knows
+// the current user and whether they're P&C leadership.
+export async function loadDepartmentNotes(country, year, deptKey) {
+  const run = `${country} ${year}`;
+  const res = await call({ action: "list", table: "deptNotes",
+    filterByFormula: `AND({Run} = ${q(run)}, {Department} = ${q(deptKey)})` });
+  return (res.records || [])
+    .map(r => ({
+      id: r.id,
+      title: r.fields["Note"] || "",
+      body: r.fields["Body"] || "",
+      author: r.fields["Author"] || "",
+      created: r.fields["Created"] || null,
+      visibility: r.fields["Visibility"] || "Private",
+    }))
+    .sort((a, b) => new Date(b.created || 0) - new Date(a.created || 0));
+}
+
+// Flip a note between Private and Public.
+export async function setDepartmentNoteVisibility(noteId, visibility) {
+  await call({ action: "update", table: "deptNotes",
+    records: [{ id: noteId, fields: { "Visibility": visibility === "Public" ? "Public" : "Private" } }] });
+}
+
+// Add a question-level note. Returns the created record id.
+export async function addQuestionNote({ country, year, deptKey, question, author, title, body, visibility }) {
+  const run = `${country} ${year}`;
+  const fields = {
+    "Note": (title || body || "").slice(0, 120),
+    "Body": body || "",
+    "Run": run,
+    "Department": deptKey,
+    "Question": question || "",
+    "Author": author || "Unknown",
+    "Created": new Date().toISOString(),
+    "Visibility": visibility === "Public" ? "Public" : "Private",
+  };
+  const res = await call({ action: "create", table: "questionNotes", records: [{ fields }] });
+  return res.records?.[0]?.id || null;
+}
+
+// Load question notes. Pass a question to get that one question's full history
+// across ALL runs (the thread), or omit it to get every question note for a run+dept.
+export async function loadQuestionNotes(country, year, deptKey, question) {
+  let formula;
+  if (question) {
+    // history of THIS question across every survey (run), for this department
+    formula = `AND({Department} = ${q(deptKey)}, {Question} = ${q(question)})`;
+  } else {
+    const run = `${country} ${year}`;
+    formula = `AND({Run} = ${q(run)}, {Department} = ${q(deptKey)})`;
+  }
+  const res = await call({ action: "list", table: "questionNotes", filterByFormula: formula });
+  return (res.records || [])
+    .map(r => ({
+      id: r.id,
+      title: r.fields["Note"] || "",
+      body: r.fields["Body"] || "",
+      run: r.fields["Run"] || "",
+      question: r.fields["Question"] || "",
+      author: r.fields["Author"] || "",
+      created: r.fields["Created"] || null,
+      visibility: r.fields["Visibility"] || "Private",
+    }))
+    .sort((a, b) => new Date(b.created || 0) - new Date(a.created || 0));
+}
+
+export async function setQuestionNoteVisibility(noteId, visibility) {
+  await call({ action: "update", table: "questionNotes",
+    records: [{ id: noteId, fields: { "Visibility": visibility === "Public" ? "Public" : "Private" } }] });
 }
 
 export { F as AIRTABLE_FIELDS };

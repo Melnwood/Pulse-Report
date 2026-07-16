@@ -14,6 +14,10 @@ const TABLES = {
   departments: "tblgk8lmwqZlUMkcz",
   selections:  "tbl199XH5ESEIPtTW",
   team:        "tblmucsQUIbfADmI1",
+  // Notes tables addressed by name (created by hand in the same base). The API
+  // accepts a table name in place of an id, so long as the URL encodes it.
+  deptNotes:     "Department Notes",
+  questionNotes: "Question Notes",
 };
 
 exports.handler = async (event) => {
@@ -59,7 +63,7 @@ exports.handler = async (event) => {
           });
         }
         if (offset) qs.set("offset", offset);
-        const res = await doFetch(`${AT}/${baseId}/${tableId}?${qs.toString()}`, { headers: authHeaders });
+        const res = await doFetch(`${AT}/${baseId}/${encodeURIComponent(tableId)}?${qs.toString()}`, { headers: authHeaders });
         const text = await res.text();
         if (!res.ok) return { statusCode: res.status, headers, body: text };
         const data = JSON.parse(text);
@@ -74,7 +78,7 @@ exports.handler = async (event) => {
       const created = [];
       for (let i = 0; i < records.length; i += 10) {
         const batch = records.slice(i, i + 10);
-        const res = await doFetch(`${AT}/${baseId}/${tableId}`, {
+        const res = await doFetch(`${AT}/${baseId}/${encodeURIComponent(tableId)}`, {
           method: "POST", headers: authHeaders,
           body: JSON.stringify({ records: batch, typecast: true }),
         });
@@ -90,7 +94,7 @@ exports.handler = async (event) => {
       const updated = [];
       for (let i = 0; i < records.length; i += 10) {
         const batch = records.slice(i, i + 10);
-        const res = await doFetch(`${AT}/${baseId}/${tableId}`, {
+        const res = await doFetch(`${AT}/${baseId}/${encodeURIComponent(tableId)}`, {
           method: "PATCH", headers: authHeaders,
           body: JSON.stringify({ records: batch, typecast: true }),
         });
@@ -107,7 +111,7 @@ exports.handler = async (event) => {
       for (let i = 0; i < recordIds.length; i += 10) {
         const batch = recordIds.slice(i, i + 10);
         const qs = batch.map(id => `records[]=${encodeURIComponent(id)}`).join("&");
-        const res = await doFetch(`${AT}/${baseId}/${tableId}?${qs}`, { method: "DELETE", headers: authHeaders });
+        const res = await doFetch(`${AT}/${baseId}/${encodeURIComponent(tableId)}?${qs}`, { method: "DELETE", headers: authHeaders });
         const text = await res.text();
         if (!res.ok) return { statusCode: res.status, headers, body: text };
         deleted.push(...JSON.parse(text).records);

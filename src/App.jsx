@@ -1,6 +1,20 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import SURVEY_BASICS from "./surveyBasics.json";
-import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData } from "./airtable";
+import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility } from "./airtable";
+
+// Detect a phone-width screen so the report/review can switch to a stacked,
+// touch-friendly layout. Updates on resize/rotate.
+function useIsMobile(breakpoint = 700) {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" ? window.innerWidth <= breakpoint : false
+  );
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= breakpoint);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [breakpoint]);
+  return isMobile;
+}
 
 // Map app department keys (HR, LD, LC1/LC2, JVK1/JVK2, ...) to surveyBasics.json keys
 // (which are lowercase and un-split: hr, ld, lc, jvk, ...).
@@ -853,6 +867,18 @@ export default function App() {
       return next;
     });
   };
+  // Simple identity: who is using the app on this device. Notes are attributed to
+  // this name, and the private/public model uses it. Remembered per device.
+  const [me, setMe] = useState(() => {
+    try { return localStorage.getItem("pulse:me") || ""; } catch { return ""; }
+  });
+  const saveMe = (name) => {
+    const n = (name || "").trim();
+    setMe(n);
+    try { localStorage.setItem("pulse:me", n); } catch {}
+  };
+  // P&C leadership (Mel & Chris) see every note regardless of private/public.
+  const isPCLead = isAdmin;   // admins are Mel & Chris — the P&C leadership
   const [country, setCountry]     = useState("");
   const [year, setYear]           = useState(new Date().getFullYear().toString());
   const [surveyData, setSurveyData] = useState(null);
@@ -860,6 +886,12 @@ export default function App() {
   const [genProgress, setGenProgress] = useState({});
   const [selections, setSelections] = useState({});    // { deptKey: { strengths:[{text,include,rewrite}], ... } }
   const [saved, setSaved]         = useState(false);
+  // Autosync status: "idle" | "saving" | "saved" | "error". Shown as a quiet indicator.
+  const [syncStatus, setSyncStatus] = useState("idle");
+  const syncTimer = useRef(null);
+  const lastSyncedRef = useRef("");   // JSON of last-synced selections, to skip no-op saves
+  const skipNextSyncRef = useRef(true); // don't autosync the very first load of a run
+  const syncInFlightRef = useRef(false); // guard so overlapping saves can't race/duplicate
   const [dashCountry, setDashCountry] = useState("all");
   const [allRuns, setAllRuns]     = useState([]);       // from storage
   const [runsLoading, setRunsLoading] = useState(true);
@@ -923,6 +955,34 @@ export default function App() {
     else delete updated[key];   // empty clears the override
     setSbOverrides(updated);
     try { localStorage.setItem("pulse:sbOverrides", JSON.stringify(updated)); } catch(e) {}
+    // Share the edit: push THIS department's overrides to its Airtable record (debounced),
+    // so the "(edited)" marker shows for everyone reviewing this run — not just this device.
+    syncSbOverridesForDept(deptKey, updated);
+  };
+
+  // Debounced per-department push of Survey Basics overrides to Airtable.
+  const sbSyncTimers = useRef({});
+  const syncSbOverridesForDept = (deptKey, allOverrides) => {
+    if (!country || !year || !surveyData?.depts?.[deptKey]) return;
+    const prefix = `${country}:${year}:${deptKey}:`;
+    // slice out just this department's edits
+    const slice = {};
+    Object.entries(allOverrides).forEach(([k, v]) => { if (k.startsWith(prefix)) slice[k] = v; });
+    if (sbSyncTimers.current[deptKey]) clearTimeout(sbSyncTimers.current[deptKey]);
+    sbSyncTimers.current[deptKey] = setTimeout(async () => {
+      try {
+        const runName = `${country} ${year}`;
+        const d = surveyData.depts[deptKey];
+        const runId = await upsertRun({ country, year, status: "In Review",
+          overallAvg: null, respondents: surveyData?.raw?.length ?? null });
+        await upsertDepartment(runId, runName, {
+          key: deptKey, label: d.label, avg: d.avg, status: d.status, n: d.n,
+          openQLabel: d.openQLabel,
+          surveyDataJSON: JSON.stringify({ questions: d.questions || [] }).slice(0, 95000),
+          sbOverridesJSON: JSON.stringify(slice),
+        });
+      } catch (e) { console.warn("SB override sync failed:", e.message); }
+    }, 1200);
   };
 
   // MASTER Survey Basics overrides — promoted interpretations that become the default
@@ -951,6 +1011,7 @@ export default function App() {
   useEffect(() => {
     if (!country || !year) return;
     let cancelled = false;
+    skipNextSyncRef.current = true;   // loading a run is not an edit — don't autosync it back
     // start from local immediately so nothing flashes empty
     try {
       const raw = localStorage.getItem(`pulse:sel:${country}:${year}`);
@@ -973,6 +1034,67 @@ export default function App() {
     })();
     return () => { cancelled = true; };
   }, [country, year]);
+
+  // ── AUTOSYNC ──────────────────────────────────────────────────────────────
+  // Whenever the review selections change (a director edits an include, rewrite,
+  // translation, etc.), save automatically: to localStorage immediately, and to
+  // Airtable after a short debounce. No manual push button, so nothing to forget
+  // or double-press. Saves are idempotent (upsert), so they can't create duplicates.
+  useEffect(() => {
+    if (!country || !year) return;
+    const snapshot = JSON.stringify(selections || {});
+    // skip empty, unchanged, or the initial load of a run
+    if (!selections || !Object.keys(selections).length) return;
+    if (skipNextSyncRef.current) { skipNextSyncRef.current = false; lastSyncedRef.current = snapshot; return; }
+    if (snapshot === lastSyncedRef.current) return;
+
+    // local save is instant
+    try { localStorage.setItem(`pulse:sel:${country}:${year}`, JSON.stringify(selections)); } catch {}
+
+    // debounce the Airtable save so rapid edits collapse into one write
+    if (syncTimer.current) clearTimeout(syncTimer.current);
+    setSyncStatus("saving");
+    syncTimer.current = setTimeout(async () => {
+      if (syncInFlightRef.current) {
+        // a save is already running — reschedule this one shortly after
+        if (syncTimer.current) clearTimeout(syncTimer.current);
+        syncTimer.current = setTimeout(() => setSelections(s => ({ ...s })), 800);
+        return;
+      }
+      syncInFlightRef.current = true;
+      try {
+        const runName = `${country} ${year}`;
+        // ensure the run exists, then save each department's selections
+        const runId = await upsertRun({
+          country, year, status: "In Review",
+          overallAvg: surveyData?.depts
+            ? (() => { const d = Object.values(surveyData.depts).filter(x=>x.avg); return d.length ? d.reduce((a,x)=>a+parseFloat(x.avg||0),0)/d.length : null; })()
+            : null,
+          respondents: surveyData?.raw?.length ?? null,
+        });
+        for (const [deptKey, sel] of Object.entries(selections)) {
+          const d = surveyData?.depts?.[deptKey];
+          if (!d) continue;
+          const deptRecId = await upsertDepartment(runId, runName, {
+            key: deptKey, label: d.label, avg: d.avg, status: d.status, n: d.n,
+            openQLabel: d.openQLabel,
+            surveyDataJSON: JSON.stringify({ questions: d.questions || [] }).slice(0, 95000),
+          });
+          await atSaveSelections(deptRecId, sel);
+        }
+        lastSyncedRef.current = snapshot;
+        setSyncStatus("saved");
+        setTimeout(() => setSyncStatus(s => s === "saved" ? "idle" : s), 2500);
+      } catch (e) {
+        console.warn("Autosync failed:", e.message);
+        setSyncStatus("error");
+      } finally {
+        syncInFlightRef.current = false;
+      }
+    }, 1500);
+
+    return () => { if (syncTimer.current) clearTimeout(syncTimer.current); };
+  }, [selections, country, year, surveyData]);
 
   const saveRun = async (data) => {
     const run = {
@@ -1097,6 +1219,7 @@ export default function App() {
       generating={generating} genProgress={genProgress}
       allRuns={allRuns} setAllRuns={setAllRuns} setView={setView}
       setSurveyData={setSurveyData} setSelections={setSelections}
+      setSbOverrides={setSbOverrides}
       setCountry2={setCountry} setYear2={setYear}
       isAdmin={isAdmin} toggleAdmin={toggleAdmin}
       runsLoading={runsLoading}
@@ -1114,7 +1237,8 @@ export default function App() {
       isAdmin={isAdmin} toggleAdmin={toggleAdmin}
       sbOverrides={sbOverrides} saveSbOverride={saveSbOverride} setSbOverrides={setSbOverrides}
       sbMaster={sbMaster} promoteSbToMaster={promoteSbToMaster}
-      cloudLoading={cloudLoading}
+      cloudLoading={cloudLoading} syncStatus={syncStatus}
+      me={me} saveMe={saveMe} isPCLead={isPCLead}
     />
   );
 
@@ -1140,7 +1264,7 @@ export default function App() {
 // ─── HOME VIEW ────────────────────────────────────────────────────────────────
 function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
   generating, genProgress, allRuns, setAllRuns, setView, setSurveyData, setSelections,
-  setCountry2, setYear2, isAdmin, toggleAdmin, runsLoading }) {
+  setCountry2, setYear2, isAdmin, toggleAdmin, runsLoading, setSbOverrides }) {
 
   const countries = [...new Set(allRuns.map(r=>r.country))].sort();
 
@@ -1263,6 +1387,19 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
                         if (_s) setSelections(JSON.parse(_s));
                       } catch {}
                       setView("review");
+                      // Always pull shared Survey Basics edits from Airtable and merge them in,
+                      // so the "(edited)" interpretations show for everyone — even when this device
+                      // already had local survey data. Remote (shared) edits win for this run.
+                      try {
+                        const sd2 = await loadRunSurveyData(run.country, run.year);
+                        if (sd2?.sbOverrides && Object.keys(sd2.sbOverrides).length) {
+                          setSbOverrides(prev => {
+                            const merged = { ...prev, ...sd2.sbOverrides };
+                            try { localStorage.setItem("pulse:sbOverrides", JSON.stringify(merged)); } catch {}
+                            return merged;
+                          });
+                        }
+                      } catch (e) { console.warn("SB override load failed:", e.message); }
                       // 2. if no local survey data (e.g. opening on a new device), rebuild from Airtable
                       if (!haveData) {
                         try {
@@ -1309,7 +1446,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 }
 
 // ─── REVIEW VIEW ──────────────────────────────────────────────────────────────
-function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, sbMaster, promoteSbToMaster, cloudLoading }) {
+function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, sbMaster, promoteSbToMaster, cloudLoading, syncStatus, me, saveMe, isPCLead }) {
   const [activeDept, setActiveDept] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
   const [translating, setTranslating] = useState(false);
@@ -1440,43 +1577,16 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
             color: genQs ? "#9C8F82" : "#1E1B3A", cursor: genQs ? "wait" : "pointer" }}>
           {genQs ? "Generating…" : "✦ Generate leadership questions"}
         </button>
-        <button
-          disabled={atBusy}
-          title="Push this run's departments and your review edits up to the shared Airtable base"
-          onClick={async () => {
-            setAtBusy(true);
-            setImportMsg({ status:"working", lines:["Pushing to Airtable…"] });
-            try {
-              const runName = `${country} ${year}`;
-              const runId = await upsertRun({
-                country, year,
-                status: "In Review",
-                overallAvg: depts.length ? (depts.reduce((a,d)=>a+parseFloat(d.avg||0),0)/depts.length) : null,
-                respondents: surveyData?.raw?.length ?? null,
-              });
-              let pushed = 0;
-              for (const d of depts) {
-                const deptRecId = await upsertDepartment(runId, runName, {
-                  key: d.key, label: d.label, avg: d.avg, status: d.status, n: d.n,
-                  openQLabel: d.openQLabel,
-                  surveyDataJSON: JSON.stringify({ questions: d.questions || [] }).slice(0, 95000),
-                });
-                if (selections[d.key]) { await atSaveSelections(deptRecId, selections[d.key]); pushed++; }
-              }
-              setImportMsg({ status:"done", lines:[`Pushed ${runName} to Airtable — ${depts.length} departments, ${pushed} with review content.`] });
-            } catch(e) {
-              setImportMsg({ status:"error", lines:["Airtable push failed: " + e.message] });
-            }
-            setAtBusy(false);
-          }}
-          style={{ ...navBtn, background:"white", border:"1px solid #F5E4D5",
-            color: atBusy ? "#9C8F82" : "#1E1B3A", cursor: atBusy ? "wait" : "pointer" }}>
-          {atBusy ? "Syncing…" : "☁ Push to Airtable"}
-        </button>
         </>)}
-        <button onClick={saveSelections} style={{ ...navBtn, background: saved?"#1E8449":"#FF6600" }}>
-          {saved ? "✓ Saved" : "Save Progress"}
-        </button>
+        {/* Quiet auto-sync indicator — replaces the manual push and save buttons.
+            Edits save themselves; this just reassures the user it's handled. */}
+        <span style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12,
+          color: syncStatus==="error" ? "#C0392B" : "#9C8F82", padding:"0 8px", whiteSpace:"nowrap" }}>
+          {syncStatus==="saving" && <>☁ Saving…</>}
+          {syncStatus==="saved"  && <span style={{ color:"#1E8449" }}>✓ Saved</span>}
+          {syncStatus==="error"  && <>⚠ Sync failed — will retry on next edit</>}
+          {syncStatus==="idle"   && <span style={{ color:"#C9BCAF" }}>✓ All changes saved</span>}
+        </span>
         {isAdmin && (
         <button onClick={()=>setView("report")} style={{ ...navBtn, background:"#FF7A1A" }}>
           Generate Report →
@@ -1553,6 +1663,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
               country={country} year={year}
               sbOverrides={sbOverrides} saveSbOverride={saveSbOverride}
               sbMaster={sbMaster} promoteSbToMaster={promoteSbToMaster} isAdmin={isAdmin}
+              me={me} saveMe={saveMe} isPCLead={isPCLead}
             />
           )}
         </div>
@@ -1712,7 +1823,132 @@ function ScoringHelpPanel({ onClose }) {
   );
 }
 
-function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, refinements, country, year, sbOverrides, saveSbOverride, sbMaster, promoteSbToMaster, isAdmin }) {
+// Department meeting-notes panel: a timestamped running log with a Private/Public
+// toggle. Private notes are visible only to their author and to P&C leadership
+// (Mel & Chris). Saves to Airtable so notes persist across devices and meetings.
+function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead }) {
+  const [notes, setNotes] = useState(null);      // null = loading
+  const [draft, setDraft] = useState("");
+  const [visibility, setVisibility] = useState("Private");
+  const [saving, setSaving] = useState(false);
+  const [nameInput, setNameInput] = useState("");
+  const [err, setErr] = useState(null);
+
+  const reload = async () => {
+    try {
+      const list = await loadDepartmentNotes(country, year, deptKey);
+      setNotes(list);
+    } catch (e) { setErr(e.message); setNotes([]); }
+  };
+  useEffect(() => { setNotes(null); reload(); /* eslint-disable-next-line */ }, [country, year, deptKey]);
+
+  // Visibility rule: show a note if it's Public, or you wrote it, or you're P&C lead.
+  const visible = (notes || []).filter(n =>
+    n.visibility === "Public" || (me && n.author === me) || isPCLead);
+
+  const fmt = (iso) => {
+    if (!iso) return "";
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) +
+        " · " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    } catch { return ""; }
+  };
+
+  const save = async () => {
+    if (!draft.trim()) return;
+    if (!me) { setErr("Set your name first so the note is yours."); return; }
+    setSaving(true); setErr(null);
+    try {
+      await addDepartmentNote({ country, year, deptKey, author: me,
+        title: draft.trim().split("\n")[0].slice(0, 80), body: draft.trim(), visibility });
+      setDraft("");
+      await reload();
+    } catch (e) { setErr("Couldn't save note: " + e.message); }
+    setSaving(false);
+  };
+
+  const flip = async (n) => {
+    const next = n.visibility === "Public" ? "Private" : "Public";
+    // optimistic
+    setNotes(prev => prev.map(x => x.id === n.id ? { ...x, visibility: next } : x));
+    try { await setDepartmentNoteVisibility(n.id, next); }
+    catch (e) { setErr("Couldn't change visibility: " + e.message); reload(); }
+  };
+
+  return (
+    <div style={{ marginTop: 22, border: "1px solid #EFE3D6", borderRadius: 12, overflow: "hidden" }}>
+      <div style={{ background: "#FFF4EC", padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "#8A5A2B" }}>Meeting notes — {deptLabel || deptKey}</span>
+        <span style={{ marginLeft: "auto", fontSize: 11, color: "#9C8F82" }}>
+          {me ? <>Signed in as <b style={{ color: "#5A4A3B" }}>{me}</b></> : "Not signed in"}
+        </span>
+      </div>
+
+      <div style={{ padding: 14 }}>
+        {!me && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, color: "#7A6E62" }}>Your name (so notes are yours):</span>
+            <input value={nameInput} onChange={e => setNameInput(e.target.value)} placeholder="e.g. Mel"
+              style={{ fontSize: 13, padding: "5px 9px", border: "1px solid #E2D3C2", borderRadius: 6 }} />
+            <button onClick={() => saveMe(nameInput)} style={{ ...navBtn, background: "#FF6600", color: "#fff" }}>Set name</button>
+          </div>
+        )}
+
+        {/* Composer */}
+        <textarea value={draft} onChange={e => setDraft(e.target.value)}
+          placeholder="Write a note for this department — thoughts on the scores, what to raise in the next meeting…"
+          rows={3}
+          style={{ width: "100%", boxSizing: "border-box", fontSize: 13, padding: 10,
+            border: "1px solid #E2D3C2", borderRadius: 8, resize: "vertical", fontFamily: "inherit" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
+          <label style={{ fontSize: 12, color: "#7A6E62", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+            <input type="checkbox" checked={visibility === "Public"}
+              onChange={e => setVisibility(e.target.checked ? "Public" : "Private")} />
+            {visibility === "Public"
+              ? <>Public <span style={{ color: "#9C8F82" }}>— country leader & team can see</span></>
+              : <>Private <span style={{ color: "#9C8F82" }}>— just you & P&C leadership</span></>}
+          </label>
+          <button onClick={save} disabled={saving || !draft.trim()}
+            style={{ ...navBtn, marginLeft: "auto", background: (saving || !draft.trim()) ? "#E7DDD2" : "#FF6600",
+              color: (saving || !draft.trim()) ? "#9C8F82" : "#fff" }}>
+            {saving ? "Saving…" : "Add note"}
+          </button>
+        </div>
+        {err && <div style={{ color: "#C0392B", fontSize: 12, marginTop: 8 }}>{err}</div>}
+
+        {/* Log */}
+        <div style={{ marginTop: 16 }}>
+          {notes === null && <div style={{ fontSize: 12, color: "#9C8F82" }}>Loading notes…</div>}
+          {notes !== null && visible.length === 0 &&
+            <div style={{ fontSize: 12, color: "#9C8F82" }}>No notes yet for this department.</div>}
+          {visible.map(n => (
+            <div key={n.id} style={{ borderTop: "1px solid #F2E7DB", padding: "10px 0" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#5A4A3B" }}>{n.author || "Unknown"}</span>
+                <span style={{ fontSize: 11, color: "#A99C8E" }}>{fmt(n.created)}</span>
+                <button onClick={() => flip(n)} title="Toggle who can see this note"
+                  style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, cursor: "pointer",
+                    color: n.visibility === "Public" ? "#2E7D32" : "#8A7A6B",
+                    background: n.visibility === "Public" ? "#E8F5E9" : "#F3ECE3",
+                    border: "1px solid " + (n.visibility === "Public" ? "#A5D6A7" : "#E2D3C2"),
+                    borderRadius: 4, padding: "2px 8px" }}>
+                  {n.visibility === "Public" ? "Public" : "Private"}
+                </button>
+              </div>
+              <div style={{ fontSize: 13, color: "#332E29", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{n.body}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, refinements, country, year, sbOverrides, saveSbOverride, sbMaster, promoteSbToMaster, isAdmin, me, saveMe, isPCLead }) {
+  const isMobile = useIsMobile();
+  // Which question's heatmap popup is open on mobile (index), or null. One at a time.
+  const [openHeatmap, setOpenHeatmap] = useState(null);
   const sections = [
     { key:"strengths",    label:"✓ Strengths",            color:"#1E8449", instruction:"Check to include. Uncheck to exclude. Click Edit to revise wording — it will appear exactly as written in the report." },
     { key:"growth",       label:"→ Growth areas",         color:"#D68910", instruction:"Check to include. Click Edit to revise wording." },
@@ -1735,15 +1971,17 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
         {/* Heatmap — Question Scores */}
         <div style={{ background:"#FFFFFF", border:"1px solid #F5E4D5", borderRadius:10, overflow:"hidden", marginBottom:0 }}>
           {/* Column headers */}
-          <div style={{ display:"grid", gridTemplateColumns:"90px 52px 60px 1fr 52px 290px", gap:0,
+          <div style={{ display:"grid",
+            gridTemplateColumns: isMobile ? "48px 1fr" : "90px 52px 60px 1fr 52px 290px", gap:0,
             background:"#FFF4EC", borderBottom:"2px solid #F5E4D5", padding:"7px 12px",
             fontSize:10, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:1.5 }}>
+            {isMobile ? <><span>Score</span><span>Question</span></> : <>
             <span>Section</span>
             <span>Score</span>
             <span>Status</span>
             <span>Full Question Text</span>
             <span style={{textAlign:"center"}}>Scale</span>
-            <span style={{textAlign:"center"}}>Heatmap — SD · D · U · A · SA</span>
+            <span style={{textAlign:"center"}}>Heatmap — SD · D · U · A · SA</span></>}
           </div>
 
           {[...dept.questions].sort((a,b) => {
@@ -1768,9 +2006,12 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
             return (
               <div key={i} style={{ borderBottom:"1px solid #FFF1E6" }}>
                 {/* Main row */}
-                <div style={{ display:"grid", gridTemplateColumns:"90px 52px 60px 1fr 52px 290px",
-                  gap:0, alignItems:"stretch", background: i%2===0?"#FFFFFF":"#FAFAF8" }}>
-                  {/* Section type (Q or Burden) */}
+                <div style={{ display:"grid",
+                  gridTemplateColumns: isMobile ? "48px 1fr" : "90px 52px 60px 1fr 52px 290px",
+                  gap:0, alignItems:"stretch", background: i%2===0?"#FFFFFF":"#FAFAF8",
+                  position: isMobile ? "relative" : "static" }}>
+                  {/* Section type (Q or Burden) — hidden on mobile */}
+                  {!isMobile && (
                   <div style={{ padding:"10px 8px", display:"flex", alignItems:"center",
                     background: q.burden ? "#FFF8E1" : "#FFF4EC",
                     borderRight:"1px solid #F5E4D5" }}>
@@ -1778,25 +2019,69 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                       color: q.burden ? "#B45309" : "#8A7A6B" }}>
                       {q.burden ? "Burden [inv.]" : "Q"}
                     </span>
-                  </div>
+                  </div>)}
                   {/* Score */}
                   <div style={{ padding:"10px 8px", display:"flex", alignItems:"center",
-                    background:statusRowBg, borderRight:"1px solid #F5E4D5" }}>
+                    background:statusRowBg, borderRight: isMobile ? "none" : "1px solid #F5E4D5" }}>
                     <span style={{ fontSize:13, fontWeight:800, color:sc(q.status) }}>{q.score?.toFixed(2)}</span>
                   </div>
-                  {/* Status */}
+                  {/* Status — hidden on mobile (shown inside question block instead) */}
+                  {!isMobile && (
                   <div style={{ padding:"10px 6px", display:"flex", alignItems:"center", justifyContent:"center",
                     background:statusRowBg, borderRight:"1px solid #F5E4D5" }}>
                     <span style={{ fontSize:9, fontWeight:700, color:sc(q.status),
                       background:sb(q.status), border:`1px solid ${sbd(q.status)}`,
                       borderRadius:4, padding:"2px 5px", textAlign:"center" }}>{q.status}</span>
-                  </div>
+                  </div>)}
                   {/* Question text + Survey Basics inline */}
                   <div style={{ padding:"10px 12px", verticalAlign:"top",
-                    borderRight:"1px solid #F5E4D5" }}>
+                    borderRight: isMobile ? "none" : "1px solid #F5E4D5", position:"relative" }}>
+                    {isMobile && (
+                      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+                        <span style={{ fontSize:9, fontWeight:700, color:sc(q.status),
+                          background:sb(q.status), border:`1px solid ${sbd(q.status)}`,
+                          borderRadius:4, padding:"2px 6px" }}>{q.status}</span>
+                        {q.burden && <span style={{ fontSize:9, color:"#B45309" }}>Burden [inv.]</span>}
+                        <button onClick={() => setOpenHeatmap(openHeatmap===i ? null : i)}
+                          style={{ marginLeft:"auto", fontSize:11, fontWeight:600, color:"#FF6600",
+                            background:"#FFEBDA", border:"0.5px solid #FFA766", borderRadius:5,
+                            padding:"3px 10px", cursor:"pointer" }}>
+                          {openHeatmap===i ? "Close" : "Heatmap"}
+                        </button>
+                      </div>
+                    )}
                     <div style={{ fontSize:12, color:"#1E1B3A", lineHeight:1.5, marginBottom:6 }}>
-                      {q.en}{q.burden ? <span style={{ color:"#B45309", fontSize:10, marginLeft:4 }}>[Burden]</span> : ""}
+                      {q.en}{q.burden && !isMobile ? <span style={{ color:"#B45309", fontSize:10, marginLeft:4 }}>[Burden]</span> : ""}
                     </div>
+                    {/* Mobile heatmap popup — overlays the question, one at a time */}
+                    {isMobile && openHeatmap===i && (
+                      <div style={{ position:"absolute", top:4, left:8, right:8, zIndex:20,
+                        background:"#FFFFFF", border:"1px solid #E8D9CA", borderRadius:10,
+                        boxShadow:"0 8px 24px rgba(0,0,0,0.18)", padding:12 }}>
+                        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                          <span style={{ fontSize:11, fontWeight:700, color:"#1E1B3A" }}>Response breakdown</span>
+                          <button onClick={() => setOpenHeatmap(null)} aria-label="Close"
+                            style={{ fontSize:12, color:"#9C8F82", background:"none", border:"none",
+                              cursor:"pointer", padding:"2px 6px" }}>✕</button>
+                        </div>
+                        <div style={{ display:"flex", gap:4 }}>
+                          {counts.map((c, ci) => (
+                            <div key={ci} style={{ flex:1, textAlign:"center" }}>
+                              <div style={{ background: c>0?CELL_COLORS[ci]:"#FFF4EC", color: c>0?CELL_TEXT[ci]:"#C8C4E8",
+                                borderRadius:5, padding:"8px 0", fontSize:13, fontWeight:700,
+                                border: c>0?"none":"1px solid #F5E4D5" }}>{c}</div>
+                              <div style={{ fontSize:8, fontWeight:600, color:"#9C8F82", marginTop:4, lineHeight:1.2 }}>
+                                {LABELS[ci]}
+                              </div>
+                              <div style={{ fontSize:8, color:"#C9BCAF", marginTop:2 }}>
+                                {c>0 ? Math.round(c/n*100)+"%" : ""}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ fontSize:10, color:"#7A6E62", marginTop:10 }}>{n} respondents · mean {q.score?.toFixed(2)}</div>
+                      </div>
+                    )}
                     {(() => {
                       const sbMatch = findSurveyBasics(dept.key, q.en);
                       if (!sbMatch) return null;
@@ -1879,15 +2164,17 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                       );
                     })()}
                   </div>
-                  {/* Scale */}
+                  {/* Scale — hidden on mobile */}
+                  {!isMobile && (
                   <div style={{ padding:"10px 6px", display:"flex", alignItems:"center", justifyContent:"center",
                     borderRight:"1px solid #F5E4D5" }}>
                     <span style={{ fontSize:10, fontWeight:700, color:"#8A7A6B",
                       background:"#FFF4EC", borderRadius:4, padding:"2px 6px" }}>
                       {q.scale.toUpperCase()}
                     </span>
-                  </div>
-                  {/* Heatmap cells — one per response option */}
+                  </div>)}
+                  {/* Heatmap cells — one per response option (desktop only; mobile uses popup) */}
+                  {!isMobile && (
                   <div style={{ display:"flex", alignItems:"flex-start", padding:"8px 10px", gap:5 }}>
                     {counts.map((c, ci) => (
                       <div key={ci} style={{ flex:1, display:"flex", flexDirection:"column",
@@ -1919,7 +2206,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                         </div>
                       </div>
                     ))}
-                  </div>
+                  </div>)}
                 </div>
 
               </div>
@@ -2036,6 +2323,10 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
           )}
         </div>
       ))}
+
+      {/* Department meeting notes — timestamped log with Private/Public toggle. */}
+      <NotesPanel country={country} year={year} deptKey={dept.key} deptLabel={dept.label}
+        me={me} saveMe={saveMe} isPCLead={isPCLead} />
     </div>
   );
 }
