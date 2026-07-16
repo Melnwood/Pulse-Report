@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import SURVEY_BASICS from "./surveyBasics.json";
-import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility } from "./airtable";
+import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility } from "./airtable";
 
 // Detect a phone-width screen so the report/review can switch to a stacked,
 // touch-friendly layout. Updates on resize/rotate.
@@ -2016,14 +2016,140 @@ function ScoringHelpPanel({ onClose }) {
 // Department meeting-notes panel: a timestamped running log with a Private/Public
 // toggle. Private notes are visible only to their author and to P&C leadership
 // (Mel & Chris). Saves to Airtable so notes persist across devices and meetings.
-// The "Notes" tab of a department page. Hosts notes at every level for this
-// department + survey. Department-level log first (verified), with section- and
-// question-level notes added as the next build increment.
+// A single note thread (for one question, or one section via a sentinel label).
+// Notes are pre-loaded by the parent and passed in; this handles composing + display.
+function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes, me, isPCLead, onAdded, onFlip }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [visibility, setVisibility] = useState("Private");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const visible = (notes || []).filter(n =>
+    n.visibility === "Public" || (me && n.author === me) || isPCLead);
+
+  const fmt = (iso) => { if (!iso) return ""; try { const d = new Date(iso);
+    return d.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}); } catch { return ""; } };
+
+  const save = async () => {
+    if (!draft.trim()) return;
+    if (!me) { setErr("Set your name in the department log above first."); return; }
+    setSaving(true); setErr(null);
+    try {
+      await addQuestionNote({ country, year, deptKey, question: questionLabel, author: me,
+        title: draft.trim().split("\n")[0].slice(0,80), body: draft.trim(), visibility });
+      setDraft(""); await onAdded();
+    } catch (e) { setErr("Couldn't save: " + e.message); }
+    setSaving(false);
+  };
+
+  return (
+    <div style={{ borderTop:"1px solid #F2E7DB", padding:"10px 0" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+        <span style={{ flex:1, fontSize:13, color:"#332E29" }}>{displayLabel || questionLabel}</span>
+        <button onClick={() => setOpen(o=>!o)}
+          style={{ fontSize:11, fontWeight:600, color:"#FF6600", background:"#FFEBDA",
+            border:"0.5px solid #FFA766", borderRadius:5, padding:"3px 9px", cursor:"pointer", whiteSpace:"nowrap" }}>
+          {open ? "Close" : (visible.length ? `${visible.length} note${visible.length>1?"s":""}` : "Add note")}
+        </button>
+      </div>
+
+      {open && (
+        <div style={{ marginTop:8 }}>
+          {visible.map(n => (
+            <div key={n.id} style={{ padding:"6px 0", borderTop:"1px dashed #F2E7DB" }}>
+              <div style={{ fontSize:11, color:"#9C8F82", display:"flex", gap:8, alignItems:"center" }}>
+                <b style={{ color:"#5A4A3B" }}>{n.author}</b>{fmt(n.created)}
+                <button onClick={() => onFlip(n)} style={{ marginLeft:"auto", fontSize:9, fontWeight:700, cursor:"pointer",
+                  color: n.visibility==="Public" ? "#2E7D32" : "#8A7A6B",
+                  background: n.visibility==="Public" ? "#E8F5E9" : "#F3ECE3",
+                  border:"1px solid " + (n.visibility==="Public" ? "#A5D6A7" : "#E2D3C2"), borderRadius:4, padding:"1px 7px" }}>
+                  {n.visibility}
+                </button>
+              </div>
+              <div style={{ fontSize:13, color:"#332E29", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{n.body}</div>
+            </div>
+          ))}
+          <textarea value={draft} onChange={e=>setDraft(e.target.value)} rows={2}
+            placeholder="Write a note…"
+            style={{ width:"100%", boxSizing:"border-box", fontSize:13, padding:8, marginTop:6,
+              border:"1px solid #E2D3C2", borderRadius:8, resize:"vertical", fontFamily:"inherit" }} />
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:6 }}>
+            <div style={{ display:"inline-flex", border:"1px solid #E2D3C2", borderRadius:6, overflow:"hidden" }}>
+              <button type="button" onClick={()=>setVisibility("Private")}
+                style={{ fontSize:11, fontWeight:600, padding:"3px 9px", border:"none", cursor:"pointer",
+                  background: visibility==="Private" ? "#5A4A3B" : "transparent", color: visibility==="Private" ? "#fff" : "#8A7A6B" }}>Private</button>
+              <button type="button" onClick={()=>setVisibility("Public")}
+                style={{ fontSize:11, fontWeight:600, padding:"3px 9px", border:"none", borderLeft:"1px solid #E2D3C2", cursor:"pointer",
+                  background: visibility==="Public" ? "#2E7D32" : "transparent", color: visibility==="Public" ? "#fff" : "#8A7A6B" }}>Public</button>
+            </div>
+            <button onClick={save} disabled={saving || !draft.trim()}
+              style={{ ...navBtn, marginLeft:"auto", background:(saving||!draft.trim())?"#E7DDD2":"#FF6600", color:(saving||!draft.trim())?"#9C8F82":"#fff" }}>
+              {saving ? "Saving…" : "Add"}
+            </button>
+          </div>
+          {err && <div style={{ color:"#C0392B", fontSize:12, marginTop:6 }}>{err}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The "Notes" tab of a department page — notes at every level:
+// general department log, a thread per section, and a thread per question.
 function DeptNotesTab({ dept, country, year, me, saveMe, isPCLead }) {
+  const [qNotes, setQNotes] = useState(null);   // all question+section notes for this run+dept
+  const SECTIONS = [
+    { key: "§ Strengths", label: "Strengths" },
+    { key: "§ Growth areas", label: "Growth areas" },
+    { key: "§ Quotes", label: "Quotes" },
+    { key: "§ Leadership questions", label: "Leadership questions" },
+  ];
+
+  const reload = async () => {
+    try { setQNotes(await loadQuestionNotes(country, year, dept.key)); }
+    catch { setQNotes([]); }
+  };
+  useEffect(() => { setQNotes(null); reload(); /* eslint-disable-next-line */ }, [country, year, dept.key]);
+
+  const notesFor = (label) => (qNotes || []).filter(n => n.question === label);
+  const flip = async (n) => {
+    const next = n.visibility === "Public" ? "Private" : "Public";
+    setQNotes(prev => prev.map(x => x.id===n.id ? { ...x, visibility: next } : x));
+    try { await setQuestionNoteVisibility(n.id, next); } catch { reload(); }
+  };
+
   return (
     <div>
+      {/* General department log */}
       <NotesPanel country={country} year={year} deptKey={dept.key} deptLabel={dept.label}
         me={me} saveMe={saveMe} isPCLead={isPCLead} />
+
+      {/* Section notes */}
+      <div style={{ marginTop:22, border:"1px solid #EFE3D6", borderRadius:12, overflow:"hidden" }}>
+        <div style={{ background:"#FFF4EC", padding:"10px 14px", fontSize:13, fontWeight:700, color:"#8A5A2B" }}>Notes by section</div>
+        <div style={{ padding:"4px 14px 12px" }}>
+          {qNotes === null ? <div style={{ fontSize:12, color:"#9C8F82", padding:"8px 0" }}>Loading…</div> :
+            SECTIONS.map(s => (
+              <NoteThread key={s.key} country={country} year={year} deptKey={dept.key}
+                questionLabel={s.key} displayLabel={s.label} notes={notesFor(s.key)} me={me} isPCLead={isPCLead}
+                onAdded={reload} onFlip={flip} />
+            ))}
+        </div>
+      </div>
+
+      {/* Question notes */}
+      <div style={{ marginTop:22, border:"1px solid #EFE3D6", borderRadius:12, overflow:"hidden" }}>
+        <div style={{ background:"#FFF4EC", padding:"10px 14px", fontSize:13, fontWeight:700, color:"#8A5A2B" }}>Notes by question</div>
+        <div style={{ padding:"4px 14px 12px" }}>
+          {qNotes === null ? <div style={{ fontSize:12, color:"#9C8F82", padding:"8px 0" }}>Loading…</div> :
+            (dept.questions || []).map((q, i) => (
+              <NoteThread key={i} country={country} year={year} deptKey={dept.key}
+                questionLabel={q.en} notes={notesFor(q.en)} me={me} isPCLead={isPCLead}
+                onAdded={reload} onFlip={flip} />
+            ))}
+        </div>
+      </div>
     </div>
   );
 }
