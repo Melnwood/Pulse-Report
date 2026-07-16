@@ -156,34 +156,44 @@ export async function saveSelections(deptRecordId, selections) {
 // (HR, LC1, JVK2, ...) in the app's selections shape. Returns {} if nothing found.
 export async function loadRunSelections(country, year) {
   const runName = `${country} ${year}`;
-  // Map each department record id -> its dept code (HR, LC1, ...) for this run.
+  // 1. Get this run's departments and build BOTH a record-id map and a name map,
+  //    so we can match selections no matter what the link field returns.
   const depts = await call({ action: "list", table: "departments",
     filterByFormula: `FIND(${q(runName)}, {Department Key}) = 1` });
   if (!depts.records.length) return {};
 
-  const codeById = {};   // recId -> dept code
+  const codeById = {};    // dept record id -> dept code
+  const codeByName = {};  // dept full name ("Poland 2026 · HR") -> dept code
   for (const dRec of depts.records) {
     const key = dRec.fields["Department Key"] || "";
     const code = dRec.fields["Dept Code"]?.name || dRec.fields["Dept Code"] ||
                  key.split("·").pop().trim();
-    if (code) codeById[dRec.id] = code;
+    if (code) { codeById[dRec.id] = code; codeByName[key] = code; }
   }
 
-  // Pull ALL selections whose linked Department name starts with this run, in one query.
-  const sels = await call({ action: "list", table: "selections",
-    filterByFormula: `FIND(${q(runName + " ")}, ARRAYJOIN({Department})) = 1` });
+  // 2. Pull ALL selections (paginated) and match each to a department of THIS run.
+  //    We don't filter server-side by name (ARRAYJOIN behavior is unreliable);
+  //    instead we match the link locally against both id and name maps.
+  const sels = await call({ action: "list", table: "selections" });
 
-  // Group into the app shape, keyed by dept code.
   const out = {};
   const ensure = (code) => (out[code] = out[code] || { strengths: [], growth: [], leadershipQs: [], quotes: [] });
+
   sels.records
     .map(r => ({ id: r.id, f: r.fields }))
     .sort((a, b) => (a.f["Order"] || 0) - (b.f["Order"] || 0))
     .forEach(({ id, f }) => {
       const linked = f["Department"];
-      const depRecId = Array.isArray(linked) && linked[0] ? linked[0].id : null;
-      const code = depRecId ? codeById[depRecId] : null;
-      if (!code) return;
+      if (!Array.isArray(linked) || !linked.length) return;
+      const item0 = linked[0];
+      // link entry may be {id, name}, a bare id string, or a bare name string
+      let code = null;
+      if (item0 && typeof item0 === "object") {
+        code = codeById[item0.id] || (item0.name ? codeByName[item0.name] : null);
+      } else if (typeof item0 === "string") {
+        code = codeById[item0] || codeByName[item0] || null;
+      }
+      if (!code) return;   // belongs to a different run
       const sectionKey = SECTION_KEY[f["Section"]?.name || f["Section"]] || null;
       if (!sectionKey) return;
       ensure(code)[sectionKey].push({
@@ -281,16 +291,25 @@ export async function loadRunSurveyData(country, year) {
     };
   }
 
-  // Pull all quote selections for this run and attach as openResponses per dept.
+  // Pull all quote selections and attach as openResponses per dept — matched
+  // locally by department id/name (robust to link-field format).
   try {
-    const sels = await call({ action: "list", table: "selections",
-      filterByFormula: `AND(FIND(${q(runName + " ")}, ARRAYJOIN({Department})) = 1, {Section} = 'Quote')` });
-    const codeById = {};
+    const sels = await call({ action: "list", table: "selections" });
+    const codeById = {}, codeByName = {};
     Object.entries(recByCode).forEach(([code, id]) => { codeById[id] = code; });
+    for (const d of depts.records) {
+      const key = d.fields["Department Key"] || "";
+      const code = d.fields["Dept Code"]?.name || d.fields["Dept Code"] || key.split("·").pop().trim();
+      if (code) codeByName[key] = code;
+    }
     sels.records.forEach(r => {
+      if ((r.fields["Section"]?.name || r.fields["Section"]) !== "Quote") return;
       const linked = r.fields["Department"];
-      const depRecId = Array.isArray(linked) && linked[0] ? linked[0].id : null;
-      const code = depRecId ? codeById[depRecId] : null;
+      if (!Array.isArray(linked) || !linked.length) return;
+      const item0 = linked[0];
+      let code = null;
+      if (item0 && typeof item0 === "object") code = codeById[item0.id] || (item0.name ? codeByName[item0.name] : null);
+      else if (typeof item0 === "string") code = codeById[item0] || codeByName[item0] || null;
       if (!code || !dd[code]) return;
       dd[code].openResponses.push({
         text: r.fields["Text"] || "",
