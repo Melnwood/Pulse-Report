@@ -851,7 +851,8 @@ function looksNonEnglish(text) {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [view, setView]           = useState("home");   // home | review | report | dashboard
+  const [view, setView]           = useState("sections");   // sections | home | review | report | dashboard | country | leadership
+  const [openToDept, setOpenToDept] = useState(null);   // deptKey to jump to when the review opens (from the P&C home)
   // Admin mode (Mel & Chris only) — shared across screens, remembered per device.
   const [isAdmin, setIsAdmin] = useState(() => {
     try { return localStorage.getItem("pulse:admin") === "1"; } catch { return false; }
@@ -1211,6 +1212,24 @@ export default function App() {
 
   // ── VIEWS ──────────────────────────────────────────────────────────────────
 
+  if (view === "sections") return (
+    <SectionsView setView={setView} isPCLead={isPCLead} isAdmin={isAdmin} toggleAdmin={toggleAdmin} />
+  );
+
+  if (view === "country") return (
+    <ComingSoonSection title="Country dashboards"
+      blurb="Each country's latest pulse report and key info synthesized over time as new pulses are added. Coming next."
+      setView={setView} />
+  );
+
+  if (view === "leadership") return (
+    <LeadershipView
+      country={country} setCountry={setCountry} year={year} setYear={setYear}
+      fileRef={fileRef} handleFile={handleFile}
+      generating={generating} genProgress={genProgress}
+      isAdmin={isAdmin} toggleAdmin={toggleAdmin} setView={setView} />
+  );
+
   if (view === "home") return (
     <HomeView
       country={country} setCountry={setCountry}
@@ -1220,6 +1239,7 @@ export default function App() {
       allRuns={allRuns} setAllRuns={setAllRuns} setView={setView}
       setSurveyData={setSurveyData} setSelections={setSelections}
       setSbOverrides={setSbOverrides}
+      setOpenToDept={setOpenToDept}
       setCountry2={setCountry} setYear2={setYear}
       isAdmin={isAdmin} toggleAdmin={toggleAdmin}
       runsLoading={runsLoading}
@@ -1239,6 +1259,7 @@ export default function App() {
       sbMaster={sbMaster} promoteSbToMaster={promoteSbToMaster}
       cloudLoading={cloudLoading} syncStatus={syncStatus}
       me={me} saveMe={saveMe} isPCLead={isPCLead}
+      openToDept={openToDept} setOpenToDept={setOpenToDept}
     />
   );
 
@@ -1261,38 +1282,93 @@ export default function App() {
   );
 }
 
-// ─── HOME VIEW ────────────────────────────────────────────────────────────────
-function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
-  generating, genProgress, allRuns, setAllRuns, setView, setSurveyData, setSelections,
-  setCountry2, setYear2, isAdmin, toggleAdmin, runsLoading, setSbOverrides }) {
-
-  const countries = [...new Set(allRuns.map(r=>r.country))].sort();
-
+// ─── SECTIONS LANDING ─────────────────────────────────────────────────────────
+// Top level of the app, organized by audience: Country dashboards (for each
+// country), People & Culture (for directors — review + department pages + notes),
+// and Leadership (for Mel & Chris — sees everything, overall dashboard).
+function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin }) {
+  const cards = [
+    { key: "country", title: "Country dashboards", to: "country",
+      blurb: "Each country's latest pulse report and how it's trending over time." },
+    { key: "pc", title: "People & Culture", to: "home",
+      blurb: "Director's review, department pages, and notes across every pulse." },
+    { key: "leadership", title: "Leadership", to: "leadership",
+      blurb: "Everything across the org, with an overall dashboard. Mel & Chris." },
+  ];
   return (
-    <div style={{ minHeight:"100vh", background:"#F8F7F4", fontFamily:"'Inter',system-ui,sans-serif" }}>
-      {/* Header */}
-      <div style={{ background:"linear-gradient(135deg,#FFFFFF 0%,#F8F7F4 100%)", borderBottom:"1px solid #FFEBDA", padding:"24px 40px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-        <div>
-          <div style={{ fontSize:11, letterSpacing:3, color:"#FF6600", fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>Josiah Venture</div>
-          <div style={{ fontSize:22, fontWeight:700, color:"#1E1B3A" }}>Pulse Report Platform</div>
+    <div style={{ minHeight:"100vh", background:"#FBF7F2", padding:"40px 24px" }}>
+      <div style={{ maxWidth:900, margin:"0 auto" }}>
+        <div style={{ display:"flex", alignItems:"baseline", gap:12, marginBottom:4 }}>
+          <span style={{ fontSize:24, fontWeight:800, color:"#1E1B3A" }}>JV Pulse</span>
+          <span style={{ fontSize:14, color:"#9C8F82" }}>People & Culture</span>
+          <button onClick={toggleAdmin} title="Admin tools for Mel & Chris"
+            style={{ marginLeft:"auto", fontSize:12, color: isAdmin ? "#2E7D32" : "#B4A897",
+              background:"transparent", border:"none", cursor:"pointer" }}>
+            {isAdmin ? "🔓 admin" : "🔒"}
+          </button>
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <button onClick={() => setView("dashboard")} style={navBtn}>
-            P&C Dashboard
-          </button>
-          {/* Discreet admin toggle — only Mel & Chris use this. */}
-          <button onClick={toggleAdmin}
-            title={isAdmin ? "Admin mode ON — click to hide admin tools" : "Admin mode"}
-            style={{ background:"transparent", border:"none", cursor:"pointer",
-              fontSize:16, color: isAdmin ? "#FF6600" : "#EAD9C9", padding:"4px 8px", lineHeight:1 }}>
-            {isAdmin ? "🔓" : "🔒"}
-          </button>
+        <div style={{ fontSize:14, color:"#7A6E62", marginBottom:28 }}>Where would you like to go?</div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(240px, 1fr))", gap:16 }}>
+          {cards.map(c => (
+            <button key={c.key} onClick={() => setView(c.to)}
+              style={{ textAlign:"left", background:"#fff", border:"1px solid #EFE3D6", borderRadius:14,
+                padding:"22px 20px", cursor:"pointer", transition:"border-color .15s",
+                display:"flex", flexDirection:"column", gap:8, minHeight:130 }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = "#FF9E5C"}
+              onMouseLeave={e => e.currentTarget.style.borderColor = "#EFE3D6"}>
+              <span style={{ fontSize:17, fontWeight:700, color:"#1E1B3A" }}>{c.title}</span>
+              <span style={{ fontSize:13, color:"#7A6E62", lineHeight:1.5 }}>{c.blurb}</span>
+              <span style={{ marginTop:"auto", fontSize:13, fontWeight:600, color:"#FF6600" }}>Open →</span>
+            </button>
+          ))}
         </div>
       </div>
+    </div>
+  );
+}
 
-      <div style={{ maxWidth:900, margin:"0 auto", padding:"48px 24px" }}>
+// Placeholder for sections not yet built — keeps navigation coherent.
+function ComingSoonSection({ title, blurb, setView }) {
+  return (
+    <div style={{ minHeight:"100vh", background:"#FBF7F2", padding:"40px 24px" }}>
+      <div style={{ maxWidth:720, margin:"0 auto" }}>
+        <button onClick={() => setView("sections")}
+          style={{ ...navBtn, background:"transparent", border:"1px solid #F5E4D5", marginBottom:24 }}>← Sections</button>
+        <div style={{ background:"#fff", border:"1px solid #EFE3D6", borderRadius:14, padding:"36px 28px" }}>
+          <div style={{ fontSize:20, fontWeight:700, color:"#1E1B3A", marginBottom:8 }}>{title}</div>
+          <div style={{ fontSize:14, color:"#7A6E62", lineHeight:1.6 }}>{blurb}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-        {/* Upload card — admin only (survey upload creates/overwrites a run) */}
+// ─── LEADERSHIP VIEW ──────────────────────────────────────────────────────────
+// For Mel & Chris. Home of survey upload/processing (a leadership action), with the
+// overall dashboard to be added here later.
+function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFile,
+  generating, genProgress, isAdmin, toggleAdmin, setView }) {
+  return (
+    <div style={{ minHeight:"100vh", background:"#FBF7F2", padding:"40px 24px" }}>
+      <div style={{ maxWidth:720, margin:"0 auto" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:24 }}>
+          <button onClick={() => setView("sections")}
+            style={{ ...navBtn, background:"transparent", border:"1px solid #F5E4D5" }}>← Sections</button>
+          <span style={{ fontSize:20, fontWeight:700, color:"#1E1B3A" }}>Leadership</span>
+          <button onClick={toggleAdmin} title="Admin tools for Mel & Chris"
+            style={{ marginLeft:"auto", fontSize:12, color: isAdmin ? "#2E7D32" : "#B4A897",
+              background:"transparent", border:"none", cursor:"pointer" }}>
+            {isAdmin ? "🔓 admin on" : "🔒 admin off"}
+          </button>
+        </div>
+
+        {!isAdmin && (
+          <div style={{ background:"#FFF4EC", border:"1px solid #F5E4D5", borderRadius:12, padding:"14px 16px", marginBottom:20, fontSize:13, color:"#8A5A2B" }}>
+            Turn on admin (lock icon, top right) to upload and process a new survey.
+          </div>
+        )}
+
         {isAdmin && (
         <div style={card}>
           <div style={{ fontSize:13, fontWeight:700, color:"#FF6600", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>New Survey Run</div>
@@ -1346,6 +1422,130 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
         </div>
         )}
 
+        <div style={{ marginTop:20, fontSize:13, color:"#9C8F82" }}>
+          An overall leadership dashboard — every country and department at a glance — will live here.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── HOME VIEW ────────────────────────────────────────────────────────────────
+function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
+  generating, genProgress, allRuns, setAllRuns, setView, setSurveyData, setSelections,
+  setCountry2, setYear2, isAdmin, toggleAdmin, runsLoading, setSbOverrides, setOpenToDept }) {
+
+  const countries = [...new Set(allRuns.map(r=>r.country))].sort();
+
+  // Open a run into the director's review (loads local first, then merges shared
+  // Airtable data). Shared by the featured card and the run list.
+  const openRun = async (run, deptKey) => {
+    setCountry2(run.country); setYear2(run.year);
+    if (setOpenToDept) setOpenToDept(deptKey || null);
+    let haveData = false;
+    try {
+      const _v = localStorage.getItem(`pulse:data:${run.country}:${run.year}`);
+      if (_v) { setSurveyData(JSON.parse(_v)); haveData = true; }
+      const _s = localStorage.getItem(`pulse:sel:${run.country}:${run.year}`);
+      if (_s) setSelections(JSON.parse(_s));
+    } catch {}
+    setView("review");
+    try {
+      const sd2 = await loadRunSurveyData(run.country, run.year);
+      if (sd2?.sbOverrides && Object.keys(sd2.sbOverrides).length) {
+        setSbOverrides(prev => {
+          const merged = { ...prev, ...sd2.sbOverrides };
+          try { localStorage.setItem("pulse:sbOverrides", JSON.stringify(merged)); } catch {}
+          return merged;
+        });
+      }
+    } catch (e) { console.warn("SB override load failed:", e.message); }
+    if (!haveData) {
+      try {
+        const sd = await loadRunSurveyData(run.country, run.year);
+        if (sd && Object.keys(sd.depts).length) {
+          setSurveyData(sd);
+          try { localStorage.setItem(`pulse:data:${run.country}:${run.year}`, JSON.stringify(sd)); } catch {}
+        }
+      } catch (e) { console.warn("Airtable surveyData load failed:", e.message); }
+      try {
+        const shared = await loadRunSelections(run.country, run.year);
+        if (shared && Object.keys(shared).length) {
+          setSelections(shared);
+          try { localStorage.setItem(`pulse:sel:${run.country}:${run.year}`, JSON.stringify(shared)); } catch {}
+        }
+      } catch (e) { console.warn("Airtable selections load failed:", e.message); }
+    }
+  };
+
+  // The latest unfinished review to lead with — most recently saved run that
+  // isn't marked complete/published. Falls back to the most recent run.
+  const isFinished = (r) => /complete|publish|done|final/i.test(String(r.status || ""));
+  const sortedByRecent = allRuns.slice().sort((a,b) => new Date(b.savedAt||0) - new Date(a.savedAt||0));
+  const featured = sortedByRecent.find(r => !isFinished(r)) || sortedByRecent[0] || null;
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#F8F7F4", fontFamily:"'Inter',system-ui,sans-serif" }}>
+      {/* Header */}
+      <div style={{ background:"linear-gradient(135deg,#FFFFFF 0%,#F8F7F4 100%)", borderBottom:"1px solid #FFEBDA", padding:"24px 40px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <div>
+          <div style={{ fontSize:11, letterSpacing:3, color:"#FF6600", fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>Josiah Venture</div>
+          <div style={{ fontSize:22, fontWeight:700, color:"#1E1B3A" }}>Pulse Report Platform</div>
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <button onClick={() => setView("sections")} style={{ ...navBtn, background:"transparent", border:"1px solid #F5E4D5" }}>← Sections</button>
+          <button onClick={() => setView("dashboard")} style={navBtn}>
+            P&C Dashboard
+          </button>
+          {/* Discreet admin toggle — only Mel & Chris use this. */}
+          <button onClick={toggleAdmin}
+            title={isAdmin ? "Admin mode ON — click to hide admin tools" : "Admin mode"}
+            style={{ background:"transparent", border:"none", cursor:"pointer",
+              fontSize:16, color: isAdmin ? "#FF6600" : "#EAD9C9", padding:"4px 8px", lineHeight:1 }}>
+            {isAdmin ? "🔓" : "🔒"}
+          </button>
+        </div>
+      </div>
+
+      <div style={{ maxWidth:900, margin:"0 auto", padding:"48px 24px" }}>
+
+        {/* Survey upload now lives in the Leadership section. */}
+
+        {/* Featured — continue the latest unfinished review, click a department to open its page */}
+        {featured && (
+          <div style={{ ...card, padding:"22px 24px", marginBottom:28, border:"1px solid #FFD9BE" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+              <span style={{ fontSize:11, fontWeight:700, color:"#FF6600", textTransform:"uppercase", letterSpacing:2 }}>Continue the review</span>
+              {!isFinished(featured) && (
+                <span style={{ fontSize:11, fontWeight:700, color:"#854F0B", background:"#FAEEDA", borderRadius:4, padding:"2px 8px" }}>In progress</span>
+              )}
+            </div>
+            <div style={{ fontSize:20, fontWeight:700, color:"#1E1B3A", marginBottom:2 }}>{featured.country} — {featured.year}</div>
+            <div style={{ fontSize:13, color:"#9C8F82", marginBottom:16 }}>{featured.depts?.length || 0} departments</div>
+
+            {featured.depts?.length ? (
+              <>
+                <div style={{ fontSize:12, color:"#7A6E62", marginBottom:8 }}>Open a department to go to its page:</div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:16 }}>
+                  {featured.depts.map(d => (
+                    <button key={d.key} onClick={() => openRun(featured, d.key)}
+                      style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:13, fontWeight:600,
+                        color:"#1E1B3A", background:"#FFF7F0", border:"1px solid #F0DCC9", borderRadius:8,
+                        padding:"7px 12px", cursor:"pointer" }}>
+                      <span style={{ width:8, height:8, borderRadius:"50%", background:sc(d.status) }} />
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null}
+
+            <button onClick={() => openRun(featured)} style={{ ...navBtn, background:"#FF7A1A", color:"#fff" }}>
+              Open review →
+            </button>
+          </div>
+        )}
+
         {/* Empty state — never leave the body blank */}
         {allRuns.length === 0 && !generating && (
           <div style={{ textAlign:"center", color:"#9C8F82", padding:"48px 24px", fontSize:14 }}>
@@ -1376,50 +1576,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
                     ))}
                   </div>
                   <div style={{ display:"flex", gap:8 }}>
-                    <button style={navBtn} onClick={async () => {
-                      setCountry2(run.country); setYear2(run.year);
-                      // 1. try local data first (instant, works offline)
-                      let haveData = false;
-                      try {
-                        const _v = localStorage.getItem(`pulse:data:${run.country}:${run.year}`);
-                        if (_v) { setSurveyData(JSON.parse(_v)); haveData = true; }
-                        const _s = localStorage.getItem(`pulse:sel:${run.country}:${run.year}`);
-                        if (_s) setSelections(JSON.parse(_s));
-                      } catch {}
-                      setView("review");
-                      // Always pull shared Survey Basics edits from Airtable and merge them in,
-                      // so the "(edited)" interpretations show for everyone — even when this device
-                      // already had local survey data. Remote (shared) edits win for this run.
-                      try {
-                        const sd2 = await loadRunSurveyData(run.country, run.year);
-                        if (sd2?.sbOverrides && Object.keys(sd2.sbOverrides).length) {
-                          setSbOverrides(prev => {
-                            const merged = { ...prev, ...sd2.sbOverrides };
-                            try { localStorage.setItem("pulse:sbOverrides", JSON.stringify(merged)); } catch {}
-                            return merged;
-                          });
-                        }
-                      } catch (e) { console.warn("SB override load failed:", e.message); }
-                      // 2. if no local survey data (e.g. opening on a new device), rebuild from Airtable
-                      if (!haveData) {
-                        try {
-                          const sd = await loadRunSurveyData(run.country, run.year);
-                          if (sd && Object.keys(sd.depts).length) {
-                            setSurveyData(sd);
-                            try { localStorage.setItem(`pulse:data:${run.country}:${run.year}`, JSON.stringify(sd)); } catch {}
-                          }
-                        } catch (e) { console.warn("Airtable surveyData load failed:", e.message); }
-                        // ALSO load the selections (review content) from Airtable, so the main
-                        // review panel isn't blank on a device that didn't create the run.
-                        try {
-                          const shared = await loadRunSelections(run.country, run.year);
-                          if (shared && Object.keys(shared).length) {
-                            setSelections(shared);
-                            try { localStorage.setItem(`pulse:sel:${run.country}:${run.year}`, JSON.stringify(shared)); } catch {}
-                          }
-                        } catch (e) { console.warn("Airtable selections load failed:", e.message); }
-                      }
-                    }}>Open</button>
+                    <button style={navBtn} onClick={() => openRun(run)}>Open</button>
                     {isAdmin && <button style={{ ...navBtn, background:"#C0392B", color:"white" }} onClick={() => {
                       const rc = run.country;
                       const ry = run.year;
@@ -1446,7 +1603,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 }
 
 // ─── REVIEW VIEW ──────────────────────────────────────────────────────────────
-function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, sbMaster, promoteSbToMaster, cloudLoading, syncStatus, me, saveMe, isPCLead }) {
+function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, sbMaster, promoteSbToMaster, cloudLoading, syncStatus, me, saveMe, isPCLead, openToDept, setOpenToDept }) {
   const [activeDept, setActiveDept] = useState(null);
   const [deptTab, setDeptTab] = useState("review");   // "review" | "notes" — which tab of the department page
   const [showHelp, setShowHelp] = useState(false);
@@ -1466,7 +1623,14 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
       })
     : [];
 
-  useEffect(() => { if (depts.length && !activeDept) setActiveDept(depts[0].key); }, [depts.length]);
+  useEffect(() => {
+    if (openToDept && depts.some(d => d.key === openToDept)) {
+      setActiveDept(openToDept);
+      if (setOpenToDept) setOpenToDept(null);
+    } else if (depts.length && !activeDept) {
+      setActiveDept(depts[0].key);
+    }
+  }, [depts.length, openToDept]);
 
   const dept = depts.find(d=>d.key===activeDept);
 
