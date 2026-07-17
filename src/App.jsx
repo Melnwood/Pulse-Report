@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useIsMobile, sc, sb, sbd, card, navBtn, lbl, inp } from "./theme";
+import { useIsMobile, sc, sb, sbd, card, navBtn, lbl, inp, C } from "./theme";
 import Disclosure from "./components/Disclosure";
 import { VisibilityPicker, VisibilityChip } from "./components/Visibility";
 import SURVEY_BASICS from "./surveyBasics.json";
@@ -3085,6 +3085,11 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
           .print-only { display:block !important; }
           body { background:white; }
           @page { margin:15mm; size:A4; }
+          /* Force every collapsible section open and drop the toggle chrome */
+          .pulse-disc-body { display:block !important; }
+          .pulse-disc-chev, .pulse-disc-head { pointer-events:none; }
+          .pulse-disc-chev { display:none !important; }
+          .pulse-disc { border-top:1px solid #EDE3D6 !important; }
         }
         .print-only { display:none; }
       `}</style>
@@ -3105,60 +3110,51 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
   const statusBd    = sbd(dept.status);
 
   return (
-    <div style={{ background:"white", borderRadius:16, padding: isMobile ? 18 : 36, marginBottom:28,
-      border:"1px solid #F5E4D5", boxShadow:"0 2px 8px rgba(124,111,224,0.07)",
-      pageBreakInside:"avoid" }}>
+    <div style={{ marginBottom:28, pageBreakInside:"avoid" }}>
 
-      {/* Dept header */}
-      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between",
-        paddingBottom:20, marginBottom:24, borderBottom:`2px solid ${statusBd}` }}>
+      {/* Dept header — always visible */}
+      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:12,
+        marginBottom:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:22, fontWeight:800, color:"#1E1B3A", marginBottom:4 }}>{dept.label}</div>
-          <div style={{ fontSize:13, color:"#9C8F82" }}>n = {dept.n} respondents</div>
+          <div style={{ fontSize:22, fontWeight:800, color:"#2A211C", marginBottom:2 }}>{dept.label}</div>
+          <div style={{ fontSize:13, color:"#8C7D70" }}>n = {dept.n} respondents</div>
         </div>
         <div style={{ textAlign:"right" }}>
-          <div style={{ fontSize:36, fontWeight:800, color:statusColor, lineHeight:1 }}>{dept.avg}</div>
+          <div style={{ fontSize:34, fontWeight:800, color:statusColor, lineHeight:1, fontVariantNumeric:"tabular-nums" }}>{dept.avg}</div>
           <span style={{ fontSize:11, fontWeight:700, color:statusColor, background:statusBg,
-            border:`1px solid ${statusBd}`, borderRadius:6, padding:"3px 10px", display:"inline-block", marginTop:6 }}>
+            border:`1px solid ${statusBd}`, borderRadius:20, padding:"3px 10px", display:"inline-block", marginTop:6 }}>
             {dept.status}
           </span>
         </div>
       </div>
 
-      {/* Strengths + Growth — two column */}
-      {(strengths.length > 0 || growth.length > 0) && (
-        <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap:20, marginBottom:24 }}>
-          {strengths.length > 0 && (
-            <div>
-              <div style={{ fontSize:10, fontWeight:700, color:"#1E8449", textTransform:"uppercase",
-                letterSpacing:2, marginBottom:12 }}>What is working</div>
-              {strengths.map((s,i) => (
-                <div key={i} style={{ display:"flex", gap:10, marginBottom:10, alignItems:"flex-start" }}>
-                  <span style={{ color:"#1E8449", fontWeight:700, fontSize:14, marginTop:1, flexShrink:0 }}>✓</span>
-                  <span style={{ fontSize:13, color:"#1E1B3A", lineHeight:1.6 }}>{s}</span>
-                </div>
-              ))}
+      {/* Nested panel — each part its own section, all open (and print-safe) */}
+      <div style={{ background:"#FFFFFF", border:"1px solid #EDE3D6", borderRadius:12, overflow:"hidden", boxShadow: C.shadow }}>
+
+      {strengths.length > 0 && (
+        <Disclosure title="What's working" count={`${strengths.length}`} dot="#1F7A44" defaultOpen>
+          {strengths.map((s,i) => (
+            <div key={i} style={{ display:"flex", gap:10, marginBottom:8, alignItems:"flex-start" }}>
+              <span style={{ color:"#1F7A44", fontWeight:700, fontSize:14, marginTop:1, flexShrink:0 }}>✓</span>
+              <span style={{ fontSize:13, color:"#2A211C", lineHeight:1.6 }}>{s}</span>
             </div>
-          )}
-          {growth.length > 0 && (
-            <div>
-              <div style={{ fontSize:10, fontWeight:700, color:statusColor, textTransform:"uppercase",
-                letterSpacing:2, marginBottom:12 }}>Where attention is needed</div>
-              {growth.map((g,i) => (
-                <div key={i} style={{ display:"flex", gap:10, marginBottom:10, alignItems:"flex-start" }}>
-                  <span style={{ color:statusColor, fontWeight:700, fontSize:14, marginTop:1, flexShrink:0 }}>→</span>
-                  <span style={{ fontSize:13, color:"#1E1B3A", lineHeight:1.6 }}>{g}</span>
-                </div>
-              ))}
+          ))}
+        </Disclosure>
+      )}
+
+      {growth.length > 0 && (
+        <Disclosure title="Where attention is needed" count={`${growth.length}`} dot={statusColor} defaultOpen>
+          {growth.map((g,i) => (
+            <div key={i} style={{ display:"flex", gap:10, marginBottom:8, alignItems:"flex-start" }}>
+              <span style={{ color:statusColor, fontWeight:700, fontSize:14, marginTop:1, flexShrink:0 }}>→</span>
+              <span style={{ fontSize:13, color:"#2A211C", lineHeight:1.6 }}>{g}</span>
             </div>
-          )}
-        </div>
+          ))}
+        </Disclosure>
       )}
 
       {/* Question scores table */}
-      <div style={{ marginBottom:24 }}>
-        <div style={{ fontSize:10, fontWeight:700, color:"#9C8F82", textTransform:"uppercase",
-          letterSpacing:2, marginBottom:10 }}>Question Scores — Concern · Watch · Healthy</div>
+      <Disclosure title="Question scores" count={`${(dept.questions||[]).length} questions`} dot="#DC5A12" defaultOpen flush>
         <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
         <table style={{ width:"100%", minWidth: isMobile ? 460 : "auto", borderCollapse:"collapse", fontSize:12 }}>
           <thead>
@@ -3205,30 +3201,25 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
           </tbody>
         </table>
         </div>
-      </div>
+      </Disclosure>
 
       {/* Leadership Questions */}
       {leadershipQs.length > 0 && (
-        <div style={{ background:"#FFF1E6", borderRadius:10, padding:20, marginBottom:24,
-          border:"1px solid #F0DFCE" }}>
-          <div style={{ fontSize:10, fontWeight:700, color:"#3B3882", textTransform:"uppercase",
-            letterSpacing:2, marginBottom:12 }}>Questions for leadership</div>
+        <Disclosure title="Questions for leadership" count={`${leadershipQs.length}`} dot="#3B3882" defaultOpen>
           {leadershipQs.map((q,i) => (
             <div key={i} style={{ display:"flex", gap:12, marginBottom:10, alignItems:"flex-start" }}>
               <span style={{ background:"#DC5A12", color:"white", borderRadius:"50%", width:20, height:20,
                 display:"flex", alignItems:"center", justifyContent:"center",
                 fontSize:11, fontWeight:700, flexShrink:0, marginTop:1 }}>{i+1}</span>
-              <span style={{ fontSize:13, color:"#1E1B3A", lineHeight:1.6 }}>{q}</span>
+              <span style={{ fontSize:13, color:"#2A211C", lineHeight:1.6 }}>{q}</span>
             </div>
           ))}
-        </div>
+        </Disclosure>
       )}
 
       {/* Staff Quotes */}
       {quotes.length > 0 && (
-        <div>
-          <div style={{ fontSize:10, fontWeight:700, color:"#9C8F82", textTransform:"uppercase",
-            letterSpacing:2, marginBottom:4 }}>What staff said</div>
+        <Disclosure title="What staff said" count={`${quotes.length}`} dot="#4B5563" defaultOpen>
           {dept.openQLabel && (
             <div style={{ fontSize:12, color:"#7A6E62", fontStyle:"italic", marginBottom:12 }}>
               In response to: "{dept.openQLabel}"
@@ -3241,16 +3232,16 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
               const trans = isObj ? q.translation : null;
               const isOrig = (isObj ? q.isOriginalLang : false) || looksNonEnglish(orig);
               return (
-                <div key={i} style={{ background:"#F8F7F4", borderLeft:"3px solid #F0DFCE",
+                <div key={i} style={{ background:"#F5EFE6", borderLeft:"3px solid #E0D4C4",
                   borderRadius:"0 8px 8px 0", padding:"12px 16px" }}>
-                  <div style={{ fontSize:13, color:"#1E1B3A", lineHeight:1.7,
+                  <div style={{ fontSize:13, color:"#2A211C", lineHeight:1.7,
                     fontStyle: isOrig ? "italic" : "normal" }}>
                     "{orig}"
                   </div>
                   {isOrig && trans && (
                     <div style={{ marginTop:6, fontSize:11, color:"#8A7A6B",
                       fontStyle:"normal", lineHeight:1.4,
-                      borderLeft:"2px solid #F0DFCE", paddingLeft:8, marginLeft:0 }}>
+                      borderLeft:"2px solid #E0D4C4", paddingLeft:8, marginLeft:0 }}>
                       <span style={{ fontSize:9, fontWeight:700, color:"#9C8F82",
                         textTransform:"uppercase", letterSpacing:.5, marginRight:6 }}>
                         Translation
@@ -3262,8 +3253,9 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
               );
             })}
           </div>
-        </div>
+        </Disclosure>
       )}
+      </div>
     </div>
   );
 }
