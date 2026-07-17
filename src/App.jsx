@@ -1,20 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useIsMobile, sc, sb, sbd, card, navBtn, lbl, inp } from "./theme";
 import SURVEY_BASICS from "./surveyBasics.json";
 import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility } from "./airtable";
-
-// Detect a phone-width screen so the report/review can switch to a stacked,
-// touch-friendly layout. Updates on resize/rotate.
-function useIsMobile(breakpoint = 700) {
-  const [isMobile, setIsMobile] = useState(
-    typeof window !== "undefined" ? window.innerWidth <= breakpoint : false
-  );
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth <= breakpoint);
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [breakpoint]);
-  return isMobile;
-}
 
 // Map app department keys (HR, LD, LC1/LC2, JVK1/JVK2, ...) to surveyBasics.json keys
 // (which are lowercase and un-split: hr, ld, lc, jvk, ...).
@@ -593,14 +580,6 @@ async function parseDirectorReview(file, departments) {
 
   return { selections: result, report, interpretations: allInterpretations };
 }
-
-// ─── COLOR / STATUS UTILS ─────────────────────────────────────────────────────
-const STATUS_COLOR = { Concern:"#C0392B", Watch:"#D68910", Healthy:"#1E8449", null:"#9C8F82" };
-const STATUS_BG    = { Concern:"#FDF2F2", Watch:"#FFFBEB", Healthy:"#F0FDF4", null:"#FAFAF8" };
-const STATUS_BORDER= { Concern:"#FCA5A5", Watch:"#FCD34D", Healthy:"#86EFAC", null:"#E2E8F0" };
-const sc = s => STATUS_COLOR[s] || STATUS_COLOR[null];
-const sb = s => STATUS_BG[s]    || STATUS_BG[null];
-const sbd= s => STATUS_BORDER[s]|| STATUS_BORDER[null];
 
 // ─── CONTENT GENERATION ──────────────────────────────────────────────────────
 // Strengths and growth come from Survey Basics (approved source of truth).
@@ -3584,16 +3563,3 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
   );
 }
 
-// ─── SHARED STYLES ────────────────────────────────────────────────────────────
-const card = {
-  background:"#FFFFFF", borderRadius:12, padding:24,
-  border:"1px solid #F5E4D5",
-  boxShadow:"0 1px 4px rgba(124,111,224,0.07)",
-};
-const navBtn = {
-  background:"#FFEBDA", border:"none", borderRadius:8,
-  color:"#1E1B3A", padding:"8px 16px", fontSize:13, fontWeight:600,
-  cursor:"pointer",
-};
-const lbl = { display:"block", fontSize:11, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:1, marginBottom:6 };
-const inp = { width:"100%", background:"#F8F7F4", border:"1px solid #F5E4D5", borderRadius:8, padding:"10px 14px", color:"#1E1B3A", fontSize:14, boxSizing:"border-box" };
