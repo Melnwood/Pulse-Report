@@ -2558,31 +2558,59 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
   );
 }
 
+// A collapsible section — the building block of the nested review. Shows a
+// title, an optional status dot, and a count so you know what's inside before
+// opening it. Progressive disclosure keeps the whole department on one screen.
+function Disclosure({ title, count, dot, defaultOpen, flush, children }) {
+  const [open, setOpen] = useState(!!defaultOpen);
+  return (
+    <div style={{ borderTop:"1px solid #EDE3D6" }}>
+      <button onClick={() => setOpen(o => !o)}
+        style={{ width:"100%", display:"flex", alignItems:"center", gap:9, padding:"11px 14px",
+          background: open ? "#FDFBF7" : "transparent", border:"none", cursor:"pointer",
+          textAlign:"left", fontFamily:"inherit" }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#B7A896"
+          strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
+          style={{ flexShrink:0, transition:"transform .15s", transform: open ? "rotate(90deg)" : "none" }}>
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+        {dot && <span style={{ width:8, height:8, borderRadius:"50%", background:dot, flexShrink:0 }} />}
+        <span style={{ fontSize:13, fontWeight:700, color:"#2A211C" }}>{title}</span>
+        {count != null && <span style={{ marginLeft:"auto", fontSize:11, color:"#8C7D70",
+          fontVariantNumeric:"tabular-nums" }}>{count}</span>}
+      </button>
+      {open && <div style={{ padding: flush ? "0 0 10px" : "2px 14px 14px" }}>{children}</div>}
+    </div>
+  );
+}
+
 function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, refinements, country, year, sbOverrides, saveSbOverride, sbMaster, promoteSbToMaster, isAdmin, me, saveMe, isPCLead }) {
   const isMobile = useIsMobile();
   // Which question's heatmap popup is open on mobile (index), or null. One at a time.
   const [openHeatmap, setOpenHeatmap] = useState(null);
   const sections = [
-    { key:"strengths",    label:"✓ Strengths",            color:"#1E8449", instruction:"Check to include. Uncheck to exclude. Click Edit to revise wording — it will appear exactly as written in the report." },
-    { key:"growth",       label:"→ Growth areas",         color:"#D68910", instruction:"Check to include. Click Edit to revise wording." },
-    { key:"leadershipQs", label:"? Leadership questions", color:"#3B3882", instruction:"Check to include. Select 1–2 maximum. Click Edit to revise." },
-    { key:"quotes",       label:"Staff quotes",           color:"#4B5563", instruction:"Check to include. Up to 4 quotes appear verbatim. Edit only to correct a translation." },
+    { key:"strengths",    label:"Strengths",            color:"#1F7A44", instruction:"Check to include. Uncheck to exclude. Click Edit to revise wording — it will appear exactly as written in the report." },
+    { key:"growth",       label:"Growth areas",         color:"#A96A12", instruction:"Check to include. Click Edit to revise wording." },
+    { key:"leadershipQs", label:"Leadership questions", color:"#3B3882", instruction:"Check to include. Select 1–2 maximum. Click Edit to revise." },
+    { key:"quotes",       label:"Staff quotes",         color:"#4B5563", instruction:"Check to include. Up to 4 quotes appear verbatim. Edit only to correct a translation." },
   ];
 
   return (
     <div>
       {/* Dept header */}
-      <div style={{ marginBottom:24 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:8 }}>
-          <div style={{ fontSize:20, fontWeight:700, color:"#1E1B3A" }}>{dept.label}</div>
-          <span style={{ fontSize:12, fontWeight:700, color:sc(dept.status), background:sb(dept.status), border:`1px solid ${sbd(dept.status)}`, borderRadius:6, padding:"3px 10px" }}>{dept.status}</span>
-          <span style={{ color:"#9C8F82", fontSize:13 }}>{dept.avg} avg · n={dept.n}</span>
-        </div>
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14, flexWrap:"wrap" }}>
+        <div style={{ fontSize:19, fontWeight:750, color:"#2A211C" }}>{dept.label}</div>
+        <span style={{ fontSize:12, fontWeight:700, color:sc(dept.status), background:sb(dept.status), border:`1px solid ${sbd(dept.status)}`, borderRadius:20, padding:"3px 10px" }}>{dept.status}</span>
+        <span style={{ color:"#8C7D70", fontSize:12.5, fontVariantNumeric:"tabular-nums" }}>{dept.avg} avg · n={dept.n}</span>
+      </div>
 
+      {/* Nested, collapsible review — one panel, drill in per part */}
+      <div style={{ background:"#FFFFFF", border:"1px solid #EDE3D6", borderRadius:12, overflow:"hidden",
+        boxShadow:"0 1px 2px rgba(58,38,22,.06), 0 6px 22px -8px rgba(58,38,22,.10)" }}>
 
-
+        <Disclosure title="Question scores" count={`${(dept.questions||[]).length} questions`} dot="#DC5A12" defaultOpen flush>
         {/* Heatmap — Question Scores */}
-        <div style={{ background:"#FFFFFF", border:"1px solid #F5E4D5", borderRadius:10, overflow:"hidden", marginBottom:0 }}>
+        <div style={{ overflowX:"auto", marginBottom:0 }}>
           {/* Column headers */}
           <div style={{ display:"grid",
             gridTemplateColumns: isMobile ? "48px 1fr" : "90px 52px 60px 1fr 52px 290px", gap:0,
@@ -2826,24 +2854,26 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
             );
           })}
         </div>
-      </div>
+        </Disclosure>
 
-      {/* Sections */}
-      {sections.map(sec => (
-        <div key={sec.key} style={{ marginBottom:20, background:"#FFFFFF", borderRadius:10, overflow:"hidden" }}>
-          <div style={{ padding:"12px 16px", borderBottom:"1px solid #F5E4D5" }}>
-            <div style={{ color:sec.color, fontWeight:700, fontSize:13 }}>{sec.label}</div>
-            {sec.key === "quotes" && dept.openQLabel && (
-              <div style={{ marginTop:6, marginBottom:2, padding:"6px 10px",
-                background:"#FFF4EC", borderLeft:"3px solid #FF7A1A", borderRadius:4 }}>
-                <span style={{ fontSize:9, fontWeight:700, color:"#FF6600",
-                  textTransform:"uppercase", letterSpacing:.5, marginRight:6 }}>Responding to</span>
-                <span style={{ fontSize:12, color:"#5C5048", fontStyle:"italic" }}>"{dept.openQLabel}"</span>
-              </div>
-            )}
-            <div style={{ color:"#9C8F82", fontSize:11, marginTop:2 }}>{sec.instruction}</div>
-          </div>
-          {(sel[sec.key] || []).map((item, idx) => {
+        {/* Content sections — each nested & collapsible, with an included-count */}
+        {sections.map(sec => {
+          const secItems = sel[sec.key] || [];
+          const inc = secItems.filter(i => i.include).length;
+          const countLabel = secItems.length ? `${inc} of ${secItems.length} included` : "none";
+          return (
+        <Disclosure key={sec.key} title={sec.label} count={countLabel} dot={sec.color}
+          defaultOpen={sec.key === "growth"} flush>
+          {sec.key === "quotes" && dept.openQLabel && (
+            <div style={{ margin:"0 14px 8px", padding:"6px 10px",
+              background:"#FBF0E6", borderLeft:"3px solid #DC5A12", borderRadius:4 }}>
+              <span style={{ fontSize:9, fontWeight:700, color:"#B84A0E",
+                textTransform:"uppercase", letterSpacing:.5, marginRight:6 }}>Responding to</span>
+              <span style={{ fontSize:12, color:"#5C5048", fontStyle:"italic" }}>"{dept.openQLabel}"</span>
+            </div>
+          )}
+          <div style={{ color:"#8C7D70", fontSize:11, margin:"0 14px 8px" }}>{sec.instruction}</div>
+          {secItems.map((item, idx) => {
             const editId = `item-edit-${dept.key}-${sec.key}-${idx}`;
             return (
               <div key={idx} style={{ borderBottom:"1px solid #FFF1E6",
@@ -2932,12 +2962,13 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
               </div>
             );
           })}
-          {(!sel[sec.key]?.length) && (
-            <div style={{ padding:"16px", color:"#8A7A6B", fontSize:13, fontStyle:"italic" }}>No items generated for this section.</div>
+          {!secItems.length && (
+            <div style={{ padding:"8px 14px", color:"#8C7D70", fontSize:13, fontStyle:"italic" }}>No items generated for this section.</div>
           )}
-        </div>
-      ))}
-
+        </Disclosure>
+          );
+        })}
+      </div>
     </div>
   );
 }
