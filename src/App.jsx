@@ -1856,6 +1856,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
             <DeptNotesTab
               dept={dept} country={country} year={year}
               me={me} saveMe={saveMe} isPCLead={isPCLead}
+              sbOverrides={sbOverrides} sbMaster={sbMaster}
             />
           )}
         </div>
@@ -2023,7 +2024,7 @@ function ScoringHelpPanel({ onClose }) {
 // (Mel & Chris). Saves to Airtable so notes persist across devices and meetings.
 // A single note thread (for one question, or one section via a sentinel label).
 // Notes are pre-loaded by the parent and passed in; this handles composing + display.
-function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes, me, isPCLead, onAdded, onFlip }) {
+function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes, me, isPCLead, onAdded, onFlip, sub }) {
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -2051,11 +2052,14 @@ function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes
 
   return (
     <div style={{ borderTop:"1px solid #F2E7DB", padding:"10px 0" }}>
-      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-        <span style={{ flex:1, fontSize:13, color:"#332E29" }}>{displayLabel || questionLabel}</span>
+      <div style={{ display:"flex", alignItems:"flex-start", gap:8 }}>
+        <div style={{ flex:1 }}>
+          <span style={{ fontSize:13, color:"#332E29" }}>{displayLabel || questionLabel}</span>
+          {sub}
+        </div>
         <button onClick={() => setOpen(o=>!o)}
           style={{ fontSize:11, fontWeight:600, color:"#FF6600", background:"#FFEBDA",
-            border:"0.5px solid #FFA766", borderRadius:5, padding:"3px 9px", cursor:"pointer", whiteSpace:"nowrap" }}>
+            border:"0.5px solid #FFA766", borderRadius:5, padding:"3px 9px", cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
           {open ? "Close" : (visible.length ? `${visible.length} note${visible.length>1?"s":""}` : "Add note")}
         </button>
       </div>
@@ -2103,8 +2107,21 @@ function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes
 
 // The "Notes" tab of a department page — notes at every level:
 // general department log, a thread per section, and a thread per question.
-function DeptNotesTab({ dept, country, year, me, saveMe, isPCLead }) {
+function DeptNotesTab({ dept, country, year, me, saveMe, isPCLead, sbOverrides, sbMaster }) {
   const [qNotes, setQNotes] = useState(null);   // all question+section notes for this run+dept
+
+  // The Survey Basics interpretation shown next to a question — same resolution
+  // the report/heatmap use: run override first, then promoted master, then the
+  // default library text for the question's status band.
+  const sbTextFor = (q) => {
+    const m = findSurveyBasics(dept.key, q.en);
+    if (!m) return "";
+    const level = q.status === 'Healthy' ? 'high' : q.status === 'Watch' ? 'mid' : 'low';
+    const sbKey = SB_KEY[dept.key] || String(dept.key || "").toLowerCase();
+    const ovKey = `${country}:${year}:${dept.key}:${normQ(q.en)}`;
+    const masterKey = `${sbKey}:${normQ(q.en)}:${level}`;
+    return (sbOverrides && sbOverrides[ovKey]) || (sbMaster && sbMaster[masterKey]) || m[level] || "";
+  };
   const SECTIONS = [
     { key: "§ Strengths", label: "Strengths" },
     { key: "§ Growth areas", label: "Growth areas" },
@@ -2152,7 +2169,20 @@ function DeptNotesTab({ dept, country, year, me, saveMe, isPCLead }) {
             (dept.questions || []).map((q, i) => (
               <NoteThread key={i} country={country} year={year} deptKey={dept.key}
                 questionLabel={q.en} notes={notesFor(q.en)} me={me} isPCLead={isPCLead}
-                onAdded={reload} onFlip={flip} />
+                onAdded={reload} onFlip={flip}
+                sub={
+                  <div style={{ display:"flex", flexWrap:"wrap", alignItems:"baseline", gap:8, marginTop:3 }}>
+                    <span style={{ fontSize:13, fontWeight:800, color:sc(q.status) }}>{q.score?.toFixed(2)}</span>
+                    <span style={{ fontSize:9, fontWeight:700, color:sc(q.status), background:sb(q.status),
+                      border:`1px solid ${sbd(q.status)}`, borderRadius:4, padding:"1px 6px" }}>{q.status}</span>
+                    {q.burden && <span style={{ fontSize:9, color:"#B45309" }}>Burden [inv.]</span>}
+                    {sbTextFor(q) && (
+                      <span style={{ flexBasis:"100%", fontSize:11, color:"#7A6E62", fontStyle:"italic", lineHeight:1.4 }}>
+                        {sbTextFor(q)}
+                      </span>
+                    )}
+                  </div>
+                } />
             ))}
         </div>
       </div>
