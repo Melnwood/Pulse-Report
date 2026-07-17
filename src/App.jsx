@@ -1216,19 +1216,44 @@ export default function App() {
   // surveyData (so the checklist reflects it instantly), the local cache, and
   // the shared Airtable "Review Status" field so Mel & Chris see it anywhere.
   const toggleDeptFinished = (deptKey) => {
-    let next;
+    if (!surveyData?.depts?.[deptKey]) return;
+    const next = !surveyData.depts[deptKey].reviewDone;
     setSurveyData(prev => {
       if (!prev?.depts?.[deptKey]) return prev;
-      next = !prev.depts[deptKey].reviewDone;
       const updated = { ...prev, depts: { ...prev.depts,
         [deptKey]: { ...prev.depts[deptKey], reviewDone: next } } };
       try { localStorage.setItem(`pulse:data:${country}:${year}`, JSON.stringify(updated)); } catch {}
       return updated;
     });
-    if (next !== undefined) {
-      setDepartmentReviewStatus(country, year, deptKey, next)
-        .catch(e => console.warn("Review status sync failed:", e.message));
+    // Mirror into the run list so the leaders' dashboard reflects it live.
+    setAllRuns(prev => prev.map(r =>
+      (String(r.country) === String(country) && String(r.year) === String(year))
+        ? { ...r, depts: (r.depts || []).map(d => d.key === deptKey ? { ...d, reviewDone: next } : d) }
+        : r));
+    setDepartmentReviewStatus(country, year, deptKey, next)
+      .catch(e => console.warn("Review status sync failed:", e.message));
+  };
+
+  // Toggle a department's finished state for ANY run — used by the leaders'
+  // dashboard so leaders can reopen/finish a department without opening the run.
+  const toggleRunDeptFinished = (run, deptKey) => {
+    const cur = (run.depts || []).find(d => d.key === deptKey);
+    const next = !cur?.reviewDone;
+    setAllRuns(prev => prev.map(r =>
+      (r.country === run.country && r.year === run.year)
+        ? { ...r, depts: (r.depts || []).map(d => d.key === deptKey ? { ...d, reviewDone: next } : d) }
+        : r));
+    // Keep the open review in sync if it happens to be this same run.
+    if (String(country) === String(run.country) && String(year) === String(run.year)) {
+      setSurveyData(prev => {
+        if (!prev?.depts?.[deptKey]) return prev;
+        const u = { ...prev, depts: { ...prev.depts, [deptKey]: { ...prev.depts[deptKey], reviewDone: next } } };
+        try { localStorage.setItem(`pulse:data:${run.country}:${run.year}`, JSON.stringify(u)); } catch {}
+        return u;
+      });
     }
+    setDepartmentReviewStatus(run.country, run.year, deptKey, next)
+      .catch(e => console.warn("Review status sync failed:", e.message));
   };
 
   // Re-pull the shared run list (with each department's finished state) from
@@ -1306,7 +1331,8 @@ export default function App() {
       fileRef={fileRef} handleFile={handleFile}
       generating={generating} genProgress={genProgress}
       isAdmin={isAdmin} toggleAdmin={toggleAdmin} setView={setView}
-      allRuns={allRuns} reloadRuns={reloadRuns} openRun={openRunShared} runsLoading={runsLoading} />
+      allRuns={allRuns} reloadRuns={reloadRuns} openRun={openRunShared} runsLoading={runsLoading}
+      toggleRunDeptFinished={toggleRunDeptFinished} />
   );
 
   if (view === "home") return (
@@ -1429,10 +1455,22 @@ function ComingSoonSection({ title, blurb, setView }) {
 // For Mel & Chris. Home of survey upload/processing (a leadership action), with the
 // overall dashboard to be added here later.
 function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFile,
-  generating, genProgress, isAdmin, toggleAdmin, setView, allRuns = [], reloadRuns, openRun, runsLoading }) {
+  generating, genProgress, isAdmin, toggleAdmin, setView, allRuns = [], reloadRuns, openRun, runsLoading,
+  toggleRunDeptFinished }) {
   const isMobile = useIsMobile();
   const [refreshing, setRefreshing] = useState(false);
   const doRefresh = async () => { setRefreshing(true); try { await reloadRuns?.(); } finally { setRefreshing(false); } };
+
+  // Live updates: refresh the shared review progress on open and every 30s, so
+  // leaders watching the dashboard see departments turn green as directors
+  // finish — without having to hit Refresh. A ref keeps the interval stable.
+  const reloadRef = useRef(reloadRuns);
+  reloadRef.current = reloadRuns;
+  useEffect(() => {
+    reloadRef.current?.();
+    const id = setInterval(() => reloadRef.current?.(), 30000);
+    return () => clearInterval(id);
+  }, []);
   return (
     <div style={{ minHeight:"100vh", background:"#FBF7F2", padding: isMobile ? "24px 16px" : "40px 24px" }}>
       <div style={{ maxWidth:720, margin:"0 auto" }}>
@@ -1525,69 +1563,96 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
             <div style={{ ...card, color:"#9C8F82", fontSize:14 }}>
               {runsLoading ? "Loading runs…" : "No runs yet. Upload a survey above to start a director review."}
             </div>
-          ) : (
-            <div style={{ display:"grid", gap:14 }}>
-              {allRuns.slice()
-                .sort((a,b) => {
-                  // Not-yet-complete runs first, then by most recent.
-                  const pa = pctDone(a), pb = pctDone(b);
-                  if ((pa >= 1) !== (pb >= 1)) return (pa >= 1) ? 1 : -1;
-                  return new Date(b.savedAt||0) - new Date(a.savedAt||0);
-                })
-                .map(run => {
-                  const depts = run.depts || [];
-                  const done = depts.filter(d => d.reviewDone).length;
-                  const total = depts.length;
-                  const allDone = total > 0 && done === total;
+          ) : (() => {
+            // Group runs by country; countries with any unfinished run come
+            // first, then alphabetical. Within a country, unfinished runs first
+            // then newest year.
+            const byCountry = {};
+            allRuns.forEach(r => { (byCountry[r.country] = byCountry[r.country] || []).push(r); });
+            const countries = Object.keys(byCountry).sort((a,b) => {
+              const inA = byCountry[a].some(r => pctDone(r) < 1) ? 0 : 1;
+              const inB = byCountry[b].some(r => pctDone(r) < 1) ? 0 : 1;
+              if (inA !== inB) return inA - inB;
+              return a.localeCompare(b);
+            });
+            return (
+              <div style={{ display:"grid", gap:24 }}>
+                {countries.map(cty => {
+                  const cruns = byCountry[cty].slice().sort((a,b) => {
+                    const pa = pctDone(a), pb = pctDone(b);
+                    if ((pa >= 1) !== (pb >= 1)) return (pa >= 1) ? 1 : -1;
+                    return (Number(b.year)||0) - (Number(a.year)||0);
+                  });
+                  const readyCount = cruns.filter(r => (r.depts||[]).length > 0 && pctDone(r) >= 1).length;
                   return (
-                    <div key={`${run.country}-${run.year}`} style={{ ...card,
-                      border: `1px solid ${allDone ? "#A5D6A7" : "#EFE3D6"}`,
-                      background: allDone ? "#F5FBF6" : "#FFFFFF", padding: isMobile ? 16 : 20 }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12, flexWrap:"wrap" }}>
-                        <span style={{ fontSize:17, fontWeight:700, color:"#1E1B3A" }}>{run.country} — {run.year}</span>
-                        <span style={{ fontSize:12, fontWeight:700, borderRadius:20, padding:"3px 10px",
-                          color: allDone ? "#1E8449" : "#8A5A2B",
-                          background: allDone ? "#E6F6EC" : "#FAEEDA",
-                          border: `1px solid ${allDone ? "#A5D6A7" : "#F0DCC9"}` }}>
-                          {total === 0 ? "No departments yet" : allDone ? "Ready to review ✓" : `${done} / ${total} finished`}
-                        </span>
-                        {openRun && total > 0 && (
-                          <button onClick={() => openRun(run)}
-                            style={{ ...navBtn, marginLeft: isMobile ? 0 : "auto",
-                              background: allDone ? "#1E8449" : "#FF7A1A", color:"#fff" }}>
-                            Open review →
-                          </button>
-                        )}
+                    <div key={cty}>
+                      <div style={{ display:"flex", alignItems:"baseline", gap:10, marginBottom:10, flexWrap:"wrap" }}>
+                        <span style={{ fontSize:16, fontWeight:800, color:"#1E1B3A" }}>{cty}</span>
+                        <span style={{ fontSize:12, color:"#9C8F82" }}>{cruns.length} run{cruns.length>1?"s":""} · {readyCount} ready</span>
                       </div>
-                      {total > 0 && (
-                        <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
-                          {depts.map(d => (
-                            <div key={d.key || d.label}
-                              onClick={() => openRun && openRun(run, d.key)}
-                              title={d.reviewDone ? "Finished" : "Not finished yet"}
-                              style={{ display:"inline-flex", alignItems:"center", gap:7,
-                                cursor: openRun ? "pointer" : "default", fontSize:12, fontWeight:600,
-                                color: d.reviewDone ? "#1E7A43" : "#5C5048",
-                                background: d.reviewDone ? "#EAF7EF" : "#FFF7F0",
-                                border: `1px solid ${d.reviewDone ? "#A5D6A7" : "#F0DCC9"}`,
-                                borderRadius:8, padding: isMobile ? "8px 10px" : "6px 10px" }}>
-                              <span style={{ width:16, height:16, borderRadius:4, flexShrink:0,
-                                display:"inline-flex", alignItems:"center", justifyContent:"center",
-                                fontSize:11, fontWeight:800, color:"#fff",
-                                background: d.reviewDone ? "#1E8449" : "#fff",
-                                border: `1.5px solid ${d.reviewDone ? "#1E8449" : "#C9BCAF"}` }}>
-                                {d.reviewDone ? "✓" : ""}
-                              </span>
-                              {d.label || d.key}
+                      <div style={{ display:"grid", gap:14 }}>
+                        {cruns.map(run => {
+                          const depts = run.depts || [];
+                          const done = depts.filter(d => d.reviewDone).length;
+                          const total = depts.length;
+                          const allDone = total > 0 && done === total;
+                          return (
+                            <div key={`${run.country}-${run.year}`} style={{ ...card,
+                              border: `1px solid ${allDone ? "#A5D6A7" : "#EFE3D6"}`,
+                              background: allDone ? "#F5FBF6" : "#FFFFFF", padding: isMobile ? 16 : 20 }}>
+                              <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom: total>0?12:0, flexWrap:"wrap" }}>
+                                <span style={{ fontSize:17, fontWeight:700, color:"#1E1B3A" }}>{run.year}</span>
+                                <span style={{ fontSize:12, fontWeight:700, borderRadius:20, padding:"3px 10px",
+                                  color: allDone ? "#1E8449" : "#8A5A2B",
+                                  background: allDone ? "#E6F6EC" : "#FAEEDA",
+                                  border: `1px solid ${allDone ? "#A5D6A7" : "#F0DCC9"}` }}>
+                                  {total === 0 ? "No departments yet" : allDone ? "Ready to review ✓" : `${done} / ${total} finished`}
+                                </span>
+                                {openRun && total > 0 && (
+                                  <button onClick={() => openRun(run)}
+                                    style={{ ...navBtn, marginLeft: isMobile ? 0 : "auto",
+                                      background: allDone ? "#1E8449" : "#FF7A1A", color:"#fff" }}>
+                                    Open review →
+                                  </button>
+                                )}
+                              </div>
+                              {total > 0 && (
+                                <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                                  {depts.map(d => (
+                                    <div key={d.key || d.label}
+                                      onClick={() => openRun && openRun(run, d.key)}
+                                      title="Open this department"
+                                      style={{ display:"inline-flex", alignItems:"center", gap:7,
+                                        cursor: openRun ? "pointer" : "default", fontSize:12, fontWeight:600,
+                                        color: d.reviewDone ? "#1E7A43" : "#5C5048",
+                                        background: d.reviewDone ? "#EAF7EF" : "#FFF7F0",
+                                        border: `1px solid ${d.reviewDone ? "#A5D6A7" : "#F0DCC9"}`,
+                                        borderRadius:8, padding: isMobile ? "8px 10px" : "6px 10px" }}>
+                                      <span role="button" tabIndex={0}
+                                        onClick={e => { e.stopPropagation(); toggleRunDeptFinished && toggleRunDeptFinished(run, d.key); }}
+                                        title={d.reviewDone ? "Finished — click to reopen" : "Click to mark finished"}
+                                        style={{ width:18, height:18, borderRadius:4, flexShrink:0, cursor:"pointer",
+                                          display:"inline-flex", alignItems:"center", justifyContent:"center",
+                                          fontSize:12, fontWeight:800, color:"#fff",
+                                          background: d.reviewDone ? "#1E8449" : "#fff",
+                                          border: `1.5px solid ${d.reviewDone ? "#1E8449" : "#C9BCAF"}` }}>
+                                        {d.reviewDone ? "✓" : ""}
+                                      </span>
+                                      {d.label || d.key}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                          ))}
-                        </div>
-                      )}
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })}
-            </div>
-          )}
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>
