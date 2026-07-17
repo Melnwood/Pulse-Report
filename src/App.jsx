@@ -1521,26 +1521,21 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
                                 </span>
                               </div>
                               {total > 0 && (
-                                <div>
+                                // Compact horizontal strip — one initials chip per
+                                // department, green with a check when finished.
+                                <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:2 }}>
                                   {depts.map(d => (
-                                    <div key={d.key || d.label}
-                                      style={{ display:"flex", alignItems:"center", gap:11,
-                                        padding: isMobile ? "9px 2px" : "8px 2px", borderTop:"1px solid #F3EBE1" }}>
-                                      {/* check / empty circle — view-only status indicator */}
-                                      <span style={{ width:20, height:20, borderRadius:"50%", flexShrink:0,
-                                        display:"inline-flex", alignItems:"center", justifyContent:"center",
-                                        fontSize:12, fontWeight:800, color:"#fff",
-                                        background: d.reviewDone ? "#1E8449" : "transparent",
-                                        border: `1.5px solid ${d.reviewDone ? "#1E8449" : "#D8CBBB"}` }}>
-                                        {d.reviewDone ? "✓" : ""}
-                                      </span>
-                                      <span style={{ flex:1, fontSize:13.5, fontWeight:600,
-                                        color: d.reviewDone ? "#1E1B3A" : "#8A7E71" }}>{d.label || d.key}</span>
-                                      {d.status && (
-                                        <span style={{ fontSize:10, fontWeight:700, color:sc(d.status), background:sb(d.status),
-                                          border:`1px solid ${sbd(d.status)}`, borderRadius:5, padding:"2px 8px", flexShrink:0 }}>{d.status}</span>
-                                      )}
-                                    </div>
+                                    <span key={d.key || d.label}
+                                      title={`${d.label || d.key} — ${d.reviewDone ? "finished" : "not finished yet"}`}
+                                      style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", gap:4,
+                                        minWidth:38, padding:"5px 9px", borderRadius:7,
+                                        fontSize:11.5, fontWeight:700, letterSpacing:.2,
+                                        color: d.reviewDone ? "#1F7A44" : "#8C7D70",
+                                        background: d.reviewDone ? "#E7F3EC" : "#F5EFE6",
+                                        border: `1px solid ${d.reviewDone ? "#BFE0CC" : "#E0D4C4"}` }}>
+                                      {d.reviewDone && <span style={{ fontSize:10 }}>✓</span>}
+                                      {deptAbbr(d)}
+                                    </span>
                                   ))}
                                 </div>
                               )}
@@ -1558,6 +1553,19 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
       </div>
     </div>
   );
+}
+
+// A short 2–4 char tag for a department, for the compact dashboard strip.
+// Uses the code key when it already looks like one (HR, LD, MPD, LC1), the word
+// initials for multi-word names (Learning & Development → L&D), or the first two
+// letters otherwise (Counseling → Co).
+function deptAbbr(d) {
+  const key = d.key || d.label || "";
+  if (/^[A-Za-z0-9]{1,4}$/.test(key)) return key.toUpperCase();
+  const label = d.label || key;
+  const words = label.replace(/&/g, " & ").split(/\s+/).filter(Boolean);
+  if (words.length > 1) return words.map(w => w[0]).join("").slice(0, 3).toUpperCase();
+  return label.slice(0, 2).toUpperCase();
 }
 
 // Fraction of a run's departments whose director review is finished (0..1).
