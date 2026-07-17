@@ -2130,7 +2130,7 @@ function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes
     <div style={{ borderTop:"1px solid #F2E7DB", padding:"10px 0" }}>
       <div style={{ display:"flex", alignItems:"flex-start", gap:8 }}>
         <div style={{ flex:1 }}>
-          <span style={{ fontSize:13, color:"#332E29" }}>{displayLabel || questionLabel}</span>
+          <div style={{ fontSize:13, color:"#332E29" }}>{displayLabel || questionLabel}</div>
           {sub}
         </div>
         <button onClick={() => setOpen(o=>!o)}
@@ -2242,24 +2242,37 @@ function DeptNotesTab({ dept, country, year, me, saveMe, isPCLead, sbOverrides, 
         <div style={{ background:"#FFF4EC", padding:"10px 14px", fontSize:13, fontWeight:700, color:"#8A5A2B" }}>Notes by question</div>
         <div style={{ padding:"4px 14px 12px" }}>
           {qNotes === null ? <div style={{ fontSize:12, color:"#9C8F82", padding:"8px 0" }}>Loading…</div> :
-            (dept.questions || []).map((q, i) => (
+            (dept.questions || []).map((q, i) => {
+              const sbText = sbTextFor(q);
+              return (
               <NoteThread key={i} country={country} year={year} deptKey={dept.key}
                 questionLabel={q.en} notes={notesFor(q.en)} me={me} isPCLead={isPCLead}
                 onAdded={reload} onFlip={flip}
+                displayLabel={
+                  <div>
+                    {/* 1) Score + status */}
+                    <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:4 }}>
+                      <span style={{ fontSize:15, fontWeight:800, color:sc(q.status) }}>{q.score?.toFixed(2)}</span>
+                      <span style={{ fontSize:9, fontWeight:700, color:sc(q.status), background:sb(q.status),
+                        border:`1px solid ${sbd(q.status)}`, borderRadius:4, padding:"2px 7px" }}>{q.status}</span>
+                      {q.burden && <span style={{ fontSize:9, color:"#B45309" }}>Burden [inv.]</span>}
+                    </div>
+                    {/* 2) The question */}
+                    <div style={{ fontSize:13, color:"#332E29", lineHeight:1.5 }}>{q.en}</div>
+                  </div>
+                }
                 sub={
-                  <div style={{ display:"flex", flexWrap:"wrap", alignItems:"baseline", gap:8, marginTop:3 }}>
-                    <span style={{ fontSize:13, fontWeight:800, color:sc(q.status) }}>{q.score?.toFixed(2)}</span>
-                    <span style={{ fontSize:9, fontWeight:700, color:sc(q.status), background:sb(q.status),
-                      border:`1px solid ${sbd(q.status)}`, borderRadius:4, padding:"1px 6px" }}>{q.status}</span>
-                    {q.burden && <span style={{ fontSize:9, color:"#B45309" }}>Burden [inv.]</span>}
-                    {sbTextFor(q) && (
-                      <span style={{ flexBasis:"100%", fontSize:11, color:"#7A6E62", fontStyle:"italic", lineHeight:1.4 }}>
-                        {sbTextFor(q)}
-                      </span>
-                    )}
+                  /* 3) Survey Basics — what this score means, so directors know what they're noting */
+                  <div style={{ marginTop:6, borderLeft:"2px solid #F0DFCE", paddingLeft:8 }}>
+                    <span style={{ fontSize:9, fontWeight:700, color:"#9C8F82",
+                      textTransform:"uppercase", letterSpacing:.5, display:"block", marginBottom:2 }}>Survey Basics</span>
+                    <span style={{ fontSize:12, color:"#5C5048", lineHeight:1.45, fontStyle: sbText ? "normal" : "italic" }}>
+                      {sbText || "No Survey Basics interpretation is on file for this question."}
+                    </span>
                   </div>
                 } />
-            ))}
+              );
+            })}
         </div>
       </div>
     </div>
