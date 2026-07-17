@@ -2228,9 +2228,54 @@ function ScoringHelpPanel({ onClose }) {
   );
 }
 
-// Department meeting-notes panel: a timestamped running log with a Private/Public
-// toggle. Private notes are visible only to their author and to P&C leadership
-// (Mel & Chris). Saves to Airtable so notes persist across devices and meetings.
+// ── Per-note visibility ───────────────────────────────────────────────────────
+// Every note carries its OWN visibility, defaulting to Private. Two levels:
+//   Private = only the author + P&C leadership (Mel & Chris)
+//   Shared  = the whole team + country leadership
+// The stored value stays "Private"/"Public" (unchanged in Airtable); the UI just
+// labels "Public" as "Shared" and spells out the audience so it's clear each note
+// is an independent choice. There is no login, so this is a soft visibility signal.
+const VIS_SHARED = "Public";
+const visLabel = (v) => (v === VIS_SHARED ? "Shared" : "Private");
+const visAudience = (v) => (v === VIS_SHARED
+  ? "the whole team & country leadership can see this note"
+  : "only you & P&C leadership (Mel & Chris) can see this note");
+
+// Segmented Private/Shared picker for the composer — sets the note being written.
+function VisibilityPicker({ value, onChange, isMobile }) {
+  const shared = value === VIS_SHARED;
+  const btn = (active, bg) => ({ fontSize:12, fontWeight:600,
+    padding: isMobile ? "9px 14px" : "5px 12px", border:"none", cursor:"pointer",
+    background: active ? bg : "transparent", color: active ? "#fff" : "#8A7A6B" });
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+      <span style={{ fontSize:12, color:"#7A6E62" }}>This note:</span>
+      <div style={{ display:"inline-flex", border:"1px solid #E2D3C2", borderRadius:8, overflow:"hidden" }}>
+        <button type="button" onClick={() => onChange("Private")} style={btn(!shared, "#5A4A3B")}>🔒 Private</button>
+        <button type="button" onClick={() => onChange(VIS_SHARED)} style={{ ...btn(shared, "#2E7D32"), borderLeft:"1px solid #E2D3C2" }}>👁 Shared</button>
+      </div>
+      <span style={{ fontSize:11, color:"#9C8F82" }}>{visAudience(value)}</span>
+    </div>
+  );
+}
+
+// Clickable chip on a posted note — shows its current level, one tap to flip.
+function VisibilityChip({ visibility, onClick }) {
+  const shared = visibility === VIS_SHARED;
+  return (
+    <button onClick={onClick} title={`${visAudience(visibility)} — click to change`}
+      style={{ marginLeft:"auto", fontSize:10, fontWeight:700, cursor:"pointer",
+        display:"inline-flex", alignItems:"center", gap:5, whiteSpace:"nowrap",
+        color: shared ? "#2E7D32" : "#8A7A6B",
+        background: shared ? "#E8F5E9" : "#F3ECE3",
+        border:"1px solid " + (shared ? "#A5D6A7" : "#E2D3C2"), borderRadius:5, padding:"2px 8px" }}>
+      {shared ? "👁 Shared" : "🔒 Private"}<span style={{ fontSize:8, fontWeight:600, opacity:.65 }}>▾ change</span>
+    </button>
+  );
+}
+
+// Department meeting-notes panel: a timestamped running log; each note is Private
+// or Shared on its own (default Private). Saves to Airtable so notes persist.
 // A single note thread (for one question, or one section via a sentinel label).
 // Notes are pre-loaded by the parent and passed in; this handles composing + display.
 function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes, me, isPCLead, onAdded, onFlip, sub }) {
@@ -2279,12 +2324,7 @@ function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes
             <div key={n.id} style={{ padding:"6px 0", borderTop:"1px dashed #F2E7DB" }}>
               <div style={{ fontSize:11, color:"#9C8F82", display:"flex", gap:8, alignItems:"center" }}>
                 <b style={{ color:"#5A4A3B" }}>{n.author}</b>{fmt(n.created)}
-                <button onClick={() => onFlip(n)} style={{ marginLeft:"auto", fontSize:9, fontWeight:700, cursor:"pointer",
-                  color: n.visibility==="Public" ? "#2E7D32" : "#8A7A6B",
-                  background: n.visibility==="Public" ? "#E8F5E9" : "#F3ECE3",
-                  border:"1px solid " + (n.visibility==="Public" ? "#A5D6A7" : "#E2D3C2"), borderRadius:4, padding:"1px 7px" }}>
-                  {n.visibility}
-                </button>
+                <VisibilityChip visibility={n.visibility} onClick={() => onFlip(n)} />
               </div>
               <div style={{ fontSize:13, color:"#332E29", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{n.body}</div>
             </div>
@@ -2293,15 +2333,8 @@ function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes
             placeholder="Write a note…"
             style={{ width:"100%", boxSizing:"border-box", fontSize:13, padding:8, marginTop:6,
               border:"1px solid #E2D3C2", borderRadius:8, resize:"vertical", fontFamily:"inherit" }} />
-          <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:6 }}>
-            <div style={{ display:"inline-flex", border:"1px solid #E2D3C2", borderRadius:6, overflow:"hidden" }}>
-              <button type="button" onClick={()=>setVisibility("Private")}
-                style={{ fontSize:11, fontWeight:600, padding: isMobile ? "8px 14px" : "3px 9px", border:"none", cursor:"pointer",
-                  background: visibility==="Private" ? "#5A4A3B" : "transparent", color: visibility==="Private" ? "#fff" : "#8A7A6B" }}>Private</button>
-              <button type="button" onClick={()=>setVisibility("Public")}
-                style={{ fontSize:11, fontWeight:600, padding: isMobile ? "8px 14px" : "3px 9px", border:"none", borderLeft:"1px solid #E2D3C2", cursor:"pointer",
-                  background: visibility==="Public" ? "#2E7D32" : "transparent", color: visibility==="Public" ? "#fff" : "#8A7A6B" }}>Public</button>
-            </div>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:6, flexWrap:"wrap" }}>
+            <VisibilityPicker value={visibility} onChange={setVisibility} isMobile={isMobile} />
             <button onClick={save} disabled={saving || !draft.trim()}
               style={{ ...navBtn, marginLeft:"auto", background:(saving||!draft.trim())?"#E7DDD2":"#FF6600", color:(saving||!draft.trim())?"#9C8F82":"#fff" }}>
               {saving ? "Saving…" : "Add"}
@@ -2473,6 +2506,12 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
       </div>
 
       <div style={{ padding: 14 }}>
+        <div style={{ fontSize: 12, color: "#8A7E71", background:"#FFF9F3", border:"1px solid #F3E6D6",
+          borderRadius:8, padding:"8px 12px", marginBottom:14, lineHeight:1.5 }}>
+          Every note is <b>Private by default</b> — only you & P&C leadership (Mel &amp; Chris) see it.
+          Set a note to <b>Shared</b> to let the team &amp; country leadership see that one. Each note is
+          its own choice, and you can change any note anytime with its tag.
+        </div>
         {!me && (
           <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center", flexWrap: "wrap" }}>
             <span style={{ fontSize: 12, color: "#7A6E62" }}>Your name (so notes are yours):</span>
@@ -2489,27 +2528,7 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
           style={{ width: "100%", boxSizing: "border-box", fontSize: 13, padding: 10,
             border: "1px solid #E2D3C2", borderRadius: 8, resize: "vertical", fontFamily: "inherit" }} />
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 12, color: "#7A6E62" }}>Who can see this:</span>
-          <div style={{ display: "inline-flex", border: "1px solid #E2D3C2", borderRadius: 8, overflow: "hidden" }}>
-            <button type="button" onClick={() => setVisibility("Private")}
-              style={{ fontSize: 12, fontWeight: 600, padding: isMobile ? "9px 14px" : "5px 12px", border: "none", cursor: "pointer",
-                background: visibility === "Private" ? "#5A4A3B" : "transparent",
-                color: visibility === "Private" ? "#fff" : "#8A7A6B" }}>
-              Private
-            </button>
-            <button type="button" onClick={() => setVisibility("Public")}
-              style={{ fontSize: 12, fontWeight: 600, padding: isMobile ? "9px 14px" : "5px 12px", border: "none", cursor: "pointer",
-                borderLeft: "1px solid #E2D3C2",
-                background: visibility === "Public" ? "#2E7D32" : "transparent",
-                color: visibility === "Public" ? "#fff" : "#8A7A6B" }}>
-              Public
-            </button>
-          </div>
-          <span style={{ fontSize: 11, color: "#9C8F82" }}>
-            {visibility === "Public"
-              ? "country leader & team can see this"
-              : "only you & P&C leadership (Mel & Chris)"}
-          </span>
+          <VisibilityPicker value={visibility} onChange={setVisibility} isMobile={isMobile} />
           <button onClick={save} disabled={saving || !draft.trim()}
             style={{ ...navBtn, marginLeft: "auto", background: (saving || !draft.trim()) ? "#E7DDD2" : "#FF6600",
               color: (saving || !draft.trim()) ? "#9C8F82" : "#fff" }}>
@@ -2528,14 +2547,7 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
                 <span style={{ fontSize: 12, fontWeight: 700, color: "#5A4A3B" }}>{n.author || "Unknown"}</span>
                 <span style={{ fontSize: 11, color: "#A99C8E" }}>{fmt(n.created)}</span>
-                <button onClick={() => flip(n)} title="Toggle who can see this note"
-                  style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, cursor: "pointer",
-                    color: n.visibility === "Public" ? "#2E7D32" : "#8A7A6B",
-                    background: n.visibility === "Public" ? "#E8F5E9" : "#F3ECE3",
-                    border: "1px solid " + (n.visibility === "Public" ? "#A5D6A7" : "#E2D3C2"),
-                    borderRadius: 4, padding: "2px 8px" }}>
-                  {n.visibility === "Public" ? "Public" : "Private"}
-                </button>
+                <VisibilityChip visibility={n.visibility} onClick={() => flip(n)} />
               </div>
               <div style={{ fontSize: 13, color: "#332E29", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{n.body}</div>
             </div>
