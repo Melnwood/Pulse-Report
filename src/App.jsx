@@ -1339,11 +1339,11 @@ function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin }) {
               style={{ textAlign:"left", background:"#fff", border:"1px solid #EFE3D6", borderRadius:14,
                 padding:"22px 20px", cursor:"pointer", transition:"border-color .15s",
                 display:"flex", flexDirection:"column", gap:8, minHeight:130 }}
-              onMouseEnter={e => e.currentTarget.style.borderColor = "#FF9E5C"}
+              onMouseEnter={e => e.currentTarget.style.borderColor = "#E8834A"}
               onMouseLeave={e => e.currentTarget.style.borderColor = "#EFE3D6"}>
               <span style={{ fontSize:17, fontWeight:700, color:"#1E1B3A" }}>{c.title}</span>
               <span style={{ fontSize:13, color:"#7A6E62", lineHeight:1.5 }}>{c.blurb}</span>
-              <span style={{ marginTop:"auto", fontSize:13, fontWeight:600, color:"#FF6600" }}>Open →</span>
+              <span style={{ marginTop:"auto", fontSize:13, fontWeight:600, color:"#DC5A12" }}>Open →</span>
             </button>
           ))}
         </div>
@@ -1407,7 +1407,7 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
 
         {isAdmin && (
         <div style={card}>
-          <div style={{ fontSize:13, fontWeight:700, color:"#FF6600", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>New Survey Run</div>
+          <div style={{ fontSize:13, fontWeight:700, color:"#DC5A12", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>New Survey Run</div>
           <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap:16, marginBottom:24 }}>
             <div>
               <label style={lbl}>Country</label>
@@ -1423,14 +1423,14 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
 
           {generating ? (
             <div style={{ background:"#FFFFFF", borderRadius:12, padding:24, textAlign:"center" }}>
-              <div style={{ width:40, height:40, border:"3px solid #FF6600", borderTopColor:"transparent", borderRadius:"50%", margin:"0 auto 16px", animation:"spin 1s linear infinite" }} />
+              <div style={{ width:40, height:40, border:"3px solid #DC5A12", borderTopColor:"transparent", borderRadius:"50%", margin:"0 auto 16px", animation:"spin 1s linear infinite" }} />
               <div style={{ color:"#1E1B3A", fontWeight:600 }}>{genProgress.step || "Processing…"}</div>
               <div style={{ color:"#9C8F82", fontSize:12, marginTop:8 }}>This may take a minute while AI generates draft content</div>
             </div>
           ) : (
             <div
               onClick={() => country && year && fileRef.current?.click()}
-              onDragOver={e => { e.preventDefault(); if(country&&year) e.currentTarget.style.borderColor="#FF6600"; }}
+              onDragOver={e => { e.preventDefault(); if(country&&year) e.currentTarget.style.borderColor="#DC5A12"; }}
               onDragLeave={e => { e.preventDefault(); e.currentTarget.style.borderColor="#F5E4D5"; }}
               onDrop={e => {
                 e.preventDefault();
@@ -1445,7 +1445,7 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
                 opacity: country&&year ? 1 : 0.5,
                 transition:"border-color 0.2s",
               }}
-              onMouseEnter={e => { if(country&&year) e.currentTarget.style.borderColor="#FF6600"; }}
+              onMouseEnter={e => { if(country&&year) e.currentTarget.style.borderColor="#DC5A12"; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor="#F5E4D5"; }}
             >
               <div style={{ fontSize:32, marginBottom:12 }}>📊</div>
@@ -1641,7 +1641,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
       {/* Header */}
       <div style={{ background:"linear-gradient(135deg,#FFFFFF 0%,#F8F7F4 100%)", borderBottom:"1px solid #FFEBDA", padding: isMobile ? "16px" : "24px 40px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
         <div>
-          <div style={{ fontSize:11, letterSpacing:3, color:"#FF6600", fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>Josiah Venture</div>
+          <div style={{ fontSize:11, letterSpacing:3, color:"#DC5A12", fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>Josiah Venture</div>
           <div style={{ fontSize:22, fontWeight:700, color:"#1E1B3A" }}>Pulse Report Platform</div>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
@@ -1653,7 +1653,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
           <button onClick={toggleAdmin}
             title={isAdmin ? "Admin mode ON — click to hide admin tools" : "Admin mode"}
             style={{ background:"transparent", border:"none", cursor:"pointer",
-              fontSize:16, color: isAdmin ? "#FF6600" : "#EAD9C9", padding:"4px 8px", lineHeight:1 }}>
+              fontSize:16, color: isAdmin ? "#DC5A12" : "#EAD9C9", padding:"4px 8px", lineHeight:1 }}>
             {isAdmin ? "🔓" : "🔒"}
           </button>
         </div>
@@ -1667,7 +1667,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
         {featured && (
           <div style={{ ...card, padding:"22px 24px", marginBottom:28, border:"1px solid #FFD9BE" }}>
             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
-              <span style={{ fontSize:11, fontWeight:700, color:"#FF6600", textTransform:"uppercase", letterSpacing:2 }}>Continue the review</span>
+              <span style={{ fontSize:11, fontWeight:700, color:"#DC5A12", textTransform:"uppercase", letterSpacing:2 }}>Continue the review</span>
               {!isFinished(featured) && (
                 <span style={{ fontSize:11, fontWeight:700, color:"#854F0B", background:"#FAEEDA", borderRadius:4, padding:"2px 8px" }}>In progress</span>
               )}
@@ -1675,7 +1675,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
             <div style={{ fontSize:20, fontWeight:700, color:"#1E1B3A", marginBottom:2 }}>{featured.country} — {featured.year}</div>
             <div style={{ fontSize:13, color:"#9C8F82", marginBottom:16 }}>{featured.depts?.length || 0} departments</div>
 
-            <button onClick={() => openRun(featured)} style={{ ...navBtn, background:"#FF7A1A", color:"#fff" }}>
+            <button onClick={() => openRun(featured)} style={{ ...navBtn, background:"#DC5A12", color:"#fff" }}>
               Open review →
             </button>
           </div>
@@ -1776,12 +1776,12 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
       <div style={{ background:"#FFFFFF", borderBottom:"1px solid #F5E4D5", padding: isMobile ? "12px 14px" : "14px 24px", display:"flex", alignItems:"center", gap: isMobile ? 8 : 16, flexShrink:0, zIndex:100, flexWrap:"wrap" }}>
         <button onClick={()=>setView("home")} style={{ ...navBtn, background:"transparent", border:"1px solid #F5E4D5" }}>← Home</button>
         <div style={{ flex:1 }}>
-          <span style={{ color:"#FF6600", fontWeight:700, fontSize:13 }}>{country} {year}</span>
+          <span style={{ color:"#DC5A12", fontWeight:700, fontSize:13 }}>{country} {year}</span>
           <span style={{ color:"#9C8F82", marginLeft:8, fontSize:13 }}>Director Review</span>
-          {cloudLoading && <span style={{ color:"#FF6600", marginLeft:10, fontSize:11, fontStyle:"italic" }}>☁ syncing…</span>}
+          {cloudLoading && <span style={{ color:"#DC5A12", marginLeft:10, fontSize:11, fontStyle:"italic" }}>☁ syncing…</span>}
         </div>
         <button onClick={()=>setShowHelp(true)} style={{ ...navBtn, background:"white",
-          border:"1px solid #F5E4D5", color:"#FF6600", fontWeight:700 }}>
+          border:"1px solid #F5E4D5", color:"#DC5A12", fontWeight:700 }}>
           ? How scoring works
         </button>
         <input ref={importInputRef} type="file" accept=".xlsx" style={{ display:"none" }}
@@ -1889,7 +1889,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
           {syncStatus==="idle"   && <span style={{ color:"#C9BCAF" }}>✓ All changes saved</span>}
         </span>
         {isAdmin && (
-        <button onClick={()=>setView("report")} style={{ ...navBtn, background:"#FF7A1A" }}>
+        <button onClick={()=>setView("report")} style={{ ...navBtn, background:"#DC5A12" }}>
           Generate Report →
         </button>
         )}
@@ -1898,7 +1898,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
           onClick={toggleAdmin}
           title={isAdmin ? "Admin mode ON — click to hide admin tools" : "Admin mode"}
           style={{ marginLeft:"auto", background:"transparent", border:"none", cursor:"pointer",
-            fontSize:14, color: isAdmin ? "#FF6600" : "#EAD9C9", padding:"4px 8px", lineHeight:1 }}>
+            fontSize:14, color: isAdmin ? "#DC5A12" : "#EAD9C9", padding:"4px 8px", lineHeight:1 }}>
           {isAdmin ? "🔓" : "🔒"}
         </button>
       </div>
@@ -1935,7 +1935,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
               style={{
                 display:"block", width:"100%", textAlign:"left",
                 padding:"12px 16px", background: activeDept===d.key ? "#F8F7F4" : "transparent",
-                border:"none", borderLeft: activeDept===d.key ? "3px solid #FF6600" : "3px solid transparent",
+                border:"none", borderLeft: activeDept===d.key ? "3px solid #DC5A12" : "3px solid transparent",
                 cursor:"pointer",
               }}>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
@@ -2015,8 +2015,8 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
                 {["review","notes"].map(tab => (
                   <button key={tab} onClick={() => setDeptTab(tab)}
                     style={{ fontSize:13, fontWeight:600, padding:"8px 16px", border:"none", cursor:"pointer",
-                      background:"transparent", color: deptTab===tab ? "#FF6600" : "#8A7A6B",
-                      borderBottom: deptTab===tab ? "2px solid #FF6600" : "2px solid transparent" }}>
+                      background:"transparent", color: deptTab===tab ? "#DC5A12" : "#8A7A6B",
+                      borderBottom: deptTab===tab ? "2px solid #DC5A12" : "2px solid transparent" }}>
                     {tab === "review" ? "Review" : "Notes"}
                   </button>
                 ))}
@@ -2200,7 +2200,7 @@ function ScoringHelpPanel({ onClose }) {
         </div>
 
         <button onClick={onClose} style={{ marginTop:20, width:"100%", padding:"10px 0",
-          background:"#FF6600", color:"white", border:"none", borderRadius:8,
+          background:"#DC5A12", color:"white", border:"none", borderRadius:8,
           fontSize:13, fontWeight:700, cursor:"pointer" }}>
           Got it — back to the review
         </button>
@@ -2247,7 +2247,7 @@ function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes
           {sub}
         </div>
         <button onClick={() => setOpen(o=>!o)}
-          style={{ fontSize:11, fontWeight:600, color:"#FF6600", background:"#FFEBDA",
+          style={{ fontSize:11, fontWeight:600, color:"#DC5A12", background:"#FFEBDA",
             border:"0.5px solid #FFA766", borderRadius:5, padding:"3px 9px", cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
           {open ? "Close" : (visible.length ? `${visible.length} note${visible.length>1?"s":""}` : "Add note")}
         </button>
@@ -2271,7 +2271,7 @@ function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes
           <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:6, flexWrap:"wrap" }}>
             <VisibilityPicker value={visibility} onChange={setVisibility} isMobile={isMobile} />
             <button onClick={save} disabled={saving || !draft.trim()}
-              style={{ ...navBtn, marginLeft:"auto", background:(saving||!draft.trim())?"#E7DDD2":"#FF6600", color:(saving||!draft.trim())?"#9C8F82":"#fff" }}>
+              style={{ ...navBtn, marginLeft:"auto", background:(saving||!draft.trim())?"#E7DDD2":"#DC5A12", color:(saving||!draft.trim())?"#9C8F82":"#fff" }}>
               {saving ? "Saving…" : "Add"}
             </button>
           </div>
@@ -2452,7 +2452,7 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
             <span style={{ fontSize: 12, color: "#7A6E62" }}>Your name (so notes are yours):</span>
             <input value={nameInput} onChange={e => setNameInput(e.target.value)} placeholder="e.g. Mel"
               style={{ fontSize: 13, padding: "5px 9px", border: "1px solid #E2D3C2", borderRadius: 6 }} />
-            <button onClick={() => saveMe(nameInput)} style={{ ...navBtn, background: "#FF6600", color: "#fff" }}>Set name</button>
+            <button onClick={() => saveMe(nameInput)} style={{ ...navBtn, background: "#DC5A12", color: "#fff" }}>Set name</button>
           </div>
         )}
 
@@ -2465,7 +2465,7 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
           <VisibilityPicker value={visibility} onChange={setVisibility} isMobile={isMobile} />
           <button onClick={save} disabled={saving || !draft.trim()}
-            style={{ ...navBtn, marginLeft: "auto", background: (saving || !draft.trim()) ? "#E7DDD2" : "#FF6600",
+            style={{ ...navBtn, marginLeft: "auto", background: (saving || !draft.trim()) ? "#E7DDD2" : "#DC5A12",
               color: (saving || !draft.trim()) ? "#9C8F82" : "#fff" }}>
             {saving ? "Saving…" : "Add note"}
           </button>
@@ -2593,7 +2593,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                           borderRadius:4, padding:"2px 6px" }}>{q.status}</span>
                         {q.burden && <span style={{ fontSize:9, color:"#B45309" }}>Burden [inv.]</span>}
                         <button onClick={() => setOpenHeatmap(openHeatmap===i ? null : i)}
-                          style={{ marginLeft:"auto", fontSize:11, fontWeight:600, color:"#FF6600",
+                          style={{ marginLeft:"auto", fontSize:11, fontWeight:600, color:"#DC5A12",
                             background:"#FFEBDA", border:"0.5px solid #FFA766", borderRadius:5,
                             padding:"3px 10px", cursor:"pointer" }}>
                           {openHeatmap===i ? "Close" : "Heatmap"}
@@ -2658,14 +2658,14 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                               fontStyle:"italic", lineHeight:1.4, flex:1 }}>
                               {sbText}
                               {override && <span style={{ fontStyle:"normal", fontSize:9, fontWeight:700,
-                                color:"#FF6600", marginLeft:6 }}>(edited)</span>}
+                                color:"#DC5A12", marginLeft:6 }}>(edited)</span>}
                             </span>
                             <button
                               onClick={() => {
                                 const el = document.getElementById(editId);
                                 if (el) el.style.display = el.style.display === "block" ? "none" : "block";
                               }}
-                              style={{ fontSize:10, color:"#FF6600", background:"#FFEBDA",
+                              style={{ fontSize:10, color:"#DC5A12", background:"#FFEBDA",
                                 border:"0.5px solid #FFA766", borderRadius:4, padding:"2px 8px",
                                 cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
                               Edit
@@ -2689,7 +2689,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                               <div style={{ marginTop:6, display:"flex", alignItems:"center", gap:8 }}>
                                 <button
                                   onClick={() => promoteSbToMaster && promoteSbToMaster(sbKey, q.en, level, override)}
-                                  style={{ fontSize:10, fontWeight:600, color:"white", background:"#FF6600",
+                                  style={{ fontSize:10, fontWeight:600, color:"white", background:"#DC5A12",
                                     border:"none", borderRadius:4, padding:"3px 10px", cursor:"pointer" }}>
                                   ★ Promote to master ({level})
                                 </button>
@@ -2792,7 +2792,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                 <div style={{ display:"flex", alignItems:"center", gap:10, padding: isMobile ? "11px 12px" : "9px 14px" }}>
                   <input type="checkbox" checked={item.include}
                     onChange={() => toggleItem(dept.key, sec.key, idx)}
-                    style={{ flexShrink:0, cursor:"pointer", accentColor:"#FF6600",
+                    style={{ flexShrink:0, cursor:"pointer", accentColor:"#DC5A12",
                       width: isMobile ? 20 : 15, height: isMobile ? 20 : 15 }} />
                   <div style={{ flex:1 }}>
                     {(() => {
@@ -2806,7 +2806,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                             fontStyle: nonEng ? "italic" : "normal" }}>
                             {displayText}
                             {item.isRefined && !item.rewrite && (
-                              <span style={{ marginLeft:8, fontSize:9, color:"#FF7A1A",
+                              <span style={{ marginLeft:8, fontSize:9, color:"#DC5A12",
                                 fontWeight:600, background:"#FFEBDA", borderRadius:4,
                                 padding:"1px 5px" }}>✦ refined</span>
                             )}
@@ -2840,7 +2840,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                         const opening = el.style.display !== "block";
                         el.style.display = opening ? "block" : "none";
                       }}
-                      style={{ fontSize: isMobile ? 12 : 10, color:"#FF6600", background:"#FFEBDA",
+                      style={{ fontSize: isMobile ? 12 : 10, color:"#DC5A12", background:"#FFEBDA",
                         border:"0.5px solid #FFA766", borderRadius:5,
                         padding: isMobile ? "8px 14px" : "3px 9px", minHeight: isMobile ? 36 : "auto",
                         cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
@@ -2986,10 +2986,10 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
       {/* Toolbar */}
       <div className="no-print" style={{ background:"white", borderBottom:"1px solid #F5E4D5", padding: isMobile ? "10px 14px" : "12px 24px", display:"flex", gap:12, alignItems:"center", flexWrap: isMobile ? "wrap" : "nowrap", position:"sticky", top:0, zIndex:10 }}>
         <button onClick={()=>setView("review")} style={{ ...navBtn, background:"transparent", border:"1px solid #F5E4D5" }}>← Director Review</button>
-        <div style={{ flex:1, order: isMobile ? 3 : 0, color:"#FF6600", fontWeight:700, fontSize: isMobile ? 11 : 13, letterSpacing:1, whiteSpace: isMobile ? "normal" : "nowrap" }}>
+        <div style={{ flex:1, order: isMobile ? 3 : 0, color:"#DC5A12", fontWeight:700, fontSize: isMobile ? 11 : 13, letterSpacing:1, whiteSpace: isMobile ? "normal" : "nowrap" }}>
           JOSIAH VENTURE · {country.toUpperCase()} {year}
         </div>
-        <button onClick={()=>window.print()} style={{ ...navBtn, background:"#FF6600", color:"white" }}>Download PDF</button>
+        <button onClick={()=>window.print()} style={{ ...navBtn, background:"#DC5A12", color:"white" }}>Download PDF</button>
       </div>
 
       <div style={{ maxWidth:960, margin:"0 auto", padding: isMobile ? "24px 16px" : "40px 24px" }}>
@@ -3000,7 +3000,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
           {/* Header */}
           <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:32, paddingBottom:24, borderBottom:"2px solid #FFF4EC" }}>
             <div>
-              <div style={{ fontSize:11, fontWeight:700, color:"#FF6600", letterSpacing:3, textTransform:"uppercase", marginBottom:8 }}>Josiah Venture</div>
+              <div style={{ fontSize:11, fontWeight:700, color:"#DC5A12", letterSpacing:3, textTransform:"uppercase", marginBottom:8 }}>Josiah Venture</div>
               <div style={{ fontSize:32, fontWeight:800, color:"#1E1B3A", marginBottom:4 }}>{country} Staff Pulse Report</div>
               <div style={{ fontSize:15, color:"#9C8F82" }}>{year} · {totalN} respondents across {depts.length} departments</div>
             </div>
@@ -3215,7 +3215,7 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
             letterSpacing:2, marginBottom:12 }}>Questions for leadership</div>
           {leadershipQs.map((q,i) => (
             <div key={i} style={{ display:"flex", gap:12, marginBottom:10, alignItems:"flex-start" }}>
-              <span style={{ background:"#FF6600", color:"white", borderRadius:"50%", width:20, height:20,
+              <span style={{ background:"#DC5A12", color:"white", borderRadius:"50%", width:20, height:20,
                 display:"flex", alignItems:"center", justifyContent:"center",
                 fontSize:11, fontWeight:700, flexShrink:0, marginTop:1 }}>{i+1}</span>
               <span style={{ fontSize:13, color:"#1E1B3A", lineHeight:1.6 }}>{q}</span>
@@ -3378,7 +3378,7 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
             <div style={{ fontSize:13, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>{dashCountry} — Department Health</div>
             {(runsByCountry[dashCountry]||[]).map(run => (
               <div key={run.id} style={{ marginBottom:32 }}>
-                <div style={{ color:"#FF6600", fontWeight:700, fontSize:13, marginBottom:12 }}>{run.year}</div>
+                <div style={{ color:"#DC5A12", fontWeight:700, fontSize:13, marginBottom:12 }}>{run.year}</div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))", gap:12 }}>
                   {(run.depts||[]).slice().sort((a,b)=>{
                     const o={Concern:0,Watch:1,Healthy:2};
@@ -3469,7 +3469,7 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
                 <div key={key} style={{ background:"#FFFFFF", borderRadius:8, padding:"12px 16px", display:"flex", alignItems:"flex-start", gap:12 }}>
                   <div style={{ flex:1 }}>
                     <div style={{ display:"flex", gap:8, marginBottom:4 }}>
-                      <span style={{ fontSize:10, fontWeight:700, color:"#FF7A1A", background:"#FFEBDA", borderRadius:4, padding:"2px 8px" }}>{deptKey}</span>
+                      <span style={{ fontSize:10, fontWeight:700, color:"#DC5A12", background:"#FFEBDA", borderRadius:4, padding:"2px 8px" }}>{deptKey}</span>
                       <span style={{ fontSize:10, fontWeight:700, color:"#9C8F82", background:"#F8F7F4", borderRadius:4, padding:"2px 8px" }}>{section}</span>
                       <span style={{ fontSize:10, color:"#8A7A6B" }}>#{parseInt(idx)+1}</span>
                     </div>
