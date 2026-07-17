@@ -1517,24 +1517,25 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
                                   color: allDone ? "#1E8449" : "#8A5A2B",
                                   background: allDone ? "#E6F6EC" : "#FAEEDA",
                                   border: `1px solid ${allDone ? "#A5D6A7" : "#F0DCC9"}` }}>
-                                  {total === 0 ? "No departments yet" : allDone ? "Ready to review ✓" : `${done} / ${total} finished`}
+                                  {total === 0 ? "No departments yet" : allDone ? `${done} / ${total} · ready ✓` : `${done} / ${total} finished`}
                                 </span>
                               </div>
                               {total > 0 && (
                                 // Compact horizontal strip — one initials chip per
                                 // department, green with a check when finished.
-                                <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:2 }}>
+                                <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginTop:2 }}>
                                   {depts.map(d => (
                                     <span key={d.key || d.label}
-                                      title={`${d.label || d.key} — ${d.reviewDone ? "finished" : "not finished yet"}`}
-                                      style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", gap:4,
-                                        minWidth:38, padding:"5px 9px", borderRadius:7,
-                                        fontSize:11.5, fontWeight:700, letterSpacing:.2,
+                                      title={`${d.label || d.key} — ${d.status || ""} — ${d.reviewDone ? "finished" : "not finished yet"}`}
+                                      style={{ display:"inline-flex", alignItems:"center", gap:5,
+                                        padding:"2px 7px", borderRadius:5, lineHeight:1.7,
+                                        fontSize:11, fontWeight:700, letterSpacing:.2,
                                         color: d.reviewDone ? "#1F7A44" : "#8C7D70",
-                                        background: d.reviewDone ? "#E7F3EC" : "#F5EFE6",
-                                        border: `1px solid ${d.reviewDone ? "#BFE0CC" : "#E0D4C4"}` }}>
-                                      {d.reviewDone && <span style={{ fontSize:10 }}>✓</span>}
+                                        background: d.reviewDone ? "#E7F3EC" : "#F7F2EA",
+                                        border: `1px solid ${d.reviewDone ? "#BFE0CC" : "#E7DBCB"}` }}>
+                                      <span style={{ width:5, height:5, borderRadius:"50%", background:sc(d.status), flexShrink:0 }} />
                                       {deptAbbr(d)}
+                                      {d.reviewDone && <span style={{ fontSize:9 }}>✓</span>}
                                     </span>
                                   ))}
                                 </div>
