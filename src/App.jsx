@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useIsMobile, sc, sb, sbd, card, navBtn, lbl, inp, C } from "./theme";
 import Disclosure from "./components/Disclosure";
 import { VisibilityPicker, VisibilityChip } from "./components/Visibility";
+import { IconHelp, IconUpload, IconGlobe, IconSparkle } from "./components/Icons";
 import SURVEY_BASICS from "./surveyBasics.json";
 import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility } from "./airtable";
 
@@ -1789,9 +1790,9 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
           <span style={{ color:"#9C8F82", marginLeft:8, fontSize:13 }}>Director Review</span>
           {cloudLoading && <span style={{ color:"#DC5A12", marginLeft:10, fontSize:11, fontStyle:"italic" }}>☁ syncing…</span>}
         </div>
-        <button onClick={()=>setShowHelp(true)} style={{ ...navBtn, background:"white",
+        <button onClick={()=>setShowHelp(true)} style={{ ...navBtn, display:"inline-flex", alignItems:"center", gap:6, background:"white",
           border:"1px solid #F5E4D5", color:"#DC5A12", fontWeight:700 }}>
-          ? How scoring works
+          <IconHelp/> How scoring works
         </button>
         <input ref={importInputRef} type="file" accept=".xlsx" style={{ display:"none" }}
           onChange={async (e) => {
@@ -1832,8 +1833,8 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
           }} />
         {isAdmin && (<>
         <button onClick={() => importInputRef.current?.click()}
-          style={{ ...navBtn, background:"white", border:"1px solid #F5E4D5", color:"#1E1B3A" }}>
-          ⬆ Import director review (Excel)
+          style={{ ...navBtn, display:"inline-flex", alignItems:"center", gap:6, background:"white", border:"1px solid #F5E4D5", color:"#1E1B3A" }}>
+          <IconUpload/> Import director review (Excel)
         </button>
         <button
           disabled={translating}
@@ -1854,9 +1855,9 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
             }
             setTranslating(false);
           }}
-          style={{ ...navBtn, background:"white", border:"1px solid #F5E4D5",
+          style={{ ...navBtn, display:"inline-flex", alignItems:"center", gap:6, background:"white", border:"1px solid #F5E4D5",
             color: translating ? "#9C8F82" : "#1E1B3A", cursor: translating ? "wait" : "pointer" }}>
-          {translating ? "Translating…" : "🌐 Translate quotes"}
+          {translating ? "Translating…" : <><IconGlobe/> Translate quotes</>}
         </button>
         <button
           disabled={genQs}
@@ -1883,9 +1884,9 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
             }
             setGenQs(false);
           }}
-          style={{ ...navBtn, background:"white", border:"1px solid #F5E4D5",
+          style={{ ...navBtn, display:"inline-flex", alignItems:"center", gap:6, background:"white", border:"1px solid #F5E4D5",
             color: genQs ? "#9C8F82" : "#1E1B3A", cursor: genQs ? "wait" : "pointer" }}>
-          {genQs ? "Generating…" : "✦ Generate leadership questions"}
+          {genQs ? "Generating…" : <><IconSparkle/> Generate leadership questions</>}
         </button>
         </>)}
         {/* Quiet auto-sync indicator — replaces the manual push and save buttons.
