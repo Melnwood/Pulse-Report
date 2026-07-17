@@ -1523,23 +1523,6 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
             <div style={{ fontSize:20, fontWeight:700, color:"#1E1B3A", marginBottom:2 }}>{featured.country} — {featured.year}</div>
             <div style={{ fontSize:13, color:"#9C8F82", marginBottom:16 }}>{featured.depts?.length || 0} departments</div>
 
-            {featured.depts?.length ? (
-              <>
-                <div style={{ fontSize:12, color:"#7A6E62", marginBottom:8 }}>Open a department to go to its page:</div>
-                <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:16 }}>
-                  {featured.depts.map(d => (
-                    <button key={d.key} onClick={() => openRun(featured, d.key)}
-                      style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:13, fontWeight:600,
-                        color:"#1E1B3A", background:"#FFF7F0", border:"1px solid #F0DCC9", borderRadius:8,
-                        padding:"7px 12px", cursor:"pointer" }}>
-                      <span style={{ width:8, height:8, borderRadius:"50%", background:sc(d.status) }} />
-                      {d.label}
-                    </button>
-                  ))}
-                </div>
-              </>
-            ) : null}
-
             <button onClick={() => openRun(featured)} style={{ ...navBtn, background:"#FF7A1A", color:"#fff" }}>
               Open review →
             </button>
