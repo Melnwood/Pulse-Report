@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import SURVEY_BASICS from "./surveyBasics.json";
-import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility } from "./airtable";
+import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility } from "./airtable";
 
 // Detect a phone-width screen so the report/review can switch to a stacked,
 // touch-friendly layout. Updates on resize/rotate.
@@ -1212,6 +1212,25 @@ export default function App() {
         return text;
       });
 
+  // Mark a department's review finished / reopen it. Updates the in-memory
+  // surveyData (so the checklist reflects it instantly), the local cache, and
+  // the shared Airtable "Review Status" field so Mel & Chris see it anywhere.
+  const toggleDeptFinished = (deptKey) => {
+    let next;
+    setSurveyData(prev => {
+      if (!prev?.depts?.[deptKey]) return prev;
+      next = !prev.depts[deptKey].reviewDone;
+      const updated = { ...prev, depts: { ...prev.depts,
+        [deptKey]: { ...prev.depts[deptKey], reviewDone: next } } };
+      try { localStorage.setItem(`pulse:data:${country}:${year}`, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    if (next !== undefined) {
+      setDepartmentReviewStatus(country, year, deptKey, next)
+        .catch(e => console.warn("Review status sync failed:", e.message));
+    }
+  };
+
   // ── VIEWS ──────────────────────────────────────────────────────────────────
 
   if (view === "sections") return (
@@ -1262,6 +1281,7 @@ export default function App() {
       cloudLoading={cloudLoading} syncStatus={syncStatus}
       me={me} saveMe={saveMe} isPCLead={isPCLead}
       openToDept={openToDept} setOpenToDept={setOpenToDept}
+      toggleDeptFinished={toggleDeptFinished}
     />
   );
 
@@ -1464,6 +1484,19 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
           return merged;
         });
       }
+      // Merge the shared "finished" state from Airtable into a cached surveyData
+      // so another admin's progress shows here even when we loaded from cache.
+      if (sd2?.depts) {
+        setSurveyData(prev => {
+          if (!prev?.depts) return prev;
+          const merged = { ...prev, depts: { ...prev.depts } };
+          for (const k of Object.keys(sd2.depts)) {
+            if (merged.depts[k]) merged.depts[k] = { ...merged.depts[k], reviewDone: !!sd2.depts[k].reviewDone };
+          }
+          try { localStorage.setItem(`pulse:data:${run.country}:${run.year}`, JSON.stringify(merged)); } catch {}
+          return merged;
+        });
+      }
     } catch (e) { console.warn("SB override load failed:", e.message); }
     if (!haveData) {
       try {
@@ -1591,7 +1624,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 }
 
 // ─── REVIEW VIEW ──────────────────────────────────────────────────────────────
-function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, sbMaster, promoteSbToMaster, cloudLoading, syncStatus, me, saveMe, isPCLead, openToDept, setOpenToDept }) {
+function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, sbMaster, promoteSbToMaster, cloudLoading, syncStatus, me, saveMe, isPCLead, openToDept, setOpenToDept, toggleDeptFinished }) {
   const isMobile = useIsMobile();
   const [activeDept, setActiveDept] = useState(null);
   const [deptTab, setDeptTab] = useState("review");   // "review" | "notes" — which tab of the department page
@@ -1802,6 +1835,41 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
 
         {/* Main panel — a department PAGE with tabs (Review · Notes) */}
         <div style={{ flex:1, overflowY: isMobile ? "visible" : "auto", padding: isMobile ? 14 : 24 }}>
+          {/* Review progress — every department's finished state at a glance, so
+              Mel & Chris can see when everything is ready to look at together. */}
+          {depts.length > 0 && (() => {
+            const finishedCount = depts.filter(d => d.reviewDone).length;
+            const allDone = finishedCount === depts.length;
+            return (
+              <div style={{ background:"#FFFFFF", border:`1px solid ${allDone ? "#A5D6A7" : "#EFE3D6"}`,
+                borderRadius:12, padding: isMobile ? "12px 14px" : "14px 18px", marginBottom:16 }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, marginBottom:10, flexWrap:"wrap" }}>
+                  <span style={{ fontSize:12, fontWeight:700, color:"#8A5A2B", textTransform:"uppercase", letterSpacing:1.5 }}>Review progress</span>
+                  <span style={{ fontSize:13, fontWeight:700, color: allDone ? "#1E8449" : "#9C8F82" }}>
+                    {finishedCount} / {depts.length} finished{allDone ? " — ready to review ✓" : ""}
+                  </span>
+                </div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                  {depts.map(d => (
+                    <div key={d.key} onClick={() => setActiveDept(d.key)}
+                      title={d.reviewDone ? "Finished — click box to reopen" : "Not finished — click box to mark done"}
+                      style={{ display:"inline-flex", alignItems:"center", gap:7, cursor:"pointer",
+                        fontSize:12, fontWeight:600,
+                        color: d.key===activeDept ? "#1E1B3A" : "#5C5048",
+                        background: d.reviewDone ? "#EAF7EF" : "#FFF7F0",
+                        border:`1px solid ${d.reviewDone ? "#A5D6A7" : (d.key===activeDept ? "#FF9A52" : "#F0DCC9")}`,
+                        borderRadius:8, padding: isMobile ? "8px 10px" : "6px 10px" }}>
+                      <input type="checkbox" checked={!!d.reviewDone}
+                        onClick={e => e.stopPropagation()}
+                        onChange={() => toggleDeptFinished(d.key)}
+                        style={{ width: isMobile?18:15, height: isMobile?18:15, cursor:"pointer", accentColor:"#1E8449", flexShrink:0 }} />
+                      {d.label}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
           {/* Mobile-only department picker — replaces the hidden sidebar */}
           {isMobile && depts.length > 0 && (
             <select
@@ -1817,9 +1885,17 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
           )}
           {dept && (
             <div style={{ marginBottom:18, borderBottom:"1px solid #EFE3D6" }}>
-              <div style={{ display:"flex", alignItems:"baseline", gap:12, marginBottom:12 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12, flexWrap:"wrap" }}>
                 <span style={{ fontSize:20, fontWeight:700, color:"#1E1B3A" }}>{dept.label}</span>
                 <span style={{ fontSize:12, color:"#9C8F82" }}>{country} {year}</span>
+                <button onClick={() => toggleDeptFinished(dept.key)}
+                  style={{ marginLeft: isMobile ? 0 : "auto", fontSize:13, fontWeight:700, cursor:"pointer",
+                    borderRadius:8, padding:"8px 14px", minHeight:38,
+                    color: dept.reviewDone ? "#1E8449" : "#fff",
+                    background: dept.reviewDone ? "#EAF7EF" : "#1E8449",
+                    border: `1px solid ${dept.reviewDone ? "#A5D6A7" : "#1E8449"}` }}>
+                  {dept.reviewDone ? "✓ Finished · Reopen" : "✓ Mark finished"}
+                </button>
               </div>
               <div style={{ display:"flex", gap:4 }}>
                 {["review","notes"].map(tab => (

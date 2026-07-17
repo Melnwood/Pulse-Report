@@ -304,6 +304,7 @@ export async function loadRunSurveyData(country, year) {
       questions,
       openResponses: [],   // filled from Selections (quotes) below
       openQLabel: d.fields["Open Question"] || "",
+      reviewDone: (d.fields["Review Status"]?.name || d.fields["Review Status"]) === "Finished",
     };
     // Merge this department's shared Survey Basics edits (if any) into the run-wide map.
     try {
@@ -341,6 +342,19 @@ export async function loadRunSurveyData(country, year) {
   } catch (e) { /* quotes optional — leave empty if unavailable */ }
 
   return { depts: dd, merged: {}, raw: [], sbOverrides };
+}
+
+// Mark a department's director review as finished (or reopen it). Persists to the
+// shared "Review Status" field so Mel & Chris see the same progress on any device.
+export async function setDepartmentReviewStatus(country, year, deptKey, done) {
+  const key = `${country} ${year} · ${deptKey}`;
+  const existing = await call({ action: "list", table: "departments",
+    filterByFormula: `{Department Key} = ${q(key)}` });
+  if (!existing.records.length) return false;
+  await call({ action: "update", table: "departments",
+    records: [{ id: existing.records[0].id,
+      fields: { [F.departments.reviewStatus]: done ? "Finished" : "In Review" } }] });
+  return true;
 }
 
 
