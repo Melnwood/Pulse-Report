@@ -1972,15 +1972,15 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
                     {finishedCount} / {depts.length} finished{allDone ? " — ready to review ✓" : ""}
                   </span>
                 </div>
-                {/* Thin bar: click a department to mark it finished (green + check);
-                    click again to reopen. It does not navigate — the sidebar /
-                    dropdown handles moving between departments. */}
+                {/* Thin bar — view-only: which departments have marked their
+                    review done (green + check). Marking done happens with the
+                    "Mark finished" button on each department. */}
                 <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
                   {depts.map(d => (
-                    <button key={d.key} type="button" onClick={() => toggleDeptFinished(d.key)}
-                      title={`${d.label} — ${d.reviewDone ? "finished (click to reopen)" : "click to mark finished"}`}
-                      style={{ display:"inline-flex", alignItems:"center", gap:5, cursor:"pointer",
-                        padding:"2px 7px", borderRadius:5, lineHeight:1.7, fontFamily:"inherit",
+                    <span key={d.key}
+                      title={`${d.label} — ${d.status || ""} — ${d.reviewDone ? "finished" : "not finished yet"}`}
+                      style={{ display:"inline-flex", alignItems:"center", gap:5,
+                        padding:"2px 7px", borderRadius:5, lineHeight:1.7,
                         fontSize:11, fontWeight:700, letterSpacing:.2,
                         color: d.reviewDone ? "#1F7A44" : "#8C7D70",
                         background: d.reviewDone ? "#E7F3EC" : "#F7F2EA",
@@ -1988,7 +1988,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
                       <span style={{ width:5, height:5, borderRadius:"50%", background:sc(d.status), flexShrink:0 }} />
                       {deptAbbr(d)}
                       {d.reviewDone && <span style={{ fontSize:9 }}>✓</span>}
-                    </button>
+                    </span>
                   ))}
                 </div>
               </div>
@@ -2012,6 +2012,15 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
               <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12, flexWrap:"wrap" }}>
                 <span style={{ fontSize:20, fontWeight:700, color:"#1E1B3A" }}>{dept.label}</span>
                 <span style={{ fontSize:12, color:"#9C8F82" }}>{country} {year}</span>
+                {/* The director marks THIS department done here; the progress bar above just shows it. */}
+                <button onClick={() => toggleDeptFinished(dept.key)}
+                  style={{ marginLeft: isMobile ? 0 : "auto", fontSize:13, fontWeight:700, cursor:"pointer",
+                    borderRadius:8, padding:"8px 14px", minHeight:38,
+                    color: dept.reviewDone ? "#1F7A44" : "#fff",
+                    background: dept.reviewDone ? "#E7F3EC" : "#1F7A44",
+                    border: `1px solid ${dept.reviewDone ? "#BFE0CC" : "#1F7A44"}` }}>
+                  {dept.reviewDone ? "✓ Finished · Reopen" : "✓ Mark finished"}
+                </button>
               </div>
               <div style={{ display:"flex", gap:4 }}>
                 {["review","notes"].map(tab => (
