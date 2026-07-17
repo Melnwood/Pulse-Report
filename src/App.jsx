@@ -1040,7 +1040,9 @@ export default function App() {
   // Whenever the review selections change (a director edits an include, rewrite,
   // translation, etc.), save automatically: to localStorage immediately, and to
   // Airtable after a short debounce. No manual push button, so nothing to forget
-  // or double-press. Saves are idempotent (upsert), so they can't create duplicates.
+  // or double-press. Each department's save deletes its existing selection rows
+  // before recreating them (see saveSelections), so re-saving replaces rather
+  // than appends — no duplicate items accumulate.
   useEffect(() => {
     if (!country || !year) return;
     const snapshot = JSON.stringify(selections || {});

@@ -124,12 +124,25 @@ export async function loadSelections(deptRecordId) {
 // Save a department's selections: replace all its items with the current set.
 // Simple + reliable: delete existing rows for this dept, then create fresh ones.
 export async function saveSelections(deptRecordId, selections) {
-  // 1. delete existing items for this department
-  const existing = await call({ action: "list", table: "selections",
-    filterByFormula: `FIND(${q(deptRecordId)}, ARRAYJOIN({Department}))` });
-  if (existing.records.length) {
-    await call({ action: "delete", table: "selections",
-      recordIds: existing.records.map(r => r.id) });
+  // 1. delete existing items for this department.
+  //    NOTE: we match the Department link LOCALLY rather than with a
+  //    filterByFormula. `ARRAYJOIN({Department})` yields the linked records'
+  //    display names (e.g. "Hungary 2026 · Counseling"), NOT their record ids,
+  //    so `FIND(deptRecordId, ARRAYJOIN({Department}))` never matched — the
+  //    delete silently found nothing and every save appended a fresh full copy,
+  //    duplicating every item. (loadRunSelections matches locally for the same
+  //    reason.) List all selections and match the link by record id here.
+  //    (Airtable REST returns fields keyed by NAME, so read {Department} by name,
+  //    exactly like loadRunSelections does.)
+  const all = await call({ action: "list", table: "selections" });
+  const staleIds = all.records.filter(r => {
+    const linked = r.fields["Department"];
+    if (!Array.isArray(linked)) return false;
+    return linked.some(l =>
+      (l && typeof l === "object" ? l.id : l) === deptRecordId);
+  }).map(r => r.id);
+  if (staleIds.length) {
+    await call({ action: "delete", table: "selections", recordIds: staleIds });
   }
   // 2. create rows for every item, section by section
   const rows = [];
