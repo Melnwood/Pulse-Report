@@ -1234,28 +1234,6 @@ export default function App() {
       .catch(e => console.warn("Review status sync failed:", e.message));
   };
 
-  // Toggle a department's finished state for ANY run — used by the leaders'
-  // dashboard so leaders can reopen/finish a department without opening the run.
-  const toggleRunDeptFinished = (run, deptKey) => {
-    const cur = (run.depts || []).find(d => d.key === deptKey);
-    const next = !cur?.reviewDone;
-    setAllRuns(prev => prev.map(r =>
-      (r.country === run.country && r.year === run.year)
-        ? { ...r, depts: (r.depts || []).map(d => d.key === deptKey ? { ...d, reviewDone: next } : d) }
-        : r));
-    // Keep the open review in sync if it happens to be this same run.
-    if (String(country) === String(run.country) && String(year) === String(run.year)) {
-      setSurveyData(prev => {
-        if (!prev?.depts?.[deptKey]) return prev;
-        const u = { ...prev, depts: { ...prev.depts, [deptKey]: { ...prev.depts[deptKey], reviewDone: next } } };
-        try { localStorage.setItem(`pulse:data:${run.country}:${run.year}`, JSON.stringify(u)); } catch {}
-        return u;
-      });
-    }
-    setDepartmentReviewStatus(run.country, run.year, deptKey, next)
-      .catch(e => console.warn("Review status sync failed:", e.message));
-  };
-
   // Re-pull the shared run list (with each department's finished state) from
   // Airtable — used by the leaders' dashboard's Refresh button.
   const reloadRuns = async () => {
@@ -1270,47 +1248,6 @@ export default function App() {
         });
       }
     } catch (e) { console.warn("Run reload failed:", e.message); }
-  };
-
-  // Open a run into the Director Review. Shared by Home and the leaders'
-  // dashboard so both land in the same place with the same shared data.
-  const openRunShared = async (run, deptKey) => {
-    setCountry(run.country); setYear(run.year);
-    setOpenToDept(deptKey || null);
-    let haveData = false;
-    try {
-      const _v = localStorage.getItem(`pulse:data:${run.country}:${run.year}`);
-      if (_v) { setSurveyData(JSON.parse(_v)); haveData = true; }
-      const _s = localStorage.getItem(`pulse:sel:${run.country}:${run.year}`);
-      if (_s) setSelections(JSON.parse(_s));
-    } catch {}
-    setView("review");
-    try {
-      const sd2 = await loadRunSurveyData(run.country, run.year);
-      if (sd2?.sbOverrides && Object.keys(sd2.sbOverrides).length) {
-        setSbOverrides(prev => { const m = { ...prev, ...sd2.sbOverrides };
-          try { localStorage.setItem("pulse:sbOverrides", JSON.stringify(m)); } catch {} return m; });
-      }
-      if (sd2?.depts) {
-        setSurveyData(prev => {
-          if (!prev?.depts) return prev;
-          const m = { ...prev, depts: { ...prev.depts } };
-          for (const k of Object.keys(sd2.depts)) if (m.depts[k]) m.depts[k] = { ...m.depts[k], reviewDone: !!sd2.depts[k].reviewDone };
-          try { localStorage.setItem(`pulse:data:${run.country}:${run.year}`, JSON.stringify(m)); } catch {}
-          return m;
-        });
-      }
-    } catch (e) { console.warn("Shared run load failed:", e.message); }
-    if (!haveData) {
-      try {
-        const sd = await loadRunSurveyData(run.country, run.year);
-        if (sd && Object.keys(sd.depts).length) { setSurveyData(sd); try { localStorage.setItem(`pulse:data:${run.country}:${run.year}`, JSON.stringify(sd)); } catch {} }
-      } catch {}
-      try {
-        const shared = await loadRunSelections(run.country, run.year);
-        if (shared && Object.keys(shared).length) { setSelections(shared); try { localStorage.setItem(`pulse:sel:${run.country}:${run.year}`, JSON.stringify(shared)); } catch {} }
-      } catch {}
-    }
   };
 
   // ── VIEWS ──────────────────────────────────────────────────────────────────
@@ -1331,8 +1268,7 @@ export default function App() {
       fileRef={fileRef} handleFile={handleFile}
       generating={generating} genProgress={genProgress}
       isAdmin={isAdmin} toggleAdmin={toggleAdmin} setView={setView}
-      allRuns={allRuns} reloadRuns={reloadRuns} openRun={openRunShared} runsLoading={runsLoading}
-      toggleRunDeptFinished={toggleRunDeptFinished} />
+      allRuns={allRuns} reloadRuns={reloadRuns} runsLoading={runsLoading} />
   );
 
   if (view === "home") return (
@@ -1455,15 +1391,12 @@ function ComingSoonSection({ title, blurb, setView }) {
 // For Mel & Chris. Home of survey upload/processing (a leadership action), with the
 // overall dashboard to be added here later.
 function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFile,
-  generating, genProgress, isAdmin, toggleAdmin, setView, allRuns = [], reloadRuns, openRun, runsLoading,
-  toggleRunDeptFinished }) {
+  generating, genProgress, isAdmin, toggleAdmin, setView, allRuns = [], reloadRuns, runsLoading }) {
   const isMobile = useIsMobile();
-  const [refreshing, setRefreshing] = useState(false);
-  const doRefresh = async () => { setRefreshing(true); try { await reloadRuns?.(); } finally { setRefreshing(false); } };
 
   // Live updates: refresh the shared review progress on open and every 30s, so
   // leaders watching the dashboard see departments turn green as directors
-  // finish — without having to hit Refresh. A ref keeps the interval stable.
+  // finish. The box itself is view-only. A ref keeps the interval stable.
   const reloadRef = useRef(reloadRuns);
   reloadRef.current = reloadRuns;
   useEffect(() => {
@@ -1545,18 +1478,15 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
         )}
 
         {/* ── Director Review Progress — the leaders' dashboard ──
-            One card per run; each department is a checkbox that turns green
-            when its director marks the review finished. A run goes all-green
-            ("Ready to review") once every department is done, so Mel & Chris
-            can see at a glance which pulses are ready to look at together. */}
+            View-only: one card per run, grouped by country, with a checklist
+            row per department (green check when its director marks the review
+            finished). A run reads "Ready to review" once every department is
+            done, so Mel & Chris can see at a glance which pulses are ready.
+            Updates automatically; leaders can't change state from here. */}
         <div style={{ marginTop:28 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14, flexWrap:"wrap" }}>
+          <div style={{ display:"flex", alignItems:"baseline", gap:10, marginBottom:14, flexWrap:"wrap" }}>
             <span style={{ fontSize:13, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:2 }}>Director Review Progress</span>
-            <button onClick={doRefresh} disabled={refreshing}
-              style={{ ...navBtn, marginLeft:"auto", background:"white", border:"1px solid #F5E4D5",
-                color: refreshing ? "#9C8F82" : "#1E1B3A", cursor: refreshing ? "wait" : "pointer" }}>
-              {refreshing ? "Refreshing…" : "↻ Refresh"}
-            </button>
+            <span style={{ fontSize:11, color:"#C9BCAF" }}>updates automatically</span>
           </div>
 
           {(!allRuns || allRuns.length === 0) ? (
@@ -1600,45 +1530,35 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
                             <div key={`${run.country}-${run.year}`} style={{ ...card,
                               border: `1px solid ${allDone ? "#A5D6A7" : "#EFE3D6"}`,
                               background: allDone ? "#F5FBF6" : "#FFFFFF", padding: isMobile ? 16 : 20 }}>
-                              <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom: total>0?12:0, flexWrap:"wrap" }}>
+                              <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom: total>0?10:0, flexWrap:"wrap" }}>
                                 <span style={{ fontSize:17, fontWeight:700, color:"#1E1B3A" }}>{run.year}</span>
-                                <span style={{ fontSize:12, fontWeight:700, borderRadius:20, padding:"3px 10px",
+                                <span style={{ marginLeft:"auto", fontSize:12, fontWeight:700, borderRadius:20, padding:"3px 12px",
                                   color: allDone ? "#1E8449" : "#8A5A2B",
                                   background: allDone ? "#E6F6EC" : "#FAEEDA",
                                   border: `1px solid ${allDone ? "#A5D6A7" : "#F0DCC9"}` }}>
                                   {total === 0 ? "No departments yet" : allDone ? "Ready to review ✓" : `${done} / ${total} finished`}
                                 </span>
-                                {openRun && total > 0 && (
-                                  <button onClick={() => openRun(run)}
-                                    style={{ ...navBtn, marginLeft: isMobile ? 0 : "auto",
-                                      background: allDone ? "#1E8449" : "#FF7A1A", color:"#fff" }}>
-                                    Open review →
-                                  </button>
-                                )}
                               </div>
                               {total > 0 && (
-                                <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                                <div>
                                   {depts.map(d => (
                                     <div key={d.key || d.label}
-                                      onClick={() => openRun && openRun(run, d.key)}
-                                      title="Open this department"
-                                      style={{ display:"inline-flex", alignItems:"center", gap:7,
-                                        cursor: openRun ? "pointer" : "default", fontSize:12, fontWeight:600,
-                                        color: d.reviewDone ? "#1E7A43" : "#5C5048",
-                                        background: d.reviewDone ? "#EAF7EF" : "#FFF7F0",
-                                        border: `1px solid ${d.reviewDone ? "#A5D6A7" : "#F0DCC9"}`,
-                                        borderRadius:8, padding: isMobile ? "8px 10px" : "6px 10px" }}>
-                                      <span role="button" tabIndex={0}
-                                        onClick={e => { e.stopPropagation(); toggleRunDeptFinished && toggleRunDeptFinished(run, d.key); }}
-                                        title={d.reviewDone ? "Finished — click to reopen" : "Click to mark finished"}
-                                        style={{ width:18, height:18, borderRadius:4, flexShrink:0, cursor:"pointer",
-                                          display:"inline-flex", alignItems:"center", justifyContent:"center",
-                                          fontSize:12, fontWeight:800, color:"#fff",
-                                          background: d.reviewDone ? "#1E8449" : "#fff",
-                                          border: `1.5px solid ${d.reviewDone ? "#1E8449" : "#C9BCAF"}` }}>
+                                      style={{ display:"flex", alignItems:"center", gap:11,
+                                        padding: isMobile ? "9px 2px" : "8px 2px", borderTop:"1px solid #F3EBE1" }}>
+                                      {/* check / empty circle — view-only status indicator */}
+                                      <span style={{ width:20, height:20, borderRadius:"50%", flexShrink:0,
+                                        display:"inline-flex", alignItems:"center", justifyContent:"center",
+                                        fontSize:12, fontWeight:800, color:"#fff",
+                                        background: d.reviewDone ? "#1E8449" : "transparent",
+                                        border: `1.5px solid ${d.reviewDone ? "#1E8449" : "#D8CBBB"}` }}>
                                         {d.reviewDone ? "✓" : ""}
                                       </span>
-                                      {d.label || d.key}
+                                      <span style={{ flex:1, fontSize:13.5, fontWeight:600,
+                                        color: d.reviewDone ? "#1E1B3A" : "#8A7E71" }}>{d.label || d.key}</span>
+                                      {d.status && (
+                                        <span style={{ fontSize:10, fontWeight:700, color:sc(d.status), background:sb(d.status),
+                                          border:`1px solid ${sbd(d.status)}`, borderRadius:5, padding:"2px 8px", flexShrink:0 }}>{d.status}</span>
+                                      )}
                                     </div>
                                   ))}
                                 </div>
