@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useIsMobile, sc, sb, sbd, card, navBtn, lbl, inp } from "./theme";
+import Disclosure from "./components/Disclosure";
+import { VisibilityPicker, VisibilityChip } from "./components/Visibility";
 import SURVEY_BASICS from "./surveyBasics.json";
 import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility } from "./airtable";
 
@@ -2207,52 +2209,6 @@ function ScoringHelpPanel({ onClose }) {
   );
 }
 
-// ── Per-note visibility ───────────────────────────────────────────────────────
-// Every note carries its OWN visibility, defaulting to Private. Two levels:
-//   Private = only the author + P&C leadership (Mel & Chris)
-//   Shared  = the whole team + country leadership
-// The stored value stays "Private"/"Public" (unchanged in Airtable); the UI just
-// labels "Public" as "Shared" and spells out the audience so it's clear each note
-// is an independent choice. There is no login, so this is a soft visibility signal.
-const VIS_SHARED = "Public";
-const visLabel = (v) => (v === VIS_SHARED ? "Shared" : "Private");
-const visAudience = (v) => (v === VIS_SHARED
-  ? "the whole team & country leadership can see this note"
-  : "only you & P&C leadership (Mel & Chris) can see this note");
-
-// Segmented Private/Shared picker for the composer — sets the note being written.
-function VisibilityPicker({ value, onChange, isMobile }) {
-  const shared = value === VIS_SHARED;
-  const btn = (active, bg) => ({ fontSize:12, fontWeight:600,
-    padding: isMobile ? "9px 14px" : "5px 12px", border:"none", cursor:"pointer",
-    background: active ? bg : "transparent", color: active ? "#fff" : "#8A7A6B" });
-  return (
-    <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-      <span style={{ fontSize:12, color:"#7A6E62" }}>This note:</span>
-      <div style={{ display:"inline-flex", border:"1px solid #E2D3C2", borderRadius:8, overflow:"hidden" }}>
-        <button type="button" onClick={() => onChange("Private")} style={btn(!shared, "#5A4A3B")}>🔒 Private</button>
-        <button type="button" onClick={() => onChange(VIS_SHARED)} style={{ ...btn(shared, "#2E7D32"), borderLeft:"1px solid #E2D3C2" }}>👁 Shared</button>
-      </div>
-      <span style={{ fontSize:11, color:"#9C8F82" }}>{visAudience(value)}</span>
-    </div>
-  );
-}
-
-// Clickable chip on a posted note — shows its current level, one tap to flip.
-function VisibilityChip({ visibility, onClick }) {
-  const shared = visibility === VIS_SHARED;
-  return (
-    <button onClick={onClick} title={`${visAudience(visibility)} — click to change`}
-      style={{ marginLeft:"auto", fontSize:10, fontWeight:700, cursor:"pointer",
-        display:"inline-flex", alignItems:"center", gap:5, whiteSpace:"nowrap",
-        color: shared ? "#2E7D32" : "#8A7A6B",
-        background: shared ? "#E8F5E9" : "#F3ECE3",
-        border:"1px solid " + (shared ? "#A5D6A7" : "#E2D3C2"), borderRadius:5, padding:"2px 8px" }}>
-      {shared ? "👁 Shared" : "🔒 Private"}<span style={{ fontSize:8, fontWeight:600, opacity:.65 }}>▾ change</span>
-    </button>
-  );
-}
-
 // Department meeting-notes panel: a timestamped running log; each note is Private
 // or Shared on its own (default Private). Saves to Airtable so notes persist.
 // A single note thread (for one question, or one section via a sentinel label).
@@ -2533,32 +2489,6 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
           ))}
         </div>
       </div>
-    </div>
-  );
-}
-
-// A collapsible section — the building block of the nested review. Shows a
-// title, an optional status dot, and a count so you know what's inside before
-// opening it. Progressive disclosure keeps the whole department on one screen.
-function Disclosure({ title, count, dot, defaultOpen, flush, children }) {
-  const [open, setOpen] = useState(!!defaultOpen);
-  return (
-    <div style={{ borderTop:"1px solid #EDE3D6" }}>
-      <button onClick={() => setOpen(o => !o)}
-        style={{ width:"100%", display:"flex", alignItems:"center", gap:9, padding:"11px 14px",
-          background: open ? "#FDFBF7" : "transparent", border:"none", cursor:"pointer",
-          textAlign:"left", fontFamily:"inherit" }}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#B7A896"
-          strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
-          style={{ flexShrink:0, transition:"transform .15s", transform: open ? "rotate(90deg)" : "none" }}>
-          <path d="M9 6l6 6-6 6" />
-        </svg>
-        {dot && <span style={{ width:8, height:8, borderRadius:"50%", background:dot, flexShrink:0 }} />}
-        <span style={{ fontSize:13, fontWeight:700, color:"#2A211C" }}>{title}</span>
-        {count != null && <span style={{ marginLeft:"auto", fontSize:11, color:"#8C7D70",
-          fontVariantNumeric:"tabular-nums" }}>{count}</span>}
-      </button>
-      {open && <div style={{ padding: flush ? "0 0 10px" : "2px 14px 14px" }}>{children}</div>}
     </div>
   );
 }
