@@ -2012,14 +2012,6 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
               <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12, flexWrap:"wrap" }}>
                 <span style={{ fontSize:20, fontWeight:700, color:"#1E1B3A" }}>{dept.label}</span>
                 <span style={{ fontSize:12, color:"#9C8F82" }}>{country} {year}</span>
-                <button onClick={() => toggleDeptFinished(dept.key)}
-                  style={{ marginLeft: isMobile ? 0 : "auto", fontSize:13, fontWeight:700, cursor:"pointer",
-                    borderRadius:8, padding:"8px 14px", minHeight:38,
-                    color: dept.reviewDone ? "#1E8449" : "#fff",
-                    background: dept.reviewDone ? "#EAF7EF" : "#1E8449",
-                    border: `1px solid ${dept.reviewDone ? "#A5D6A7" : "#1E8449"}` }}>
-                  {dept.reviewDone ? "✓ Finished · Reopen" : "✓ Mark finished"}
-                </button>
               </div>
               <div style={{ display:"flex", gap:4 }}>
                 {["review","notes"].map(tab => (
