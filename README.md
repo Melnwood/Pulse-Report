@@ -11,23 +11,28 @@ cd pulse-report-app
 npm install
 ```
 
-### 2. Set your API key
+### 2. Set your API keys
+API keys are read server-side by the Netlify Functions and must **never** be
+put in `REACT_APP_*` variables (those are bundled into the public client JS).
+
 In Netlify dashboard → Site settings → Environment variables:
 ```
-REACT_APP_ANTHROPIC_KEY = sk-ant-...
+ANTHROPIC_KEY = sk-ant-...
+AIRTABLE_TOKEN = pat...
 ```
 
-For local development, create `.env`:
+For local development, create `.env` with the same (non-prefixed) names:
 ```
-REACT_APP_ANTHROPIC_KEY=your-key-here
+ANTHROPIC_KEY=your-key-here
+AIRTABLE_TOKEN=your-token-here
 ```
 
 ### 3. Deploy
-Push to GitHub. Netlify auto-deploys on every push.
+Push to `main` on GitHub. Netlify auto-deploys on every push.
 
-For local dev:
+For local dev (runs the Netlify Functions and loads env vars):
 ```bash
-npm start
+netlify dev
 ```
 
 ## How it works
@@ -48,6 +53,10 @@ npm start
 ```
 src/
   App.jsx       — full application
+netlify/
+  functions/
+    claude.js   — Anthropic API proxy (reads ANTHROPIC_KEY), model claude-sonnet-4-6
+    airtable.js — Airtable proxy (reads AIRTABLE_TOKEN)
 public/
   index.html
   favicon.svg   — pulse waveform icon

@@ -34,5 +34,6 @@ and environment variables are available locally.
 
 ## Known issues
 
-- `README.md` still incorrectly instructs setting `REACT_APP_ANTHROPIC_KEY`.
-  This is wrong and insecure (see Secrets above) and should be fixed.
+- None currently. (`README.md` previously instructed setting
+  `REACT_APP_ANTHROPIC_KEY`, which was wrong and insecure — now corrected to the
+  server-side `ANTHROPIC_KEY` / `AIRTABLE_TOKEN` env vars.)
