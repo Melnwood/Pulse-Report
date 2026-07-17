@@ -1972,22 +1972,23 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
                     {finishedCount} / {depts.length} finished{allDone ? " — ready to review ✓" : ""}
                   </span>
                 </div>
-                <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                {/* Thin bar: click a department to mark it finished (green + check);
+                    click again to reopen. It does not navigate — the sidebar /
+                    dropdown handles moving between departments. */}
+                <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
                   {depts.map(d => (
-                    <div key={d.key} onClick={() => setActiveDept(d.key)}
-                      title={d.reviewDone ? "Finished — click box to reopen" : "Not finished — click box to mark done"}
-                      style={{ display:"inline-flex", alignItems:"center", gap:7, cursor:"pointer",
-                        fontSize:12, fontWeight:600,
-                        color: d.key===activeDept ? "#1E1B3A" : "#5C5048",
-                        background: d.reviewDone ? "#EAF7EF" : "#FFF7F0",
-                        border:`1px solid ${d.reviewDone ? "#A5D6A7" : (d.key===activeDept ? "#FF9A52" : "#F0DCC9")}`,
-                        borderRadius:8, padding: isMobile ? "8px 10px" : "6px 10px" }}>
-                      <input type="checkbox" checked={!!d.reviewDone}
-                        onClick={e => e.stopPropagation()}
-                        onChange={() => toggleDeptFinished(d.key)}
-                        style={{ width: isMobile?18:15, height: isMobile?18:15, cursor:"pointer", accentColor:"#1E8449", flexShrink:0 }} />
-                      {d.label}
-                    </div>
+                    <button key={d.key} type="button" onClick={() => toggleDeptFinished(d.key)}
+                      title={`${d.label} — ${d.reviewDone ? "finished (click to reopen)" : "click to mark finished"}`}
+                      style={{ display:"inline-flex", alignItems:"center", gap:5, cursor:"pointer",
+                        padding:"2px 7px", borderRadius:5, lineHeight:1.7, fontFamily:"inherit",
+                        fontSize:11, fontWeight:700, letterSpacing:.2,
+                        color: d.reviewDone ? "#1F7A44" : "#8C7D70",
+                        background: d.reviewDone ? "#E7F3EC" : "#F7F2EA",
+                        border:`1px solid ${d.reviewDone ? "#BFE0CC" : "#E7DBCB"}` }}>
+                      <span style={{ width:5, height:5, borderRadius:"50%", background:sc(d.status), flexShrink:0 }} />
+                      {deptAbbr(d)}
+                      {d.reviewDone && <span style={{ fontSize:9 }}>✓</span>}
+                    </button>
                   ))}
                 </div>
               </div>
