@@ -1231,6 +1231,63 @@ export default function App() {
     }
   };
 
+  // Re-pull the shared run list (with each department's finished state) from
+  // Airtable — used by the leaders' dashboard's Refresh button.
+  const reloadRuns = async () => {
+    try {
+      const shared = await loadAllRuns();
+      if (shared && shared.length) {
+        setAllRuns(prev => {
+          const byKey = {};
+          (prev || []).forEach(r => { byKey[`${r.country}-${r.year}`] = r; });
+          shared.forEach(r => { byKey[`${r.country}-${r.year}`] = { ...(byKey[`${r.country}-${r.year}`]||{}), ...r }; });
+          return Object.values(byKey);
+        });
+      }
+    } catch (e) { console.warn("Run reload failed:", e.message); }
+  };
+
+  // Open a run into the Director Review. Shared by Home and the leaders'
+  // dashboard so both land in the same place with the same shared data.
+  const openRunShared = async (run, deptKey) => {
+    setCountry(run.country); setYear(run.year);
+    setOpenToDept(deptKey || null);
+    let haveData = false;
+    try {
+      const _v = localStorage.getItem(`pulse:data:${run.country}:${run.year}`);
+      if (_v) { setSurveyData(JSON.parse(_v)); haveData = true; }
+      const _s = localStorage.getItem(`pulse:sel:${run.country}:${run.year}`);
+      if (_s) setSelections(JSON.parse(_s));
+    } catch {}
+    setView("review");
+    try {
+      const sd2 = await loadRunSurveyData(run.country, run.year);
+      if (sd2?.sbOverrides && Object.keys(sd2.sbOverrides).length) {
+        setSbOverrides(prev => { const m = { ...prev, ...sd2.sbOverrides };
+          try { localStorage.setItem("pulse:sbOverrides", JSON.stringify(m)); } catch {} return m; });
+      }
+      if (sd2?.depts) {
+        setSurveyData(prev => {
+          if (!prev?.depts) return prev;
+          const m = { ...prev, depts: { ...prev.depts } };
+          for (const k of Object.keys(sd2.depts)) if (m.depts[k]) m.depts[k] = { ...m.depts[k], reviewDone: !!sd2.depts[k].reviewDone };
+          try { localStorage.setItem(`pulse:data:${run.country}:${run.year}`, JSON.stringify(m)); } catch {}
+          return m;
+        });
+      }
+    } catch (e) { console.warn("Shared run load failed:", e.message); }
+    if (!haveData) {
+      try {
+        const sd = await loadRunSurveyData(run.country, run.year);
+        if (sd && Object.keys(sd.depts).length) { setSurveyData(sd); try { localStorage.setItem(`pulse:data:${run.country}:${run.year}`, JSON.stringify(sd)); } catch {} }
+      } catch {}
+      try {
+        const shared = await loadRunSelections(run.country, run.year);
+        if (shared && Object.keys(shared).length) { setSelections(shared); try { localStorage.setItem(`pulse:sel:${run.country}:${run.year}`, JSON.stringify(shared)); } catch {} }
+      } catch {}
+    }
+  };
+
   // ── VIEWS ──────────────────────────────────────────────────────────────────
 
   if (view === "sections") return (
@@ -1248,7 +1305,8 @@ export default function App() {
       country={country} setCountry={setCountry} year={year} setYear={setYear}
       fileRef={fileRef} handleFile={handleFile}
       generating={generating} genProgress={genProgress}
-      isAdmin={isAdmin} toggleAdmin={toggleAdmin} setView={setView} />
+      isAdmin={isAdmin} toggleAdmin={toggleAdmin} setView={setView}
+      allRuns={allRuns} reloadRuns={reloadRuns} openRun={openRunShared} runsLoading={runsLoading} />
   );
 
   if (view === "home") return (
@@ -1371,8 +1429,10 @@ function ComingSoonSection({ title, blurb, setView }) {
 // For Mel & Chris. Home of survey upload/processing (a leadership action), with the
 // overall dashboard to be added here later.
 function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFile,
-  generating, genProgress, isAdmin, toggleAdmin, setView }) {
+  generating, genProgress, isAdmin, toggleAdmin, setView, allRuns = [], reloadRuns, openRun, runsLoading }) {
   const isMobile = useIsMobile();
+  const [refreshing, setRefreshing] = useState(false);
+  const doRefresh = async () => { setRefreshing(true); try { await reloadRuns?.(); } finally { setRefreshing(false); } };
   return (
     <div style={{ minHeight:"100vh", background:"#FBF7F2", padding: isMobile ? "24px 16px" : "40px 24px" }}>
       <div style={{ maxWidth:720, margin:"0 auto" }}>
@@ -1446,12 +1506,100 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
         </div>
         )}
 
-        <div style={{ marginTop:20, fontSize:13, color:"#9C8F82" }}>
-          An overall leadership dashboard — every country and department at a glance — will live here.
+        {/* ── Director Review Progress — the leaders' dashboard ──
+            One card per run; each department is a checkbox that turns green
+            when its director marks the review finished. A run goes all-green
+            ("Ready to review") once every department is done, so Mel & Chris
+            can see at a glance which pulses are ready to look at together. */}
+        <div style={{ marginTop:28 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14, flexWrap:"wrap" }}>
+            <span style={{ fontSize:13, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:2 }}>Director Review Progress</span>
+            <button onClick={doRefresh} disabled={refreshing}
+              style={{ ...navBtn, marginLeft:"auto", background:"white", border:"1px solid #F5E4D5",
+                color: refreshing ? "#9C8F82" : "#1E1B3A", cursor: refreshing ? "wait" : "pointer" }}>
+              {refreshing ? "Refreshing…" : "↻ Refresh"}
+            </button>
+          </div>
+
+          {(!allRuns || allRuns.length === 0) ? (
+            <div style={{ ...card, color:"#9C8F82", fontSize:14 }}>
+              {runsLoading ? "Loading runs…" : "No runs yet. Upload a survey above to start a director review."}
+            </div>
+          ) : (
+            <div style={{ display:"grid", gap:14 }}>
+              {allRuns.slice()
+                .sort((a,b) => {
+                  // Not-yet-complete runs first, then by most recent.
+                  const pa = pctDone(a), pb = pctDone(b);
+                  if ((pa >= 1) !== (pb >= 1)) return (pa >= 1) ? 1 : -1;
+                  return new Date(b.savedAt||0) - new Date(a.savedAt||0);
+                })
+                .map(run => {
+                  const depts = run.depts || [];
+                  const done = depts.filter(d => d.reviewDone).length;
+                  const total = depts.length;
+                  const allDone = total > 0 && done === total;
+                  return (
+                    <div key={`${run.country}-${run.year}`} style={{ ...card,
+                      border: `1px solid ${allDone ? "#A5D6A7" : "#EFE3D6"}`,
+                      background: allDone ? "#F5FBF6" : "#FFFFFF", padding: isMobile ? 16 : 20 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12, flexWrap:"wrap" }}>
+                        <span style={{ fontSize:17, fontWeight:700, color:"#1E1B3A" }}>{run.country} — {run.year}</span>
+                        <span style={{ fontSize:12, fontWeight:700, borderRadius:20, padding:"3px 10px",
+                          color: allDone ? "#1E8449" : "#8A5A2B",
+                          background: allDone ? "#E6F6EC" : "#FAEEDA",
+                          border: `1px solid ${allDone ? "#A5D6A7" : "#F0DCC9"}` }}>
+                          {total === 0 ? "No departments yet" : allDone ? "Ready to review ✓" : `${done} / ${total} finished`}
+                        </span>
+                        {openRun && total > 0 && (
+                          <button onClick={() => openRun(run)}
+                            style={{ ...navBtn, marginLeft: isMobile ? 0 : "auto",
+                              background: allDone ? "#1E8449" : "#FF7A1A", color:"#fff" }}>
+                            Open review →
+                          </button>
+                        )}
+                      </div>
+                      {total > 0 && (
+                        <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                          {depts.map(d => (
+                            <div key={d.key || d.label}
+                              onClick={() => openRun && openRun(run, d.key)}
+                              title={d.reviewDone ? "Finished" : "Not finished yet"}
+                              style={{ display:"inline-flex", alignItems:"center", gap:7,
+                                cursor: openRun ? "pointer" : "default", fontSize:12, fontWeight:600,
+                                color: d.reviewDone ? "#1E7A43" : "#5C5048",
+                                background: d.reviewDone ? "#EAF7EF" : "#FFF7F0",
+                                border: `1px solid ${d.reviewDone ? "#A5D6A7" : "#F0DCC9"}`,
+                                borderRadius:8, padding: isMobile ? "8px 10px" : "6px 10px" }}>
+                              <span style={{ width:16, height:16, borderRadius:4, flexShrink:0,
+                                display:"inline-flex", alignItems:"center", justifyContent:"center",
+                                fontSize:11, fontWeight:800, color:"#fff",
+                                background: d.reviewDone ? "#1E8449" : "#fff",
+                                border: `1.5px solid ${d.reviewDone ? "#1E8449" : "#C9BCAF"}` }}>
+                                {d.reviewDone ? "✓" : ""}
+                              </span>
+                              {d.label || d.key}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
+}
+
+// Fraction of a run's departments whose director review is finished (0..1).
+// A run with no departments counts as 0 so it sorts among the unfinished.
+function pctDone(run) {
+  const depts = run?.depts || [];
+  if (!depts.length) return 0;
+  return depts.filter(d => d.reviewDone).length / depts.length;
 }
 
 // ─── HOME VIEW ────────────────────────────────────────────────────────────────

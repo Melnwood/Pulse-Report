@@ -251,6 +251,7 @@ export async function loadAllRuns() {
       avg: d.fields["Average"] ?? null,
       status: d.fields["Status"]?.name || d.fields["Status"] || null,
       n: d.fields["Respondents"] ?? null,
+      reviewDone: (d.fields["Review Status"]?.name || d.fields["Review Status"]) === "Finished",
     });
   }
 
