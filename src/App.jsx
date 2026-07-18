@@ -9,6 +9,7 @@ import { authStatus, tokenValid, getUser, logout } from "./authClient";
 import SURVEY_BASICS from "./surveyBasics.json";
 import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, loadMeasures } from "./airtable";
 import MeasurePanel from "./components/MeasurePanel";
+import NotesDigest from "./components/NotesDigest";
 
 // Map app department keys (HR, LD, LC1/LC2, JVK1/JVK2, ...) to surveyBasics.json keys
 // (which are lowercase and un-split: hr, ld, lc, jvk, ...).
@@ -2635,6 +2636,10 @@ function DeptNotesTab({ dept, country, year, me, saveMe, isPCLead, canEdit = tru
 
   return (
     <div>
+      {/* AI digest of everything the viewer can see */}
+      <NotesDigest country={country} year={year} deptKey={dept.key} deptLabel={dept.label}
+        me={me} isPCLead={isPCLead} openResponses={dept.openResponses || []} />
+
       {/* General department log */}
       <NotesPanel country={country} year={year} deptKey={dept.key} deptLabel={dept.label}
         me={me} saveMe={saveMe} isPCLead={isPCLead} />
@@ -2831,6 +2836,10 @@ function WorkspaceView({ allRuns, setView, authRole, authUser, authDept, canEdit
         ) : (
           <>
             <div style={{ fontFamily: FONT_DISPLAY, fontSize: 18, fontWeight: 600, color: "#2C2621", marginBottom: 12 }}>{dept.label || dept.key}</div>
+
+            {/* AI digest of the notes + open responses this viewer can see */}
+            <NotesDigest country={country} year={year} deptKey={deptKey} deptLabel={dept.label || dept.key}
+              me={me} isPCLead={isPCLead} openResponses={dept.openResponses || []} />
 
             {/* Tracking summary */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(90px,1fr))", gap: 10, marginBottom: 16 }}>
