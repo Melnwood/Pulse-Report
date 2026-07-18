@@ -1221,7 +1221,7 @@ export default function App() {
   // Open a run into the Director Review — used by the leaders' dashboard to
   // drill into a run for the full detail. Loads local cache first, then merges
   // the shared Airtable data (survey scores, selections, sb overrides).
-  const openRunShared = async (run) => {
+  const openRunShared = async (run, targetView = "review") => {
     setCountry(run.country); setYear(run.year);
     setOpenToDept(null);
     let haveData = false;
@@ -1231,7 +1231,7 @@ export default function App() {
       const _s = localStorage.getItem(`pulse:sel:${run.country}:${run.year}`);
       if (_s) setSelections(JSON.parse(_s));
     } catch {}
-    setView("review");
+    setView(targetView);
     try {
       const sd = await loadRunSurveyData(run.country, run.year);
       if (sd?.sbOverrides && Object.keys(sd.sbOverrides).length) {
@@ -1251,6 +1251,7 @@ export default function App() {
       }
     } catch (e) { console.warn("Open run failed:", e.message); }
   };
+  const openReport = (run) => openRunShared(run, "report");
 
   // ── AUTH GATE ── (only intercepts when login is switched on)
   if (authGate === "checking") return (
@@ -1339,6 +1340,10 @@ export default function App() {
       setDashCountry={setDashCountry} setView={setView}
       country={country} year={year} surveyData={surveyData}
       refinements={refinements} setRefinements={setRefinements}
+      openReport={openReport}
+      lockCountry={authRole === "country" ? (authUser && authUser.country) : null}
+      isLeader={effIsAdmin}
+      authUser={authUser} onSignOut={signOut}
     />
   );
 }
@@ -1350,7 +1355,7 @@ export default function App() {
 function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin, authUser, onSignOut, authRole }) {
   const isMobile = useIsMobile();
   const allCards = [
-    { key: "country", title: "Country dashboards", to: "country", roles: ["leader", "country"],
+    { key: "country", title: "Country dashboards", to: "dashboard", roles: ["leader", "country"],
       blurb: "Each country's latest pulse report and how it's trending over time." },
     { key: "pc", title: "People & Culture", to: "home", roles: ["leader", "director"],
       blurb: "Director's review, department pages, and notes across every pulse." },
@@ -3311,10 +3316,12 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
 }
 
 // ─── DASHBOARD VIEW ───────────────────────────────────────────────────────────
-function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country, year, surveyData, refinements, setRefinements }) {
+function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country, year, surveyData, refinements, setRefinements, openReport, lockCountry, isLeader = true, authUser, onSignOut }) {
   const isMobile = useIsMobile();
   const countries = [...new Set(allRuns.map(r=>r.country))].sort();
   const DEPTS_ORDER = ["HR","LD","LC","MPD","Counseling","Women","Singles","Marriages","JVK"];
+  // A country leader is locked to their country; everyone else uses the selector.
+  const effDashCountry = lockCountry || dashCountry;
 
   // Build trend data per country+dept
   const runsByCountry = {};
@@ -3324,9 +3331,9 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
   }
 
   // Current country's latest run
-  const currentRuns = dashCountry === "all"
+  const currentRuns = effDashCountry === "all"
     ? allRuns
-    : (runsByCountry[dashCountry] || []);
+    : (runsByCountry[effDashCountry] || []);
 
   const latestByCountry = {};
   for (const run of allRuns) {
@@ -3337,19 +3344,27 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
   return (
     <div style={{ minHeight:"100vh", background:"#F8F7F4", fontFamily:"'Inter',system-ui,sans-serif" }}>
       <div style={{ background:"#FFFFFF", borderBottom:"1px solid #EDE3D6", padding: isMobile ? "12px 16px" : "14px 24px", display:"flex", alignItems:"center", gap: isMobile ? 10 : 16, flexWrap:"wrap" }}>
-        <button onClick={()=>setView("home")} style={{ ...navBtn, background:"transparent", border:"1px solid #EDE3D6" }}>← Home</button>
-        <div style={{ flex:1, color:"#1E1B3A", fontWeight:700 }}>P&C Dashboard</div>
-        <select value={dashCountry} onChange={e=>setDashCountry(e.target.value)}
-          style={{ background:"#F8F7F4", border:"1px solid #EDE3D6", borderRadius:6, color:"#1E1B3A", padding:"6px 12px", fontSize:13 }}>
-          <option value="all">All Countries</option>
-          {countries.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+        <button onClick={()=>setView(lockCountry ? "sections" : "home")} style={{ ...navBtn, background:"transparent", border:"1px solid #EDE3D6" }}>← Back</button>
+        <div style={{ flex:1, color:"#1E1B3A", fontWeight:700 }}>{lockCountry ? `${lockCountry} Dashboard` : "P&C Dashboard"}</div>
+        {!lockCountry && (
+          <select value={dashCountry} onChange={e=>setDashCountry(e.target.value)}
+            style={{ background:"#F8F7F4", border:"1px solid #EDE3D6", borderRadius:6, color:"#1E1B3A", padding:"6px 12px", fontSize:13 }}>
+            <option value="all">All Countries</option>
+            {countries.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        )}
+        {authUser && (
+          <span style={{ fontSize:12, color:"#8C7D70", whiteSpace:"nowrap" }}>
+            {authUser.name} · <button onClick={onSignOut}
+              style={{ background:"none", border:"none", padding:0, cursor:"pointer", color:"#B84A0E", fontWeight:600, fontSize:12 }}>Sign out</button>
+          </span>
+        )}
       </div>
 
       <div style={{ maxWidth:1100, margin:"0 auto", padding: isMobile ? "20px 14px" : "32px 24px" }}>
 
         {/* JV-wide overview grid */}
-        {dashCountry === "all" && (
+        {effDashCountry === "all" && (
           <>
             <div style={{ fontSize:13, fontWeight:700, color:"#8C7D70", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Latest Results by Country</div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:16, marginBottom:40 }}>
@@ -3415,12 +3430,20 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
         )}
 
         {/* Single country trend view */}
-        {dashCountry !== "all" && (
+        {effDashCountry !== "all" && (
           <>
-            <div style={{ fontSize:13, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>{dashCountry} — Department Health</div>
-            {(runsByCountry[dashCountry]||[]).map(run => (
+            <div style={{ fontSize:13, fontWeight:700, color:"#8C7D70", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>{effDashCountry} — Department Health</div>
+            {(runsByCountry[effDashCountry]||[]).map(run => (
               <div key={run.id} style={{ marginBottom:32 }}>
-                <div style={{ color:"#DC5A12", fontWeight:700, fontSize:13, marginBottom:12 }}>{run.year}</div>
+                <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12, flexWrap:"wrap" }}>
+                  <span style={{ color:"#DC5A12", fontWeight:700, fontSize:13 }}>{run.year}</span>
+                  {openReport && (
+                    <button onClick={() => openReport(run)}
+                      style={{ ...navBtn, fontSize:12, padding:"5px 12px", background:"#DC5A12", color:"#fff", border:"1px solid transparent" }}>
+                      View report →
+                    </button>
+                  )}
+                </div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))", gap:12 }}>
                   {(run.depts||[]).slice().sort((a,b)=>{
                     const o={Concern:0,Watch:1,Healthy:2};
@@ -3442,21 +3465,21 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
             ))}
 
             {/* Trend chart (text-based for now) */}
-            {(runsByCountry[dashCountry]||[]).length > 1 && (
+            {(runsByCountry[effDashCountry]||[]).length > 1 && (
               <div style={{ background:"#FFFFFF", border:"1px solid #EDE3D6", boxShadow:C.shadow, borderRadius:12, padding:20, marginTop:24, overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
                 <div style={{ fontSize:11, fontWeight:700, color:"#8C7D70", textTransform:"uppercase", letterSpacing:1.5, marginBottom:16 }}>Trend — Year over Year</div>
                 <table style={{ width:"100%", minWidth: isMobile ? 420 : "auto", borderCollapse:"collapse", fontSize:12 }}>
                   <thead>
                     <tr style={{ borderBottom:"1px solid #EDE3D6" }}>
                       <th style={{ textAlign:"left", padding:"8px 12px", color:"#9C8F82" }}>Department</th>
-                      {[...(runsByCountry[dashCountry]||[])].sort((a,b)=>a.year-b.year).map(r=>(
+                      {[...(runsByCountry[effDashCountry]||[])].sort((a,b)=>a.year-b.year).map(r=>(
                         <th key={r.year} style={{ textAlign:"center", padding:"8px 12px", color:"#9C8F82" }}>{r.year}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {DEPTS_ORDER.map(dk => {
-                      const rows = [...(runsByCountry[dashCountry]||[])].sort((a,b)=>a.year-b.year)
+                      const rows = [...(runsByCountry[effDashCountry]||[])].sort((a,b)=>a.year-b.year)
                         .map(r => r.depts?.find(d=>d.key===dk||d.group===dk));
                       if (rows.every(r=>!r)) return null;
                       return (
@@ -3484,7 +3507,8 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
             </div>
           </>
         )}
-      {/* Refinements manager — always visible in P&C view */}
+      {/* Refinements manager — leaders only (cross-country wording edits) */}
+      {isLeader && (
       <div style={{ marginTop:32 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
           <div style={{ fontSize:13, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:2 }}>
@@ -3530,6 +3554,7 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
           </div>
         )}
       </div>
+      )}
       </div>
     </div>
   );
