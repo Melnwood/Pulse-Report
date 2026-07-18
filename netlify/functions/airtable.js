@@ -22,6 +22,14 @@ const TABLES = {
   deptNotes:     "Department Notes",
   questionNotes: "Question Notes",
   measures:      "Measures",
+  surveyBasics:  "Survey Basics",
+};
+
+// Department code -> Survey Basics key (lowercase, culture-merged), mirroring the
+// client's SB_KEY. Used to scope director writes to the Survey Basics table.
+const SB_KEY = {
+  hr: "hr", ld: "ld", lc1: "lc", lc2: "lc", mpd: "mpd", counseling: "counseling",
+  women: "women", singles: "singles", marriages: "marriages", jvk1: "jvk", jvk2: "jvk",
 };
 
 exports.handler = async (event) => {
@@ -121,6 +129,7 @@ exports.handler = async (event) => {
     if (tbl === "departments") return startsWithCountry(fields["Department Key"]);
     if (tbl === "deptNotes" || tbl === "questionNotes") return startsWithCountry(fields.Run);
     if (tbl === "measures") return String(fields.Country || "").toLowerCase() === country.toLowerCase();
+    if (tbl === "surveyBasics") return true; // shared org-wide defaults — everyone reads them
     if (tbl === "selections") { const set = await allowedCountryDeptIds(); const id = selectionDeptId(fields); return !!id && set.has(id); }
     return false;
   };
@@ -133,12 +142,15 @@ exports.handler = async (event) => {
     myDeptIds = new Set(recs.filter(r => deptSet.has(codeOf(r.fields || {}))).map(r => r.id));
     return myDeptIds;
   };
+  // The Survey Basics keys a director may edit (their dept codes mapped to SB keys).
+  const mySbKeys = new Set([...deptSet].map(c => SB_KEY[c] || c));
   const recordInDept = async (tbl, fields) => {
     fields = fields || {};
     if (tbl === "runs") return true; // shared run metadata; directors work across all countries
     if (tbl === "departments") return deptSet.has(codeOf(fields));
     if (tbl === "deptNotes" || tbl === "questionNotes") return deptSet.has(String(fields.Department || "").trim().toLowerCase());
     if (tbl === "measures") return deptSet.has(String(fields.Department || "").trim().toLowerCase());
+    if (tbl === "surveyBasics") return mySbKeys.has(String(fields["SB Key"] || "").trim().toLowerCase());
     if (tbl === "selections") { const set = await myDepartmentIds(); const id = selectionDeptId(fields); return !!id && set.has(id); }
     return false;
   };
