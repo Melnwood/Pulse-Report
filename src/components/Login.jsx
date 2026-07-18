@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { login } from "../authClient";
+import { FONT_DISPLAY } from "../theme";
 
 // The login screen shown when auth is switched on and there's no valid session.
 export default function Login({ onLogin }) {
@@ -29,7 +30,7 @@ export default function Login({ onLogin }) {
         padding: 28 }}>
         <div style={{ fontFamily: "ui-monospace,Menlo,monospace", fontSize: 11, letterSpacing: 2,
           textTransform: "uppercase", color: "#B96524", fontWeight: 600, marginBottom: 6 }}>Josiah Venture</div>
-        <div style={{ fontSize: 22, fontWeight: 800, color: "#2C2621", marginBottom: 4 }}>Pulse Report</div>
+        <div style={{ fontFamily: FONT_DISPLAY, fontSize: 26, fontWeight: 600, color: "#2C2621", marginBottom: 4, letterSpacing: -.3 }}>Pulse Report</div>
         <div style={{ fontSize: 13.5, color: "#7A6F63", marginBottom: 22 }}>Sign in to continue.</div>
 
         <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#7A6F63",
