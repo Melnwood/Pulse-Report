@@ -17,28 +17,34 @@ export function useIsMobile(breakpoint = 700) {
   return isMobile;
 }
 
-// ── Palette ───────────────────────────────────────────────────────────────────
-// Warm neutrals with a faint orange bias (chosen, not inherited grey) plus one
-// accent used for actions only. The design direction from the audit.
+// ── Palette — "Warm & Human" ──────────────────────────────────────────────────
+// Warm cream grounds, a soft amber accent used for actions, and muted earth
+// neutrals. The old orange/navy identity is retired. Fraunces carries display
+// type (headings & scores); Inter carries body/UI. Keep this the single source
+// of truth — screens should reference these tokens, not raw hex.
+export const FONT_DISPLAY = "'Fraunces', Georgia, 'Times New Roman', serif";
+export const FONT_BODY    = "'Inter', system-ui, sans-serif";
+
 export const C = {
-  paper:   "#FAF6F0",
-  surface: "#FFFFFF",
-  surface2:"#F5EFE6",
-  ink:     "#2A211C",
-  inkSoft: "#5C5049",
-  muted:   "#8C7D70",
-  line:    "#EDE3D6",
-  line2:   "#E0D4C4",
-  accent:  "#DC5A12",   // JV orange, deepened for legible UI
-  accentInk:"#B84A0E",
-  accentWash:"#FBEEE3",
-  shadow:  "0 1px 2px rgba(58,38,22,.06), 0 6px 22px -8px rgba(58,38,22,.10)",
+  paper:   "#F6F1E8",   // page background
+  surface: "#FFFFFF",   // cards
+  surface2:"#FDFAF4",   // warm inset panel
+  ink:     "#2C2621",   // primary text / headings
+  inkSoft: "#5A4A3B",   // secondary text
+  muted:   "#7A6F63",   // soft labels
+  faint:   "#A89C8D",   // faint captions
+  line:    "#ECE2D2",   // hairlines
+  line2:   "#E2D3C2",   // stronger borders
+  accent:  "#E0863C",   // amber — actions only
+  accentInk:"#B96524",  // deep amber — accent text / hover
+  accentWash:"#FBEFE4", // faint accent tint
+  shadow:  "0 1px 2px rgba(58,38,22,.05), 0 6px 22px -10px rgba(58,38,22,.12)",
 };
 
-// ── Status colors (Concern / Watch / Healthy) ────────────────────────────────
-export const STATUS_COLOR  = { Concern:"#BE3B2E", Watch:"#A96A12", Healthy:"#1F7A44", null:"#8C7D70" };
-export const STATUS_BG     = { Concern:"#FBE9E6", Watch:"#FBF0DC", Healthy:"#E7F3EC", null:"#F5EFE6" };
-export const STATUS_BORDER = { Concern:"#EEC7C1", Watch:"#EAD5AC", Healthy:"#BFE0CC", null:"#E0D4C4" };
+// ── Status colors (Concern / Watch / Healthy) — sage / amber / terracotta ─────
+export const STATUS_COLOR  = { Concern:"#BE6650", Watch:"#C08636", Healthy:"#5C9A6D", null:"#7A6F63" };
+export const STATUS_BG     = { Concern:"#F6E5DE", Watch:"#F7EEDC", Healthy:"#E9F1E9", null:"#FDFAF4" };
+export const STATUS_BORDER = { Concern:"#E4C4BA", Watch:"#E2CDA0", Healthy:"#C3DCC8", null:"#E2D3C2" };
 export const sc  = s => STATUS_COLOR[s]  || STATUS_COLOR[null];
 export const sb  = s => STATUS_BG[s]     || STATUS_BG[null];
 export const sbd = s => STATUS_BORDER[s] || STATUS_BORDER[null];

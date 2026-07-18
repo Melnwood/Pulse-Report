@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useIsMobile, sc, sb, sbd, card, navBtn, lbl, inp, C } from "./theme";
+import { useIsMobile, sc, sb, sbd, card, navBtn, lbl, inp, C, FONT_DISPLAY } from "./theme";
 import Disclosure from "./components/Disclosure";
 import { VisibilityPicker, VisibilityChip } from "./components/Visibility";
 import { IconHelp, IconUpload } from "./components/Icons";
@@ -1273,8 +1273,8 @@ export default function App() {
 
   // ── AUTH GATE ── (only intercepts when login is switched on)
   if (authGate === "checking") return (
-    <div style={{ minHeight:"100vh", background:"#FAF6F0", fontFamily:"'Inter',system-ui,sans-serif",
-      display:"flex", alignItems:"center", justifyContent:"center", color:"#8C7D70", fontSize:14 }}>Loading…</div>
+    <div style={{ minHeight:"100vh", background:"#F6F1E8", fontFamily:"'Inter',system-ui,sans-serif",
+      display:"flex", alignItems:"center", justifyContent:"center", color:"#7A6F63", fontSize:14 }}>Loading…</div>
   );
   if (authGate === "needLogin") return (
     <Login onLogin={(u) => { setAuthUser(u); setAuthGate("authed"); }} />
@@ -1383,40 +1383,40 @@ function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin, authUser, onSig
   // With login on, show only the sections this role can use; otherwise show all.
   const cards = authRole ? allCards.filter(c => c.roles.includes(authRole)) : allCards;
   return (
-    <div style={{ minHeight:"100vh", background:"#FBF7F2", padding: isMobile ? "28px 16px" : "40px 24px" }}>
+    <div style={{ minHeight:"100vh", background:"#F6F1E8", padding: isMobile ? "28px 16px" : "40px 24px" }}>
       <div style={{ maxWidth:900, margin:"0 auto" }}>
         <div style={{ display:"flex", alignItems:"baseline", gap:12, marginBottom:4, flexWrap:"wrap" }}>
-          <span style={{ fontSize:24, fontWeight:800, color:"#1E1B3A" }}>JV Pulse</span>
-          <span style={{ fontSize:14, color:"#9C8F82" }}>People & Culture</span>
+          <span style={{ fontFamily:FONT_DISPLAY, fontSize:26, fontWeight:600, color:"#2C2621", letterSpacing:-.2 }}>JV Pulse</span>
+          <span style={{ fontSize:14, color:"#7A6F63" }}>People & Culture</span>
           <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:12 }}>
             {authUser && (
-              <span style={{ fontSize:12, color:"#8C7D70" }}>
+              <span style={{ fontSize:12, color:"#7A6F63" }}>
                 {authUser.name} · <button onClick={onSignOut}
-                  style={{ background:"none", border:"none", padding:0, cursor:"pointer", color:"#B84A0E", fontWeight:600, fontSize:12 }}>Sign out</button>
+                  style={{ background:"none", border:"none", padding:0, cursor:"pointer", color:"#B96524", fontWeight:600, fontSize:12 }}>Sign out</button>
               </span>
             )}
             {!authUser && (
               <button onClick={toggleAdmin} title="Admin tools for Mel & Chris"
-                style={{ fontSize:12, color: isAdmin ? "#2E7D32" : "#B4A897",
+                style={{ fontSize:12, color: isAdmin ? "#5C9A6D" : "#A89C8D",
                   background:"transparent", border:"none", cursor:"pointer" }}>
                 {isAdmin ? "🔓 admin" : "🔒"}
               </button>
             )}
           </div>
         </div>
-        <div style={{ fontSize:14, color:"#7A6E62", marginBottom:28 }}>Where would you like to go?</div>
+        <div style={{ fontSize:14, color:"#7A6F63", marginBottom:28 }}>Where would you like to go?</div>
 
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(240px, 1fr))", gap:16 }}>
           {cards.map(c => (
             <button key={c.key} onClick={() => setView(c.to)}
-              style={{ textAlign:"left", background:"#fff", border:"1px solid #EFE3D6", borderRadius:14,
+              style={{ textAlign:"left", background:"#fff", border:"1px solid #ECE2D2", borderRadius:14,
                 padding:"22px 20px", cursor:"pointer", transition:"border-color .15s",
                 display:"flex", flexDirection:"column", gap:8, minHeight:130 }}
-              onMouseEnter={e => e.currentTarget.style.borderColor = "#E8834A"}
-              onMouseLeave={e => e.currentTarget.style.borderColor = "#EFE3D6"}>
-              <span style={{ fontSize:17, fontWeight:700, color:"#1E1B3A" }}>{c.title}</span>
-              <span style={{ fontSize:13, color:"#7A6E62", lineHeight:1.5 }}>{c.blurb}</span>
-              <span style={{ marginTop:"auto", fontSize:13, fontWeight:600, color:"#DC5A12" }}>Open →</span>
+              onMouseEnter={e => e.currentTarget.style.borderColor = "#E0863C"}
+              onMouseLeave={e => e.currentTarget.style.borderColor = "#ECE2D2"}>
+              <span style={{ fontSize:17, fontWeight:700, color:"#2C2621" }}>{c.title}</span>
+              <span style={{ fontSize:13, color:"#7A6F63", lineHeight:1.5 }}>{c.blurb}</span>
+              <span style={{ marginTop:"auto", fontSize:13, fontWeight:600, color:"#E0863C" }}>Open →</span>
             </button>
           ))}
         </div>
@@ -1428,13 +1428,13 @@ function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin, authUser, onSig
 // Placeholder for sections not yet built — keeps navigation coherent.
 function ComingSoonSection({ title, blurb, setView }) {
   return (
-    <div style={{ minHeight:"100vh", background:"#FBF7F2", padding:"40px 24px" }}>
+    <div style={{ minHeight:"100vh", background:"#F6F1E8", padding:"40px 24px" }}>
       <div style={{ maxWidth:720, margin:"0 auto" }}>
         <button onClick={() => setView("__back__")}
-          style={{ ...navBtn, background:"transparent", border:"1px solid #EDE3D6", marginBottom:24 }}>← Back</button>
-        <div style={{ background:"#fff", border:"1px solid #EFE3D6", borderRadius:14, padding:"36px 28px" }}>
-          <div style={{ fontSize:20, fontWeight:700, color:"#1E1B3A", marginBottom:8 }}>{title}</div>
-          <div style={{ fontSize:14, color:"#7A6E62", lineHeight:1.6 }}>{blurb}</div>
+          style={{ ...navBtn, background:"transparent", border:"1px solid #ECE2D2", marginBottom:24 }}>← Back</button>
+        <div style={{ background:"#fff", border:"1px solid #ECE2D2", borderRadius:14, padding:"36px 28px" }}>
+          <div style={{ fontSize:20, fontWeight:700, color:"#2C2621", marginBottom:8 }}>{title}</div>
+          <div style={{ fontSize:14, color:"#7A6F63", lineHeight:1.6 }}>{blurb}</div>
         </div>
       </div>
     </div>
@@ -1534,29 +1534,29 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
 
   const Tile = ({ n, label, color }) => (
     <div style={{ ...card, padding:"14px 16px", textAlign:"center", minWidth:0 }}>
-      <div style={{ fontSize:26, fontWeight:800, color: color || "#2A211C", fontVariantNumeric:"tabular-nums" }}>{n}</div>
-      <div style={{ fontSize:10.5, fontWeight:700, color:"#8C7D70", textTransform:"uppercase", letterSpacing:.6, marginTop:2 }}>{label}</div>
+      <div style={{ fontFamily:FONT_DISPLAY, fontSize:28, fontWeight:600, color: color || "#2C2621", fontVariantNumeric:"tabular-nums" }}>{n}</div>
+      <div style={{ fontSize:10.5, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:.6, marginTop:2 }}>{label}</div>
     </div>
   );
 
   return (
-    <div style={{ minHeight:"100vh", background:"#FBF7F2", padding: isMobile ? "24px 16px" : "40px 24px" }}>
+    <div style={{ minHeight:"100vh", background:"#F6F1E8", padding: isMobile ? "24px 16px" : "40px 24px" }}>
       <div style={{ maxWidth:900, margin:"0 auto" }}>
         <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:24 }}>
           <button onClick={() => setView("__back__")}
-            style={{ ...navBtn, background:"transparent", border:"1px solid #EDE3D6" }}>← Back</button>
-          <span style={{ fontSize:20, fontWeight:700, color:"#1E1B3A" }}>Leadership</span>
+            style={{ ...navBtn, background:"transparent", border:"1px solid #ECE2D2" }}>← Back</button>
+          <span style={{ fontFamily:FONT_DISPLAY, fontSize:22, fontWeight:600, color:"#2C2621" }}>Leadership</span>
           {authUser && authUser.role === "leader" && (
             <button onClick={() => setView("users")} style={{ ...navBtn, fontSize:12, padding:"6px 12px" }}>Manage people</button>
           )}
           {authUser ? (
-            <span style={{ marginLeft:"auto", fontSize:12, color:"#8C7D70" }}>
+            <span style={{ marginLeft:"auto", fontSize:12, color:"#7A6F63" }}>
               {authUser.name} · <button onClick={onSignOut}
-                style={{ background:"none", border:"none", padding:0, cursor:"pointer", color:"#B84A0E", fontWeight:600, fontSize:12 }}>Sign out</button>
+                style={{ background:"none", border:"none", padding:0, cursor:"pointer", color:"#B96524", fontWeight:600, fontSize:12 }}>Sign out</button>
             </span>
           ) : (
             <button onClick={toggleAdmin} title="Admin tools for Mel & Chris"
-              style={{ marginLeft:"auto", fontSize:12, color: isAdmin ? "#2E7D32" : "#B4A897",
+              style={{ marginLeft:"auto", fontSize:12, color: isAdmin ? "#5C9A6D" : "#A89C8D",
                 background:"transparent", border:"none", cursor:"pointer" }}>
               {isAdmin ? "🔓 admin on" : "🔒 admin off"}
             </button>
@@ -1564,14 +1564,14 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
         </div>
 
         {!isAdmin && (
-          <div style={{ background:"#FFF4EC", border:"1px solid #EDE3D6", borderRadius:12, padding:"14px 16px", marginBottom:20, fontSize:13, color:"#8A5A2B" }}>
+          <div style={{ background:"#FBEFE4", border:"1px solid #ECE2D2", borderRadius:12, padding:"14px 16px", marginBottom:20, fontSize:13, color:"#9A6B26" }}>
             Turn on admin (lock icon, top right) to upload and process a new survey.
           </div>
         )}
 
         {isAdmin && (
         <div style={{ ...card, padding:0, overflow:"hidden" }}>
-          <Disclosure title="Upload a new survey run" dot="#DC5A12"
+          <Disclosure title="Upload a new survey run" dot="#E0863C"
             count=".xlsx or .csv" defaultOpen={allRuns.length === 0}>
           <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap:16, marginBottom:24 }}>
             <div>
@@ -1588,34 +1588,34 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
 
           {generating ? (
             <div style={{ background:"#FFFFFF", borderRadius:12, padding:24, textAlign:"center" }}>
-              <div style={{ width:40, height:40, border:"3px solid #DC5A12", borderTopColor:"transparent", borderRadius:"50%", margin:"0 auto 16px", animation:"spin 1s linear infinite" }} />
-              <div style={{ color:"#1E1B3A", fontWeight:600 }}>{genProgress.step || "Processing…"}</div>
-              <div style={{ color:"#9C8F82", fontSize:12, marginTop:8 }}>This may take a minute while AI generates draft content</div>
+              <div style={{ width:40, height:40, border:"3px solid #E0863C", borderTopColor:"transparent", borderRadius:"50%", margin:"0 auto 16px", animation:"spin 1s linear infinite" }} />
+              <div style={{ color:"#2C2621", fontWeight:600 }}>{genProgress.step || "Processing…"}</div>
+              <div style={{ color:"#7A6F63", fontSize:12, marginTop:8 }}>This may take a minute while AI generates draft content</div>
             </div>
           ) : (
             <div
               onClick={() => country && year && fileRef.current?.click()}
-              onDragOver={e => { e.preventDefault(); if(country&&year) e.currentTarget.style.borderColor="#DC5A12"; }}
-              onDragLeave={e => { e.preventDefault(); e.currentTarget.style.borderColor="#EDE3D6"; }}
+              onDragOver={e => { e.preventDefault(); if(country&&year) e.currentTarget.style.borderColor="#E0863C"; }}
+              onDragLeave={e => { e.preventDefault(); e.currentTarget.style.borderColor="#ECE2D2"; }}
               onDrop={e => {
                 e.preventDefault();
-                e.currentTarget.style.borderColor="#EDE3D6";
+                e.currentTarget.style.borderColor="#ECE2D2";
                 if (!(country && year)) return;
                 const file = e.dataTransfer.files?.[0];
                 if (file) handleFile(file);
               }}
               style={{
-                border:"2px dashed #EDE3D6", borderRadius:12, padding: isMobile ? 20 : 30,
+                border:"2px dashed #ECE2D2", borderRadius:12, padding: isMobile ? 20 : 30,
                 textAlign:"center", cursor: country&&year ? "pointer":"not-allowed",
                 opacity: country&&year ? 1 : 0.5,
                 transition:"border-color 0.2s",
               }}
-              onMouseEnter={e => { if(country&&year) e.currentTarget.style.borderColor="#DC5A12"; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor="#EDE3D6"; }}
+              onMouseEnter={e => { if(country&&year) e.currentTarget.style.borderColor="#E0863C"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor="#ECE2D2"; }}
             >
               <div style={{ fontSize:32, marginBottom:12 }}>📊</div>
-              <div style={{ color:"#1E1B3A", fontWeight:600, marginBottom:4 }}>Drop QuestionPro export here, or click to browse</div>
-              <div style={{ color:"#9C8F82", fontSize:13 }}>.xlsx or .csv</div>
+              <div style={{ color:"#2C2621", fontWeight:600, marginBottom:4 }}>Drop QuestionPro export here, or click to browse</div>
+              <div style={{ color:"#7A6F63", fontSize:13 }}>.xlsx or .csv</div>
               <input ref={fileRef} type="file" accept=".xlsx,.csv" style={{ display:"none" }}
                 onChange={e => e.target.files[0] && handleFile(e.target.files[0])} />
             </div>
@@ -1627,33 +1627,33 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
         {/* ── Org overview ── */}
         {allDepts.length > 0 && (
           <div style={{ marginBottom:32 }}>
-            <div style={{ fontSize:13, fontWeight:700, color:"#8C7D70", textTransform:"uppercase", letterSpacing:2, marginBottom:14 }}>
-              Across the org <span style={{ fontWeight:500, color:"#C9BCAF", letterSpacing:0, textTransform:"none" }}>· latest pulse per country</span>
+            <div style={{ fontSize:13, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:2, marginBottom:14 }}>
+              Across the org <span style={{ fontWeight:500, color:"#A89C8D", letterSpacing:0, textTransform:"none" }}>· latest pulse per country</span>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(90px,1fr))", gap:10, marginBottom:24 }}>
               <Tile n={latestRuns.length} label={latestRuns.length===1?"Country":"Countries"} />
               <Tile n={withStatus.length} label="Departments" />
-              <Tile n={counts.Concern} label="Concern" color="#BE3B2E" />
-              <Tile n={counts.Watch} label="Watch" color="#A96A12" />
-              <Tile n={counts.Healthy} label="Healthy" color="#1F7A44" />
-              <Tile n={`${finishedCt}/${allDepts.length}`} label="Reviews done" color={finishedCt===allDepts.length?"#1F7A44":"#2A211C"} />
+              <Tile n={counts.Concern} label="Concern" color="#BE6650" />
+              <Tile n={counts.Watch} label="Watch" color="#C08636" />
+              <Tile n={counts.Healthy} label="Healthy" color="#5C9A6D" />
+              <Tile n={`${finishedCt}/${allDepts.length}`} label="Reviews done" color={finishedCt===allDepts.length?"#5C9A6D":"#2C2621"} />
             </div>
 
             {/* Needs attention — every Concern/Watch dept across all countries */}
             {attention.length > 0 && (
               <div style={{ marginBottom:24 }}>
-                <div style={{ fontSize:12, fontWeight:700, color:"#8A5A2B", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>
-                  Needs attention <span style={{ color:"#C9BCAF", fontWeight:500 }}>· {attention.length} department{attention.length===1?"":"s"}</span>
+                <div style={{ fontSize:12, fontWeight:700, color:"#9A6B26", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>
+                  Needs attention <span style={{ color:"#A89C8D", fontWeight:500 }}>· {attention.length} department{attention.length===1?"":"s"}</span>
                 </div>
                 <div style={{ ...card, padding:0, overflow:"hidden" }}>
                   {attention.map((d,i) => (
-                    <div key={`${d.country}-${d.key}-${i}`} style={{ display:"flex", alignItems:"center", gap:10, padding: isMobile?"9px 12px":"9px 14px", borderTop: i?"1px solid #F3EBE1":"none" }}>
+                    <div key={`${d.country}-${d.key}-${i}`} style={{ display:"flex", alignItems:"center", gap:10, padding: isMobile?"9px 12px":"9px 14px", borderTop: i?"1px solid #F4ECDD":"none" }}>
                       <span style={{ width:8, height:8, borderRadius:"50%", background:sc(d.status), flexShrink:0 }} />
                       <span style={{ fontFamily:"ui-monospace,Menlo,monospace", fontSize:13, fontWeight:700, color:sc(d.status), width:42, flexShrink:0 }}>{d.avg}</span>
-                      <span style={{ flex:1, fontSize:13, color:"#2A211C", minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                      <span style={{ flex:1, fontSize:13, color:"#2C2621", minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                         <b style={{ fontWeight:650 }}>{d.country}</b> · {d.label || d.key}
                       </span>
-                      {!d.reviewDone && <span style={{ fontSize:10, color:"#B7A896", flexShrink:0 }}>review pending</span>}
+                      {!d.reviewDone && <span style={{ fontSize:10, color:"#A89C8D", flexShrink:0 }}>review pending</span>}
                       <span style={{ fontSize:10, fontWeight:700, color:sc(d.status), background:sb(d.status), border:`1px solid ${sbd(d.status)}`, borderRadius:5, padding:"2px 8px", flexShrink:0 }}>{d.status}</span>
                     </div>
                   ))}
@@ -1664,27 +1664,27 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
             {/* By department across the org — spot systemic patterns */}
             {deptPattern.length > 0 && (
               <div>
-                <div style={{ fontSize:12, fontWeight:700, color:"#8C7D70", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>
+                <div style={{ fontSize:12, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>
                   By department, across countries
                 </div>
                 <div style={{ ...card, padding:0, overflow:"hidden" }}>
                   {deptPattern.map((e,i) => {
                     const total = e.Concern + e.Watch + e.Healthy || 1;
                     return (
-                      <div key={e.label+i} style={{ display:"flex", alignItems:"center", gap:12, padding: isMobile?"9px 12px":"10px 14px", borderTop: i?"1px solid #F3EBE1":"none", flexWrap:"wrap" }}>
-                        <span style={{ fontSize:13, fontWeight:650, color:"#2A211C", width: isMobile?"100%":150, flexShrink:0 }}>{e.label}</span>
-                        <div style={{ flex:1, minWidth:120, display:"flex", height:8, borderRadius:5, overflow:"hidden", background:"#F5EFE6" }}>
-                          {e.Concern>0 && <div style={{ width:`${e.Concern/total*100}%`, background:"#BE3B2E" }} />}
-                          {e.Watch>0 &&   <div style={{ width:`${e.Watch/total*100}%`, background:"#A96A12" }} />}
-                          {e.Healthy>0 && <div style={{ width:`${e.Healthy/total*100}%`, background:"#1F7A44" }} />}
+                      <div key={e.label+i} style={{ display:"flex", alignItems:"center", gap:12, padding: isMobile?"9px 12px":"10px 14px", borderTop: i?"1px solid #F4ECDD":"none", flexWrap:"wrap" }}>
+                        <span style={{ fontSize:13, fontWeight:650, color:"#2C2621", width: isMobile?"100%":150, flexShrink:0 }}>{e.label}</span>
+                        <div style={{ flex:1, minWidth:120, display:"flex", height:8, borderRadius:5, overflow:"hidden", background:"#FDFAF4" }}>
+                          {e.Concern>0 && <div style={{ width:`${e.Concern/total*100}%`, background:"#BE6650" }} />}
+                          {e.Watch>0 &&   <div style={{ width:`${e.Watch/total*100}%`, background:"#C08636" }} />}
+                          {e.Healthy>0 && <div style={{ width:`${e.Healthy/total*100}%`, background:"#5C9A6D" }} />}
                         </div>
-                        <span style={{ fontSize:11, color:"#8C7D70", fontVariantNumeric:"tabular-nums", flexShrink:0 }}>
+                        <span style={{ fontSize:11, color:"#7A6F63", fontVariantNumeric:"tabular-nums", flexShrink:0 }}>
                           {[
-                            e.Concern>0 && <b key="c" style={{ color:"#BE3B2E" }}>{e.Concern}</b>,
-                            e.Watch>0   && <b key="w" style={{ color:"#A96A12" }}>{e.Watch}</b>,
-                            e.Healthy>0 && <b key="h" style={{ color:"#1F7A44" }}>{e.Healthy}</b>,
+                            e.Concern>0 && <b key="c" style={{ color:"#BE6650" }}>{e.Concern}</b>,
+                            e.Watch>0   && <b key="w" style={{ color:"#C08636" }}>{e.Watch}</b>,
+                            e.Healthy>0 && <b key="h" style={{ color:"#5C9A6D" }}>{e.Healthy}</b>,
                           ].filter(Boolean).map((el,ix) => <span key={ix}>{ix>0 && " · "}{el}</span>)}
-                          {e.concernCountries.length>0 && <span style={{ color:"#B7A896" }}> — {e.concernCountries.join(", ")}</span>}
+                          {e.concernCountries.length>0 && <span style={{ color:"#A89C8D" }}> — {e.concernCountries.join(", ")}</span>}
                         </span>
                       </div>
                     );
@@ -1698,23 +1698,23 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
         {/* ── Top issues across the org (question level) ── */}
         {allDepts.length > 0 && (
           <div style={{ marginBottom:32 }}>
-            <div style={{ fontSize:13, fontWeight:700, color:"#8C7D70", textTransform:"uppercase", letterSpacing:2, marginBottom:14 }}>
-              Top issues <span style={{ fontWeight:500, color:"#C9BCAF", letterSpacing:0, textTransform:"none" }}>· the specific questions staff scored lowest</span>
+            <div style={{ fontSize:13, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:2, marginBottom:14 }}>
+              Top issues <span style={{ fontWeight:500, color:"#A89C8D", letterSpacing:0, textTransform:"none" }}>· the specific questions staff scored lowest</span>
             </div>
 
             {orgIssues === null ? (
-              <div style={{ ...card, color:"#8C7D70", fontSize:13, fontStyle:"italic" }}>Reading the survey responses…</div>
+              <div style={{ ...card, color:"#7A6F63", fontSize:13, fontStyle:"italic" }}>Reading the survey responses…</div>
             ) : topConcerns.length === 0 ? (
-              <div style={{ ...card, color:"#8C7D70", fontSize:13 }}>No concern- or watch-level questions across the org right now.</div>
+              <div style={{ ...card, color:"#7A6F63", fontSize:13 }}>No concern- or watch-level questions across the org right now.</div>
             ) : (
               <>
                 <div style={{ ...card, padding:0, overflow:"hidden", marginBottom: recurring.length ? 20 : 0 }}>
                   {topConcerns.map((q,i) => (
-                    <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:11, padding: isMobile?"10px 12px":"10px 14px", borderTop: i?"1px solid #F3EBE1":"none" }}>
+                    <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:11, padding: isMobile?"10px 12px":"10px 14px", borderTop: i?"1px solid #F4ECDD":"none" }}>
                       <span style={{ fontFamily:"ui-monospace,Menlo,monospace", fontSize:13, fontWeight:700, color:sc(q.status), width:42, flexShrink:0, textAlign:"right" }}>{Number(q.score).toFixed(2)}</span>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:13, color:"#2A211C", lineHeight:1.4 }}>{q.en}{q.burden && <span style={{ color:"#A96A12", fontSize:10 }}> · burden</span>}</div>
-                        <div style={{ fontSize:11, color:"#8C7D70", marginTop:2 }}><b style={{ fontWeight:650 }}>{q.country}</b> · {q.deptLabel}</div>
+                        <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.4 }}>{q.en}{q.burden && <span style={{ color:"#C08636", fontSize:10 }}> · burden</span>}</div>
+                        <div style={{ fontSize:11, color:"#7A6F63", marginTop:2 }}><b style={{ fontWeight:650 }}>{q.country}</b> · {q.deptLabel}</div>
                       </div>
                       <span style={{ fontSize:10, fontWeight:700, color:sc(q.status), background:sb(q.status), border:`1px solid ${sbd(q.status)}`, borderRadius:5, padding:"2px 8px", flexShrink:0 }}>{q.status}</span>
                     </div>
@@ -1723,17 +1723,17 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
 
                 {recurring.length > 0 && (
                   <>
-                    <div style={{ fontSize:12, fontWeight:700, color:"#8A5A2B", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>
-                      Recurring across teams <span style={{ color:"#C9BCAF", fontWeight:500 }}>· same question low in multiple places</span>
+                    <div style={{ fontSize:12, fontWeight:700, color:"#9A6B26", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>
+                      Recurring across teams <span style={{ color:"#A89C8D", fontWeight:500 }}>· same question low in multiple places</span>
                     </div>
                     <div style={{ ...card, padding:0, overflow:"hidden" }}>
                       {recurring.map((e,i) => (
-                        <div key={i} style={{ padding: isMobile?"10px 12px":"10px 14px", borderTop: i?"1px solid #F3EBE1":"none" }}>
+                        <div key={i} style={{ padding: isMobile?"10px 12px":"10px 14px", borderTop: i?"1px solid #F4ECDD":"none" }}>
                           <div style={{ display:"flex", alignItems:"baseline", gap:10 }}>
-                            <span style={{ fontSize:11, fontWeight:800, color:"#8A5A2B", flexShrink:0 }}>{e.where.length} teams</span>
-                            <span style={{ fontSize:13, color:"#2A211C", lineHeight:1.4 }}>{e.en}</span>
+                            <span style={{ fontSize:11, fontWeight:800, color:"#9A6B26", flexShrink:0 }}>{e.where.length} teams</span>
+                            <span style={{ fontSize:13, color:"#2C2621", lineHeight:1.4 }}>{e.en}</span>
                           </div>
-                          <div style={{ fontSize:11, color:"#8C7D70", marginTop:3 }}>{e.where.join("  ·  ")}</div>
+                          <div style={{ fontSize:11, color:"#7A6F63", marginTop:3 }}>{e.where.join("  ·  ")}</div>
                         </div>
                       ))}
                     </div>
@@ -1752,12 +1752,12 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
             Updates automatically; leaders can't change state from here. */}
         <div style={{ marginTop:28 }}>
           <div style={{ display:"flex", alignItems:"baseline", gap:10, marginBottom:14, flexWrap:"wrap" }}>
-            <span style={{ fontSize:13, fontWeight:700, color:"#8C7D70", textTransform:"uppercase", letterSpacing:2 }}>Director Review Progress</span>
-            <span style={{ fontSize:11, color:"#C9BCAF" }}>updates automatically · click a run to open it</span>
+            <span style={{ fontSize:13, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:2 }}>Director Review Progress</span>
+            <span style={{ fontSize:11, color:"#A89C8D" }}>updates automatically · click a run to open it</span>
           </div>
 
           {(!allRuns || allRuns.length === 0) ? (
-            <div style={{ ...card, color:"#9C8F82", fontSize:14 }}>
+            <div style={{ ...card, color:"#7A6F63", fontSize:14 }}>
               {runsLoading ? "Loading runs…" : "No runs yet. Upload a survey above to start a director review."}
             </div>
           ) : (() => {
@@ -1784,8 +1784,8 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
                   return (
                     <div key={cty}>
                       <div style={{ display:"flex", alignItems:"baseline", gap:10, marginBottom:10, flexWrap:"wrap" }}>
-                        <span style={{ fontSize:16, fontWeight:800, color:"#1E1B3A" }}>{cty}</span>
-                        <span style={{ fontSize:12, color:"#9C8F82" }}>{cruns.length} run{cruns.length>1?"s":""} · {readyCount} ready</span>
+                        <span style={{ fontSize:16, fontWeight:800, color:"#2C2621" }}>{cty}</span>
+                        <span style={{ fontSize:12, color:"#7A6F63" }}>{cruns.length} run{cruns.length>1?"s":""} · {readyCount} ready</span>
                       </div>
                       <div style={{ display:"grid", gap:14 }}>
                         {cruns.map(run => {
@@ -1797,20 +1797,20 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
                             <div key={`${run.country}-${run.year}`}
                               onClick={() => openRun && openRun(run)}
                               title={openRun ? "Open this run's review" : undefined}
-                              onMouseEnter={e => { if (openRun) e.currentTarget.style.borderColor = "#DC5A12"; }}
-                              onMouseLeave={e => { e.currentTarget.style.borderColor = allDone ? "#A5D6A7" : "#EFE3D6"; }}
+                              onMouseEnter={e => { if (openRun) e.currentTarget.style.borderColor = "#E0863C"; }}
+                              onMouseLeave={e => { e.currentTarget.style.borderColor = allDone ? "#AFD8BB" : "#ECE2D2"; }}
                               style={{ ...card, cursor: openRun ? "pointer" : "default", transition:"border-color .12s",
-                              border: `1px solid ${allDone ? "#A5D6A7" : "#EFE3D6"}`,
-                              background: allDone ? "#F5FBF6" : "#FFFFFF", padding: isMobile ? 16 : 20 }}>
+                              border: `1px solid ${allDone ? "#AFD8BB" : "#ECE2D2"}`,
+                              background: allDone ? "#E9F1E9" : "#FFFFFF", padding: isMobile ? 16 : 20 }}>
                               <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom: total>0?10:0, flexWrap:"wrap" }}>
-                                <span style={{ fontSize:17, fontWeight:700, color:"#1E1B3A" }}>{run.year}</span>
+                                <span style={{ fontSize:17, fontWeight:700, color:"#2C2621" }}>{run.year}</span>
                                 <span style={{ marginLeft:"auto", fontSize:12, fontWeight:700, borderRadius:20, padding:"3px 12px",
-                                  color: allDone ? "#1E8449" : "#8A5A2B",
-                                  background: allDone ? "#E6F6EC" : "#FAEEDA",
-                                  border: `1px solid ${allDone ? "#A5D6A7" : "#F0DCC9"}` }}>
+                                  color: allDone ? "#5C9A6D" : "#9A6B26",
+                                  background: allDone ? "#E9F1E9" : "#F7EEDC",
+                                  border: `1px solid ${allDone ? "#AFD8BB" : "#F7EEDC"}` }}>
                                   {total === 0 ? "No departments yet" : allDone ? `${done} / ${total} · ready ✓` : `${done} / ${total} finished`}
                                 </span>
-                                {openRun && <span style={{ color:"#B7A896", fontSize:15, fontWeight:700 }} aria-hidden="true">→</span>}
+                                {openRun && <span style={{ color:"#A89C8D", fontSize:15, fontWeight:700 }} aria-hidden="true">→</span>}
                               </div>
                               {total > 0 && (
                                 // Compact horizontal strip — one initials chip per
@@ -1822,9 +1822,9 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
                                       style={{ display:"inline-flex", alignItems:"center", gap:5,
                                         padding:"2px 7px", borderRadius:5, lineHeight:1.7,
                                         fontSize:11, fontWeight:700, letterSpacing:.2,
-                                        color: d.reviewDone ? "#1F7A44" : "#8C7D70",
-                                        background: d.reviewDone ? "#E7F3EC" : "#F7F2EA",
-                                        border: `1px solid ${d.reviewDone ? "#BFE0CC" : "#E7DBCB"}` }}>
+                                        color: d.reviewDone ? "#5C9A6D" : "#7A6F63",
+                                        background: d.reviewDone ? "#E9F1E9" : "#F6F1E8",
+                                        border: `1px solid ${d.reviewDone ? "#C3DCC8" : "#ECE2D2"}` }}>
                                       <span style={{ width:5, height:5, borderRadius:"50%", background:sc(d.status), flexShrink:0 }} />
                                       {deptAbbr(d)}
                                       {d.reviewDone && <span style={{ fontSize:9 }}>✓</span>}
@@ -1938,29 +1938,29 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
   const featured = sortedByRecent.find(r => !isFinished(r)) || sortedByRecent[0] || null;
 
   return (
-    <div style={{ minHeight:"100vh", background:"#F8F7F4", fontFamily:"'Inter',system-ui,sans-serif" }}>
+    <div style={{ minHeight:"100vh", background:"#F6F1E8", fontFamily:"'Inter',system-ui,sans-serif" }}>
       {/* Header */}
-      <div style={{ background:"linear-gradient(135deg,#FFFFFF 0%,#F8F7F4 100%)", borderBottom:"1px solid #FFEBDA", padding: isMobile ? "16px" : "24px 40px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
+      <div style={{ background:"linear-gradient(135deg,#FFFFFF 0%,#F6F1E8 100%)", borderBottom:"1px solid #F7E7D5", padding: isMobile ? "16px" : "24px 40px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
         <div>
-          <div style={{ fontSize:11, letterSpacing:3, color:"#DC5A12", fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>Josiah Venture</div>
-          <div style={{ fontSize:22, fontWeight:700, color:"#1E1B3A" }}>Pulse Report Platform</div>
+          <div style={{ fontSize:11, letterSpacing:3, color:"#E0863C", fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>Josiah Venture</div>
+          <div style={{ fontFamily:FONT_DISPLAY, fontSize:24, fontWeight:600, color:"#2C2621" }}>Pulse Report Platform</div>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <button onClick={() => setView("__back__")} style={{ ...navBtn, background:"transparent", border:"1px solid #EDE3D6" }}>← Back</button>
+          <button onClick={() => setView("__back__")} style={{ ...navBtn, background:"transparent", border:"1px solid #ECE2D2" }}>← Back</button>
           <button onClick={() => setView("dashboard")} style={navBtn}>
             P&C Dashboard
           </button>
           {authUser ? (
-            <span style={{ fontSize:12, color:"#8C7D70", whiteSpace:"nowrap" }}>
+            <span style={{ fontSize:12, color:"#7A6F63", whiteSpace:"nowrap" }}>
               {authUser.name} · <button onClick={onSignOut}
-                style={{ background:"none", border:"none", padding:0, cursor:"pointer", color:"#B84A0E", fontWeight:600, fontSize:12 }}>Sign out</button>
+                style={{ background:"none", border:"none", padding:0, cursor:"pointer", color:"#B96524", fontWeight:600, fontSize:12 }}>Sign out</button>
             </span>
           ) : (
             /* Discreet admin toggle — only Mel & Chris use this (auth-off only). */
             <button onClick={toggleAdmin}
               title={isAdmin ? "Admin mode ON — click to hide admin tools" : "Admin mode"}
               style={{ background:"transparent", border:"none", cursor:"pointer",
-                fontSize:16, color: isAdmin ? "#DC5A12" : "#EAD9C9", padding:"4px 8px", lineHeight:1 }}>
+                fontSize:16, color: isAdmin ? "#E0863C" : "#EAD9C9", padding:"4px 8px", lineHeight:1 }}>
               {isAdmin ? "🔓" : "🔒"}
             </button>
           )}
@@ -1973,17 +1973,17 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 
         {/* Featured — continue the latest unfinished review, click a department to open its page */}
         {featured && (
-          <div style={{ ...card, padding:"22px 24px", marginBottom:28, border:"1px solid #FFD9BE" }}>
+          <div style={{ ...card, padding:"22px 24px", marginBottom:28, border:"1px solid #F5DCC4" }}>
             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
-              <span style={{ fontSize:11, fontWeight:700, color:"#DC5A12", textTransform:"uppercase", letterSpacing:2 }}>Continue the review</span>
+              <span style={{ fontSize:11, fontWeight:700, color:"#E0863C", textTransform:"uppercase", letterSpacing:2 }}>Continue the review</span>
               {!isFinished(featured) && (
-                <span style={{ fontSize:11, fontWeight:700, color:"#854F0B", background:"#FAEEDA", borderRadius:4, padding:"2px 8px" }}>In progress</span>
+                <span style={{ fontSize:11, fontWeight:700, color:"#9A6B26", background:"#F7EEDC", borderRadius:4, padding:"2px 8px" }}>In progress</span>
               )}
             </div>
-            <div style={{ fontSize:20, fontWeight:700, color:"#1E1B3A", marginBottom:2 }}>{featured.country} — {featured.year}</div>
-            <div style={{ fontSize:13, color:"#9C8F82", marginBottom:16 }}>{featured.depts?.length || 0} departments</div>
+            <div style={{ fontFamily:FONT_DISPLAY, fontSize:22, fontWeight:600, color:"#2C2621", marginBottom:2 }}>{featured.country} — {featured.year}</div>
+            <div style={{ fontSize:13, color:"#7A6F63", marginBottom:16 }}>{featured.depts?.length || 0} departments</div>
 
-            <button onClick={() => openRun(featured)} style={{ ...navBtn, background:"#DC5A12", color:"#fff" }}>
+            <button onClick={() => openRun(featured)} style={{ ...navBtn, background:"#E0863C", color:"#fff" }}>
               Open review →
             </button>
           </div>
@@ -1991,7 +1991,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 
         {/* Empty state — never leave the body blank */}
         {allRuns.length === 0 && !generating && (
-          <div style={{ textAlign:"center", color:"#9C8F82", padding:"48px 24px", fontSize:14 }}>
+          <div style={{ textAlign:"center", color:"#7A6F63", padding:"48px 24px", fontSize:14 }}>
             {runsLoading
               ? "Loading reports…"
               : isAdmin
@@ -2003,13 +2003,13 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
         {/* Previous runs */}
         {allRuns.length > 0 && (
           <div style={{ marginTop:32 }}>
-            <div style={{ fontSize:13, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Previous Runs</div>
+            <div style={{ fontSize:13, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Previous Runs</div>
             <div style={{ display:"grid", gap:12 }}>
               {allRuns.slice().reverse().map(run => (
                 <div key={run.id} style={{ ...card, display:"flex", flexDirection: isMobile ? "column" : "row", justifyContent:"space-between", alignItems: isMobile ? "stretch" : "center", gap: isMobile ? 12 : 0, padding:"16px 20px" }}>
                   <div>
-                    <div style={{ color:"#1E1B3A", fontWeight:600 }}>{run.country} — {run.year}</div>
-                    <div style={{ color:"#9C8F82", fontSize:12, marginTop:2 }}>{run.depts?.length} departments · {new Date(run.savedAt).toLocaleDateString()}</div>
+                    <div style={{ color:"#2C2621", fontWeight:600 }}>{run.country} — {run.year}</div>
+                    <div style={{ color:"#7A6F63", fontSize:12, marginTop:2 }}>{run.depts?.length} departments · {new Date(run.savedAt).toLocaleDateString()}</div>
                   </div>
                   <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                     {run.depts?.slice(0,5).map(d => (
@@ -2020,7 +2020,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
                   </div>
                   <div style={{ display:"flex", gap:8 }}>
                     <button style={navBtn} onClick={() => openRun(run)}>Open</button>
-                    {isAdmin && <button style={{ ...navBtn, background:"#C0392B", color:"white" }} onClick={() => {
+                    {isAdmin && <button style={{ ...navBtn, background:"#BE6650", color:"white" }} onClick={() => {
                       const rc = run.country;
                       const ry = run.year;
                       const ri = run.id;
@@ -2078,17 +2078,17 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
   const dept = depts.find(d=>d.key===activeDept);
 
   return (
-    <div style={{ height: isMobile ? "auto" : "100vh", minHeight:"100vh", background:"#F8F7F4", fontFamily:"'Inter',system-ui,sans-serif", display:"flex", flexDirection:"column", overflow: isMobile ? "visible" : "hidden" }}>
+    <div style={{ height: isMobile ? "auto" : "100vh", minHeight:"100vh", background:"#F6F1E8", fontFamily:"'Inter',system-ui,sans-serif", display:"flex", flexDirection:"column", overflow: isMobile ? "visible" : "hidden" }}>
       {/* Top bar — on desktop it stays fixed at the top while only the content pane scrolls, keeping the action buttons (Translate, Import, Save, Generate) visible; on mobile it scrolls with the page since the whole shell scrolls normally */}
-      <div style={{ background:"#FFFFFF", borderBottom:"1px solid #EDE3D6", padding: isMobile ? "12px 14px" : "14px 24px", display:"flex", alignItems:"center", gap: isMobile ? 8 : 16, flexShrink:0, zIndex:100, flexWrap:"wrap" }}>
-        <button onClick={()=>setView("__back__")} style={{ ...navBtn, background:"transparent", border:"1px solid #EDE3D6" }}>← Back</button>
+      <div style={{ background:"#FFFFFF", borderBottom:"1px solid #ECE2D2", padding: isMobile ? "12px 14px" : "14px 24px", display:"flex", alignItems:"center", gap: isMobile ? 8 : 16, flexShrink:0, zIndex:100, flexWrap:"wrap" }}>
+        <button onClick={()=>setView("__back__")} style={{ ...navBtn, background:"transparent", border:"1px solid #ECE2D2" }}>← Back</button>
         <div style={{ flex:1 }}>
-          <span style={{ color:"#DC5A12", fontWeight:700, fontSize:13 }}>{country} {year}</span>
-          <span style={{ color:"#9C8F82", marginLeft:8, fontSize:13 }}>Director Review</span>
-          {cloudLoading && <span style={{ color:"#DC5A12", marginLeft:10, fontSize:11, fontStyle:"italic" }}>☁ syncing…</span>}
+          <span style={{ color:"#E0863C", fontWeight:700, fontSize:13 }}>{country} {year}</span>
+          <span style={{ color:"#7A6F63", marginLeft:8, fontSize:13 }}>Director Review</span>
+          {cloudLoading && <span style={{ color:"#E0863C", marginLeft:10, fontSize:11, fontStyle:"italic" }}>☁ syncing…</span>}
         </div>
         <button onClick={()=>setShowHelp(true)} style={{ ...navBtn, display:"inline-flex", alignItems:"center", gap:6, background:"white",
-          border:"1px solid #EDE3D6", color:"#DC5A12", fontWeight:700 }}>
+          border:"1px solid #ECE2D2", color:"#E0863C", fontWeight:700 }}>
           <IconHelp/> How scoring works
         </button>
         <input ref={importInputRef} type="file" accept=".xlsx" style={{ display:"none" }}
@@ -2136,28 +2136,28 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
           }} />
         {isAdmin && (<>
         <button onClick={() => importInputRef.current?.click()}
-          style={{ ...navBtn, display:"inline-flex", alignItems:"center", gap:6, background:"white", border:"1px solid #EDE3D6", color:"#1E1B3A" }}>
+          style={{ ...navBtn, display:"inline-flex", alignItems:"center", gap:6, background:"white", border:"1px solid #ECE2D2", color:"#2C2621" }}>
           <IconUpload/> Import director review (Excel)
         </button>
         </>)}
         {/* Quiet auto-sync indicator — replaces the manual push and save buttons.
             Edits save themselves; this just reassures the user it's handled. */}
         <span style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12,
-          color: syncStatus==="error" ? "#C0392B" : "#9C8F82", padding:"0 8px", whiteSpace:"nowrap" }}>
+          color: syncStatus==="error" ? "#BE6650" : "#7A6F63", padding:"0 8px", whiteSpace:"nowrap" }}>
           {syncStatus==="saving" && <>☁ Saving…</>}
-          {syncStatus==="saved"  && <span style={{ color:"#1E8449" }}>✓ Saved</span>}
+          {syncStatus==="saved"  && <span style={{ color:"#5C9A6D" }}>✓ Saved</span>}
           {syncStatus==="error"  && <>⚠ Sync failed — will retry on next edit</>}
-          {syncStatus==="idle"   && <span style={{ color:"#C9BCAF" }}>✓ All changes saved</span>}
+          {syncStatus==="idle"   && <span style={{ color:"#A89C8D" }}>✓ All changes saved</span>}
         </span>
         {isAdmin && (
-        <button onClick={()=>setView("report")} style={{ ...navBtn, background:"#DC5A12" }}>
+        <button onClick={()=>setView("report")} style={{ ...navBtn, background:"#E0863C" }}>
           Generate Report →
         </button>
         )}
         {authUser ? (
-          <span style={{ marginLeft:"auto", fontSize:12, color:"#8C7D70", whiteSpace:"nowrap" }}>
+          <span style={{ marginLeft:"auto", fontSize:12, color:"#7A6F63", whiteSpace:"nowrap" }}>
             {authUser.name} · <button onClick={onSignOut}
-              style={{ background:"none", border:"none", padding:0, cursor:"pointer", color:"#B84A0E", fontWeight:600, fontSize:12 }}>Sign out</button>
+              style={{ background:"none", border:"none", padding:0, cursor:"pointer", color:"#B96524", fontWeight:600, fontSize:12 }}>Sign out</button>
           </span>
         ) : (
           /* Discreet admin toggle — only Mel & Chris use this (auth-off only). */
@@ -2165,7 +2165,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
             onClick={toggleAdmin}
             title={isAdmin ? "Admin mode ON — click to hide admin tools" : "Admin mode"}
             style={{ marginLeft:"auto", background:"transparent", border:"none", cursor:"pointer",
-              fontSize:14, color: isAdmin ? "#DC5A12" : "#EAD9C9", padding:"4px 8px", lineHeight:1 }}>
+              fontSize:14, color: isAdmin ? "#E0863C" : "#EAD9C9", padding:"4px 8px", lineHeight:1 }}>
             {isAdmin ? "🔓" : "🔒"}
           </button>
         )}
@@ -2176,19 +2176,19 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
       {importMsg && (
         <div style={{ margin:"12px 20px", padding:"12px 16px", borderRadius:8, flexShrink:0,
           maxHeight:"30vh", overflowY:"auto",
-          background: importMsg.status==="error" ? "#FDF2F2" : importMsg.status==="done" ? "#F0FDF4" : "#FFF4EC",
-          border: `1px solid ${importMsg.status==="error" ? "#FCA5A5" : importMsg.status==="done" ? "#86EFAC" : "#EDE3D6"}` }}>
+          background: importMsg.status==="error" ? "#F6E5DE" : importMsg.status==="done" ? "#E9F1E9" : "#FBEFE4",
+          border: `1px solid ${importMsg.status==="error" ? "#E2B3A8" : importMsg.status==="done" ? "#AFD8BB" : "#ECE2D2"}` }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
-            <div style={{ fontSize:12, lineHeight:1.6, color:"#1E1B3A" }}>
+            <div style={{ fontSize:12, lineHeight:1.6, color:"#2C2621" }}>
               {importMsg.lines.map((l,i) => (
                 <div key={i} style={{ fontWeight: i===0 ? 700 : 400 }}>{l}</div>
               ))}
             </div>
             <button onClick={()=>setImportMsg(null)} style={{ background:"none", border:"none",
-              cursor:"pointer", color:"#9C8F82", fontSize:16, lineHeight:1 }}>×</button>
+              cursor:"pointer", color:"#7A6F63", fontSize:16, lineHeight:1 }}>×</button>
           </div>
           {importMsg.status==="done" && (
-            <div style={{ fontSize:11, color:"#166534", marginTop:8 }}>
+            <div style={{ fontSize:11, color:"#3E7A50", marginTop:8 }}>
               Review the imported edits in each department below, then generate the report when ready.
             </div>
           )}
@@ -2197,20 +2197,20 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
 
       <div style={{ display:"flex", flex:1, overflow: isMobile ? "visible" : "hidden" }}>
         {/* Sidebar — hidden on mobile; a full-width department dropdown (below) replaces it */}
-        <div style={{ display: isMobile ? "none" : "block", width:220, background:"#FFFFFF", borderRight:"1px solid #EDE3D6", overflowY:"auto", flexShrink:0 }}>
+        <div style={{ display: isMobile ? "none" : "block", width:220, background:"#FFFFFF", borderRight:"1px solid #ECE2D2", overflowY:"auto", flexShrink:0 }}>
           {depts.map(d => (
             <button key={d.key} onClick={()=>setActiveDept(d.key)}
               style={{
                 display:"block", width:"100%", textAlign:"left",
-                padding:"12px 16px", background: activeDept===d.key ? "#F8F7F4" : "transparent",
-                border:"none", borderLeft: activeDept===d.key ? "3px solid #DC5A12" : "3px solid transparent",
+                padding:"12px 16px", background: activeDept===d.key ? "#F6F1E8" : "transparent",
+                border:"none", borderLeft: activeDept===d.key ? "3px solid #E0863C" : "3px solid transparent",
                 cursor:"pointer",
               }}>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                 <span style={{ width:8, height:8, borderRadius:"50%", background:sc(d.status), flexShrink:0 }} />
-                <span style={{ color: activeDept===d.key ? "#1E1B3A":"#7A6E62", fontSize:13, fontWeight: activeDept===d.key?600:400 }}>{d.label}</span>
+                <span style={{ color: activeDept===d.key ? "#2C2621":"#7A6F63", fontSize:13, fontWeight: activeDept===d.key?600:400 }}>{d.label}</span>
               </div>
-              <div style={{ color:"#8A7A6B", fontSize:11, marginLeft:16, marginTop:2 }}>{d.avg} · {d.n} respondents</div>
+              <div style={{ color:"#7A6F63", fontSize:11, marginLeft:16, marginTop:2 }}>{d.avg} · {d.n} respondents</div>
             </button>
           ))}
         </div>
@@ -2223,11 +2223,11 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
             const finishedCount = depts.filter(d => d.reviewDone).length;
             const allDone = finishedCount === depts.length;
             return (
-              <div style={{ background:"#FFFFFF", border:`1px solid ${allDone ? "#A5D6A7" : "#EFE3D6"}`,
+              <div style={{ background:"#FFFFFF", border:`1px solid ${allDone ? "#AFD8BB" : "#ECE2D2"}`,
                 borderRadius:12, padding: isMobile ? "12px 14px" : "14px 18px", marginBottom:16 }}>
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, marginBottom:10, flexWrap:"wrap" }}>
-                  <span style={{ fontSize:12, fontWeight:700, color:"#8A5A2B", textTransform:"uppercase", letterSpacing:1.5 }}>Review progress</span>
-                  <span style={{ fontSize:13, fontWeight:700, color: allDone ? "#1E8449" : "#9C8F82" }}>
+                  <span style={{ fontSize:12, fontWeight:700, color:"#9A6B26", textTransform:"uppercase", letterSpacing:1.5 }}>Review progress</span>
+                  <span style={{ fontSize:13, fontWeight:700, color: allDone ? "#5C9A6D" : "#7A6F63" }}>
                     {finishedCount} / {depts.length} finished{allDone ? " — ready to review ✓" : ""}
                   </span>
                 </div>
@@ -2241,9 +2241,9 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
                       style={{ display:"inline-flex", alignItems:"center", gap:5,
                         padding:"2px 7px", borderRadius:5, lineHeight:1.7,
                         fontSize:11, fontWeight:700, letterSpacing:.2,
-                        color: d.reviewDone ? "#1F7A44" : "#8C7D70",
-                        background: d.reviewDone ? "#E7F3EC" : "#F7F2EA",
-                        border:`1px solid ${d.reviewDone ? "#BFE0CC" : "#E7DBCB"}` }}>
+                        color: d.reviewDone ? "#5C9A6D" : "#7A6F63",
+                        background: d.reviewDone ? "#E9F1E9" : "#F6F1E8",
+                        border:`1px solid ${d.reviewDone ? "#C3DCC8" : "#ECE2D2"}` }}>
                       <span style={{ width:5, height:5, borderRadius:"50%", background:sc(d.status), flexShrink:0 }} />
                       {deptAbbr(d)}
                       {d.reviewDone && <span style={{ fontSize:9 }}>✓</span>}
@@ -2259,27 +2259,27 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
               value={activeDept || ""}
               onChange={e => setActiveDept(e.target.value)}
               style={{ width:"100%", marginBottom:16, padding:"12px 14px", fontSize:15,
-                fontWeight:600, color:"#1E1B3A", background:"#FFFFFF",
-                border:"1px solid #F0DCC9", borderRadius:10, appearance:"menulist" }}>
+                fontWeight:600, color:"#2C2621", background:"#FFFFFF",
+                border:"1px solid #F7EEDC", borderRadius:10, appearance:"menulist" }}>
               {depts.map(d => (
                 <option key={d.key} value={d.key}>{d.label} — {d.status} · {d.avg} avg</option>
               ))}
             </select>
           )}
           {dept && (
-            <div style={{ marginBottom:18, borderBottom:"1px solid #EFE3D6" }}>
+            <div style={{ marginBottom:18, borderBottom:"1px solid #ECE2D2" }}>
               <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12, flexWrap:"wrap" }}>
-                <span style={{ fontSize:20, fontWeight:700, color:"#1E1B3A" }}>{dept.label}</span>
-                <span style={{ fontSize:12, color:"#9C8F82" }}>{country} {year}</span>
+                <span style={{ fontFamily:FONT_DISPLAY, fontSize:22, fontWeight:600, color:"#2C2621" }}>{dept.label}</span>
+                <span style={{ fontSize:12, color:"#7A6F63" }}>{country} {year}</span>
                 {/* The director marks THEIR department done here; only editable by
                     whoever owns it (or a leader). */}
                 {canEdit(dept.key) && (
                   <button onClick={() => toggleDeptFinished(dept.key)}
                     style={{ marginLeft: isMobile ? 0 : "auto", fontSize:13, fontWeight:700, cursor:"pointer",
                       borderRadius:8, padding:"8px 14px", minHeight:38,
-                      color: dept.reviewDone ? "#1F7A44" : "#fff",
-                      background: dept.reviewDone ? "#E7F3EC" : "#1F7A44",
-                      border: `1px solid ${dept.reviewDone ? "#BFE0CC" : "#1F7A44"}` }}>
+                      color: dept.reviewDone ? "#5C9A6D" : "#fff",
+                      background: dept.reviewDone ? "#E9F1E9" : "#5C9A6D",
+                      border: `1px solid ${dept.reviewDone ? "#C3DCC8" : "#5C9A6D"}` }}>
                     {dept.reviewDone ? "✓ Finished · Reopen" : "✓ Mark finished"}
                   </button>
                 )}
@@ -2288,8 +2288,8 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
                 {["review","notes"].map(tab => (
                   <button key={tab} onClick={() => setDeptTab(tab)}
                     style={{ fontSize:13, fontWeight:600, padding:"8px 16px", border:"none", cursor:"pointer",
-                      background:"transparent", color: deptTab===tab ? "#DC5A12" : "#8A7A6B",
-                      borderBottom: deptTab===tab ? "2px solid #DC5A12" : "2px solid transparent" }}>
+                      background:"transparent", color: deptTab===tab ? "#E0863C" : "#7A6F63",
+                      borderBottom: deptTab===tab ? "2px solid #E0863C" : "2px solid transparent" }}>
                     {tab === "review" ? "Review" : "Notes"}
                   </button>
                 ))}
@@ -2298,7 +2298,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
           )}
 
           {dept && deptTab === "review" && !selections[dept.key] && (
-            <div style={{ textAlign:"center", color:"#9C8F82", padding:"60px 24px" }}>
+            <div style={{ textAlign:"center", color:"#7A6F63", padding:"60px 24px" }}>
               {cloudLoading
                 ? "☁ Loading this department's review from the shared workspace…"
                 : "No review content is loaded for this department on this device yet. If it shows on another device, the shared sync hasn't completed here — try reloading. (You can still Generate Report.)"}
@@ -2345,69 +2345,69 @@ function ScoringHelpPanel({ onClose }) {
       }}>
         {/* Header */}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
-          <div style={{ fontSize:16, fontWeight:700, color:"#1E1B3A" }}>How scoring works</div>
+          <div style={{ fontSize:16, fontWeight:700, color:"#2C2621" }}>How scoring works</div>
           <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer",
-            fontSize:20, color:"#9C8F82", lineHeight:1, padding:"0 4px" }}>✕</button>
+            fontSize:20, color:"#7A6F63", lineHeight:1, padding:"0 4px" }}>✕</button>
         </div>
 
         {/* MEAN vs DIST */}
-        <div style={{ fontSize:11, fontWeight:700, color:"#9C8F82", textTransform:"uppercase",
+        <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase",
           letterSpacing:1.5, marginBottom:12 }}>Two ways to measure a question</div>
         <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap:12, marginBottom:20 }}>
           {[
-            { label:"Mean", title:"The average score", color:"#166534", bg:"#F0FDF4", bd:"#86EFAC",
+            { label:"Mean", title:"The average score", color:"#3E7A50", bg:"#E9F1E9", bd:"#AFD8BB",
               desc:"Add up all responses and divide by how many people answered. Simple and reliable when most people are somewhere in the middle.",
               when:"Used for questions about personal experience or attitude — growth, connection, confidence — where one or two outliers won't distort the picture." },
-            { label:"Dist", title:"The response distribution", color:"#1E3A8A", bg:"#EFF6FF", bd:"#93C5FD",
+            { label:"Dist", title:"The response distribution", color:"#B96524", bg:"#FDFAF4", bd:"#E2CDA0",
               desc:"Instead of averaging, it asks: are enough people on the positive side? An average can hide a divided team. DIST catches that.",
               when:"Used for questions about access, clarity, or concrete experience — things that should be true for everyone. If even a third of your team can't say yes, that matters." },
           ].map(f => (
             <div key={f.label} style={{ background:f.bg, border:`1px solid ${f.bd}`, borderRadius:10, padding:14 }}>
               <div style={{ fontSize:10, fontWeight:700, color:f.color, textTransform:"uppercase",
                 letterSpacing:1.5, marginBottom:4 }}>{f.label} scale</div>
-              <div style={{ fontSize:13, fontWeight:700, color:"#1E1B3A", marginBottom:8 }}>{f.title}</div>
-              <div style={{ fontSize:12, color:"#374151", lineHeight:1.6, marginBottom:8 }}>{f.desc}</div>
-              <div style={{ fontSize:11, color:"#6B7280", lineHeight:1.5, background:"white",
+              <div style={{ fontSize:13, fontWeight:700, color:"#2C2621", marginBottom:8 }}>{f.title}</div>
+              <div style={{ fontSize:12, color:"#2C2621", lineHeight:1.6, marginBottom:8 }}>{f.desc}</div>
+              <div style={{ fontSize:11, color:"#7A6F63", lineHeight:1.5, background:"white",
                 borderRadius:6, padding:"8px 10px" }}>
-                <strong style={{ color:"#374151" }}>Used when:</strong> {f.when}
+                <strong style={{ color:"#2C2621" }}>Used when:</strong> {f.when}
               </div>
             </div>
           ))}
         </div>
 
         {/* Real example */}
-        <div style={{ background:"#F9FAFB", borderRadius:10, padding:14, marginBottom:20,
-          border:"1px solid #E5E7EB" }}>
-          <div style={{ fontSize:11, fontWeight:700, color:"#9C8F82", textTransform:"uppercase",
+        <div style={{ background:"#F6F1E8", borderRadius:10, padding:14, marginBottom:20,
+          border:"1px solid #ECE2D2" }}>
+          <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase",
             letterSpacing:1.5, marginBottom:10 }}>Why it matters — the same responses, two different answers</div>
-          <div style={{ fontSize:12, color:"#1E1B3A", fontWeight:600, marginBottom:10 }}>
+          <div style={{ fontSize:12, color:"#2C2621", fontWeight:600, marginBottom:10 }}>
             9 single staff respond to: "My practical needs are adequately supported."
           </div>
           <div style={{ display:"flex", gap:6, marginBottom:12, alignItems:"flex-end", height:44 }}>
-            {[[0,"#E5E7EB"],[1,"#E24B4A"],[5,"#F2C4CE"],[3,"#639922"],[0,"#E5E7EB"]].map(([c,col],i)=>(
+            {[[0,"#ECE2D2"],[1,"#BE6650"],[5,"#EBD0C8"],[3,"#5C9A6D"],[0,"#ECE2D2"]].map(([c,col],i)=>(
               <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:2 }}>
                 <div style={{ width:"100%", height:`${Math.max(c/5*36,c>0?6:2)}px`,
                   background:col, borderRadius:"3px 3px 0 0", display:"flex",
                   alignItems:"center", justifyContent:"center" }}>
                   {c>0 && <span style={{ fontSize:10, fontWeight:700, color:"white" }}>{c}</span>}
                 </div>
-                <span style={{ fontSize:9, color:"#9CA3AF" }}>{["SD","D","U","A","SA"][i]}</span>
+                <span style={{ fontSize:9, color:"#A89C8D" }}>{["SD","D","U","A","SA"][i]}</span>
               </div>
             ))}
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>{/* two small result tiles — narrow but readable, keep side-by-side */}
-            <div style={{ background:"#FFFBEB", borderRadius:8, padding:10, textAlign:"center" }}>
-              <div style={{ fontSize:10, fontWeight:700, color:"#92400E", textTransform:"uppercase", letterSpacing:1 }}>Mean scale says</div>
-              <div style={{ fontSize:18, fontWeight:800, color:"#B45309", margin:"4px 0" }}>3.22</div>
-              <div style={{ fontSize:11, color:"#B45309" }}>→ Watch</div>
+            <div style={{ background:"#F7EEDC", borderRadius:8, padding:10, textAlign:"center" }}>
+              <div style={{ fontSize:10, fontWeight:700, color:"#9A6B26", textTransform:"uppercase", letterSpacing:1 }}>Mean scale says</div>
+              <div style={{ fontSize:18, fontWeight:800, color:"#C08636", margin:"4px 0" }}>3.22</div>
+              <div style={{ fontSize:11, color:"#C08636" }}>→ Watch</div>
             </div>
-            <div style={{ background:"#FEF2F2", borderRadius:8, padding:10, textAlign:"center" }}>
-              <div style={{ fontSize:10, fontWeight:700, color:"#991B1B", textTransform:"uppercase", letterSpacing:1 }}>Dist scale says</div>
-              <div style={{ fontSize:18, fontWeight:800, color:"#B91C1C", margin:"4px 0" }}>33% positive</div>
-              <div style={{ fontSize:11, color:"#B91C1C" }}>→ Concern</div>
+            <div style={{ background:"#F6E5DE", borderRadius:8, padding:10, textAlign:"center" }}>
+              <div style={{ fontSize:10, fontWeight:700, color:"#A34D3B", textTransform:"uppercase", letterSpacing:1 }}>Dist scale says</div>
+              <div style={{ fontSize:18, fontWeight:800, color:"#BE6650", margin:"4px 0" }}>33% positive</div>
+              <div style={{ fontSize:11, color:"#BE6650" }}>→ Concern</div>
             </div>
           </div>
-          <div style={{ marginTop:8, fontSize:11, color:"#6B7280", lineHeight:1.6 }}>
+          <div style={{ marginTop:8, fontSize:11, color:"#7A6F63", lineHeight:1.6 }}>
             The average of 3.22 looks like a mild Watch. But only 3 out of 9 people agreed their
             needs are met. DIST flags this as Concern because for a question about whether staff
             feel supported, "most people aren't sure" is not a Watch result.
@@ -2415,16 +2415,16 @@ function ScoringHelpPanel({ onClose }) {
         </div>
 
         {/* Three factors */}
-        <div style={{ fontSize:11, fontWeight:700, color:"#9C8F82", textTransform:"uppercase",
+        <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase",
           letterSpacing:1.5, marginBottom:12 }}>Three things that determine a department's status</div>
         {[
-          { num:"1", color:"#166534", bg:"#F0FDF4", bd:"#86EFAC",
+          { num:"1", color:"#3E7A50", bg:"#E9F1E9", bd:"#AFD8BB",
             title:"Individual question scoring",
             desc:"Each question gets its own status (Concern, Watch, or Healthy) using either MEAN or DIST. This is what the heatmap helps you verify — does the distribution match what you see on your team?" },
-          { num:"2", color:"#B45309", bg:"#FFFBEB", bd:"#FCD34D",
+          { num:"2", color:"#C08636", bg:"#F7EEDC", bd:"#E3B85C",
             title:"Burden questions are flipped",
             desc:'Some questions are worded negatively — "I feel alone," "I feel overwhelmed." For these, agreeing is a bad sign. Responses are inverted before scoring so the math always reads correctly. The heatmap colours flip to match: red on the right (Strongly Agree = bad), green on the left.' },
-          { num:"3", color:"#B91C1C", bg:"#FEF2F2", bd:"#FCA5A5",
+          { num:"3", color:"#BE6650", bg:"#F6E5DE", bd:"#E2B3A8",
             title:"Concern-count override — the most important rule",
             desc:"If 3 or more individual questions score Concern, the whole department is automatically flagged as Concern — regardless of its average. An average can hide real problems. Poland HR averaged 3.24 (normally Watch) but had 4 Concern questions, so it correctly shows Concern. This is the rule that protects against averages hiding what's actually happening." },
         ].map(f => (
@@ -2434,37 +2434,37 @@ function ScoringHelpPanel({ onClose }) {
               border:`1.5px solid ${f.bd}`, display:"flex", alignItems:"center",
               justifyContent:"center", fontSize:13, fontWeight:700, color:f.color, flexShrink:0 }}>{f.num}</div>
             <div>
-              <div style={{ fontSize:13, fontWeight:700, color:"#1E1B3A", marginBottom:5 }}>{f.title}</div>
-              <div style={{ fontSize:12, color:"#374151", lineHeight:1.6 }}>{f.desc}</div>
+              <div style={{ fontSize:13, fontWeight:700, color:"#2C2621", marginBottom:5 }}>{f.title}</div>
+              <div style={{ fontSize:12, color:"#2C2621", lineHeight:1.6 }}>{f.desc}</div>
             </div>
           </div>
         ))}
 
         {/* Status thresholds */}
-        <div style={{ background:"#F9FAFB", border:"1px solid #E5E7EB", borderRadius:10,
+        <div style={{ background:"#F6F1E8", border:"1px solid #ECE2D2", borderRadius:10,
           padding:14, marginTop:4 }}>
-          <div style={{ fontSize:11, fontWeight:700, color:"#9C8F82", textTransform:"uppercase",
+          <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase",
             letterSpacing:1.5, marginBottom:10 }}>Status thresholds</div>
           <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
           <table style={{ width:"100%", minWidth: isMobile ? 380 : "auto", borderCollapse:"collapse", fontSize:12 }}>
             <thead>
-              <tr style={{ borderBottom:"1px solid #E5E7EB" }}>
+              <tr style={{ borderBottom:"1px solid #ECE2D2" }}>
                 {["Status","Mean","Dist"].map(h=>(
                   <th key={h} style={{ textAlign:"left", padding:"4px 8px", fontSize:10,
-                    fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:.5 }}>{h}</th>
+                    fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:.5 }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {[
-                ["Healthy","#166534","3.50 or above","75%+ agreed, fewer than 15% disagreed"],
-                ["Watch","#B45309","2.50 – 3.49","50%+ agreed, fewer than 30% disagreed"],
-                ["Concern","#B91C1C","Below 2.50","Fewer than 50% agreed, or too many disagreed"],
+                ["Healthy","#3E7A50","3.50 or above","75%+ agreed, fewer than 15% disagreed"],
+                ["Watch","#C08636","2.50 – 3.49","50%+ agreed, fewer than 30% disagreed"],
+                ["Concern","#BE6650","Below 2.50","Fewer than 50% agreed, or too many disagreed"],
               ].map(([s,c,m,d])=>(
-                <tr key={s} style={{ borderBottom:"1px solid #F3F4F6" }}>
+                <tr key={s} style={{ borderBottom:"1px solid #F6F1E8" }}>
                   <td style={{ padding:"7px 8px", fontWeight:700, color:c, fontSize:12 }}>{s}</td>
-                  <td style={{ padding:"7px 8px", color:"#374151", fontSize:12 }}>{m}</td>
-                  <td style={{ padding:"7px 8px", color:"#374151", fontSize:12 }}>{d}</td>
+                  <td style={{ padding:"7px 8px", color:"#2C2621", fontSize:12 }}>{m}</td>
+                  <td style={{ padding:"7px 8px", color:"#2C2621", fontSize:12 }}>{d}</td>
                 </tr>
               ))}
             </tbody>
@@ -2473,7 +2473,7 @@ function ScoringHelpPanel({ onClose }) {
         </div>
 
         <button onClick={onClose} style={{ marginTop:20, width:"100%", padding:"10px 0",
-          background:"#DC5A12", color:"white", border:"none", borderRadius:8,
+          background:"#E0863C", color:"white", border:"none", borderRadius:8,
           fontSize:13, fontWeight:700, cursor:"pointer" }}>
           Got it — back to the review
         </button>
@@ -2513,15 +2513,15 @@ function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes
   };
 
   return (
-    <div style={{ borderTop:"1px solid #F2E7DB", padding:"10px 0" }}>
+    <div style={{ borderTop:"1px solid #FDFAF4", padding:"10px 0" }}>
       <div style={{ display:"flex", alignItems:"flex-start", gap:8 }}>
         <div style={{ flex:1 }}>
-          <div style={{ fontSize:13, color:"#332E29" }}>{displayLabel || questionLabel}</div>
+          <div style={{ fontSize:13, color:"#2C2621" }}>{displayLabel || questionLabel}</div>
           {sub}
         </div>
         <button onClick={() => setOpen(o=>!o)}
-          style={{ fontSize:11, fontWeight:600, color:"#DC5A12", background:"#FFEBDA",
-            border:"0.5px solid #FFA766", borderRadius:5, padding:"3px 9px", cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
+          style={{ fontSize:11, fontWeight:600, color:"#E0863C", background:"#F7E7D5",
+            border:"0.5px solid #E0A56F", borderRadius:5, padding:"3px 9px", cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
           {open ? "Close" : (visible.length ? `${visible.length} note${visible.length>1?"s":""}` : "Add note")}
         </button>
       </div>
@@ -2529,12 +2529,12 @@ function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes
       {open && (
         <div style={{ marginTop:8 }}>
           {visible.map(n => (
-            <div key={n.id} style={{ padding:"6px 0", borderTop:"1px dashed #F2E7DB" }}>
-              <div style={{ fontSize:11, color:"#9C8F82", display:"flex", gap:8, alignItems:"center" }}>
+            <div key={n.id} style={{ padding:"6px 0", borderTop:"1px dashed #FDFAF4" }}>
+              <div style={{ fontSize:11, color:"#7A6F63", display:"flex", gap:8, alignItems:"center" }}>
                 <b style={{ color:"#5A4A3B" }}>{n.author}</b>{fmt(n.created)}
                 <VisibilityChip visibility={n.visibility} onClick={() => onFlip(n)} />
               </div>
-              <div style={{ fontSize:13, color:"#332E29", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{n.body}</div>
+              <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{n.body}</div>
             </div>
           ))}
           <textarea value={draft} onChange={e=>setDraft(e.target.value)} rows={2}
@@ -2544,11 +2544,11 @@ function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes
           <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:6, flexWrap:"wrap" }}>
             <VisibilityPicker value={visibility} onChange={setVisibility} isMobile={isMobile} />
             <button onClick={save} disabled={saving || !draft.trim()}
-              style={{ ...navBtn, marginLeft:"auto", background:(saving||!draft.trim())?"#E7DDD2":"#DC5A12", color:(saving||!draft.trim())?"#9C8F82":"#fff" }}>
+              style={{ ...navBtn, marginLeft:"auto", background:(saving||!draft.trim())?"#ECE2D2":"#E0863C", color:(saving||!draft.trim())?"#7A6F63":"#fff" }}>
               {saving ? "Saving…" : "Add"}
             </button>
           </div>
-          {err && <div style={{ color:"#C0392B", fontSize:12, marginTop:6 }}>{err}</div>}
+          {err && <div style={{ color:"#BE6650", fontSize:12, marginTop:6 }}>{err}</div>}
         </div>
       )}
     </div>
@@ -2599,10 +2599,10 @@ function DeptNotesTab({ dept, country, year, me, saveMe, isPCLead, sbOverrides, 
         me={me} saveMe={saveMe} isPCLead={isPCLead} />
 
       {/* Section notes */}
-      <div style={{ marginTop:22, border:"1px solid #EFE3D6", borderRadius:12, overflow:"hidden" }}>
-        <div style={{ background:"#FFF4EC", padding:"10px 14px", fontSize:13, fontWeight:700, color:"#8A5A2B" }}>Notes by section</div>
+      <div style={{ marginTop:22, border:"1px solid #ECE2D2", borderRadius:12, overflow:"hidden" }}>
+        <div style={{ background:"#FBEFE4", padding:"10px 14px", fontSize:13, fontWeight:700, color:"#9A6B26" }}>Notes by section</div>
         <div style={{ padding:"4px 14px 12px" }}>
-          {qNotes === null ? <div style={{ fontSize:12, color:"#9C8F82", padding:"8px 0" }}>Loading…</div> :
+          {qNotes === null ? <div style={{ fontSize:12, color:"#7A6F63", padding:"8px 0" }}>Loading…</div> :
             SECTIONS.map(s => (
               <NoteThread key={s.key} country={country} year={year} deptKey={dept.key}
                 questionLabel={s.key} displayLabel={s.label} notes={notesFor(s.key)} me={me} isPCLead={isPCLead}
@@ -2612,10 +2612,10 @@ function DeptNotesTab({ dept, country, year, me, saveMe, isPCLead, sbOverrides, 
       </div>
 
       {/* Question notes */}
-      <div style={{ marginTop:22, border:"1px solid #EFE3D6", borderRadius:12, overflow:"hidden" }}>
-        <div style={{ background:"#FFF4EC", padding:"10px 14px", fontSize:13, fontWeight:700, color:"#8A5A2B" }}>Notes by question</div>
+      <div style={{ marginTop:22, border:"1px solid #ECE2D2", borderRadius:12, overflow:"hidden" }}>
+        <div style={{ background:"#FBEFE4", padding:"10px 14px", fontSize:13, fontWeight:700, color:"#9A6B26" }}>Notes by question</div>
         <div style={{ padding:"4px 14px 12px" }}>
-          {qNotes === null ? <div style={{ fontSize:12, color:"#9C8F82", padding:"8px 0" }}>Loading…</div> :
+          {qNotes === null ? <div style={{ fontSize:12, color:"#7A6F63", padding:"8px 0" }}>Loading…</div> :
             (dept.questions || []).map((q, i) => {
               const sbText = sbTextFor(q);
               return (
@@ -2629,18 +2629,18 @@ function DeptNotesTab({ dept, country, year, me, saveMe, isPCLead, sbOverrides, 
                       <span style={{ fontSize:15, fontWeight:800, color:sc(q.status) }}>{q.score?.toFixed(2)}</span>
                       <span style={{ fontSize:9, fontWeight:700, color:sc(q.status), background:sb(q.status),
                         border:`1px solid ${sbd(q.status)}`, borderRadius:4, padding:"2px 7px" }}>{q.status}</span>
-                      {q.burden && <span style={{ fontSize:9, color:"#B45309" }}>Burden [inv.]</span>}
+                      {q.burden && <span style={{ fontSize:9, color:"#C08636" }}>Burden [inv.]</span>}
                     </div>
                     {/* 2) The question */}
-                    <div style={{ fontSize:13, color:"#332E29", lineHeight:1.5 }}>{q.en}</div>
+                    <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.5 }}>{q.en}</div>
                   </div>
                 }
                 sub={
                   /* 3) Survey Basics — what this score means, so directors know what they're noting */
                   <div style={{ marginTop:6, borderLeft:"2px solid #F0DFCE", paddingLeft:8 }}>
-                    <span style={{ fontSize:9, fontWeight:700, color:"#9C8F82",
+                    <span style={{ fontSize:9, fontWeight:700, color:"#7A6F63",
                       textTransform:"uppercase", letterSpacing:.5, display:"block", marginBottom:2 }}>Survey Basics</span>
-                    <span style={{ fontSize:12, color:"#5C5048", lineHeight:1.45, fontStyle: sbText ? "normal" : "italic" }}>
+                    <span style={{ fontSize:12, color:"#5A4A3B", lineHeight:1.45, fontStyle: sbText ? "normal" : "italic" }}>
                       {sbText || "No Survey Basics interpretation is on file for this question."}
                     </span>
                   </div>
@@ -2705,16 +2705,16 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
   };
 
   return (
-    <div style={{ marginTop: 22, border: "1px solid #EFE3D6", borderRadius: 12, overflow: "hidden" }}>
-      <div style={{ background: "#FFF4EC", padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: "#8A5A2B" }}>Meeting notes — {deptLabel || deptKey}</span>
-        <span style={{ marginLeft: "auto", fontSize: 11, color: "#9C8F82" }}>
+    <div style={{ marginTop: 22, border: "1px solid #ECE2D2", borderRadius: 12, overflow: "hidden" }}>
+      <div style={{ background: "#FBEFE4", padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "#9A6B26" }}>Meeting notes — {deptLabel || deptKey}</span>
+        <span style={{ marginLeft: "auto", fontSize: 11, color: "#7A6F63" }}>
           {me ? <>Signed in as <b style={{ color: "#5A4A3B" }}>{me}</b></> : "Not signed in"}
         </span>
       </div>
 
       <div style={{ padding: 14 }}>
-        <div style={{ fontSize: 12, color: "#8A7E71", background:"#FFF9F3", border:"1px solid #F3E6D6",
+        <div style={{ fontSize: 12, color: "#7A6F63", background:"#FDFAF4", border:"1px solid #FDFAF4",
           borderRadius:8, padding:"8px 12px", marginBottom:14, lineHeight:1.5 }}>
           Every note is <b>Private by default</b> — only you & P&C leadership (Mel &amp; Chris) see it.
           Set a note to <b>Shared</b> to let the team &amp; country leadership see that one. Each note is
@@ -2722,10 +2722,10 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
         </div>
         {!me && (
           <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center", flexWrap: "wrap" }}>
-            <span style={{ fontSize: 12, color: "#7A6E62" }}>Your name (so notes are yours):</span>
+            <span style={{ fontSize: 12, color: "#7A6F63" }}>Your name (so notes are yours):</span>
             <input value={nameInput} onChange={e => setNameInput(e.target.value)} placeholder="e.g. Mel"
               style={{ fontSize: 13, padding: "5px 9px", border: "1px solid #E2D3C2", borderRadius: 6 }} />
-            <button onClick={() => saveMe(nameInput)} style={{ ...navBtn, background: "#DC5A12", color: "#fff" }}>Set name</button>
+            <button onClick={() => saveMe(nameInput)} style={{ ...navBtn, background: "#E0863C", color: "#fff" }}>Set name</button>
           </div>
         )}
 
@@ -2738,26 +2738,26 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
           <VisibilityPicker value={visibility} onChange={setVisibility} isMobile={isMobile} />
           <button onClick={save} disabled={saving || !draft.trim()}
-            style={{ ...navBtn, marginLeft: "auto", background: (saving || !draft.trim()) ? "#E7DDD2" : "#DC5A12",
-              color: (saving || !draft.trim()) ? "#9C8F82" : "#fff" }}>
+            style={{ ...navBtn, marginLeft: "auto", background: (saving || !draft.trim()) ? "#ECE2D2" : "#E0863C",
+              color: (saving || !draft.trim()) ? "#7A6F63" : "#fff" }}>
             {saving ? "Saving…" : "Add note"}
           </button>
         </div>
-        {err && <div style={{ color: "#C0392B", fontSize: 12, marginTop: 8 }}>{err}</div>}
+        {err && <div style={{ color: "#BE6650", fontSize: 12, marginTop: 8 }}>{err}</div>}
 
         {/* Log */}
         <div style={{ marginTop: 16 }}>
-          {notes === null && <div style={{ fontSize: 12, color: "#9C8F82" }}>Loading notes…</div>}
+          {notes === null && <div style={{ fontSize: 12, color: "#7A6F63" }}>Loading notes…</div>}
           {notes !== null && visible.length === 0 &&
-            <div style={{ fontSize: 12, color: "#9C8F82" }}>No notes yet for this department.</div>}
+            <div style={{ fontSize: 12, color: "#7A6F63" }}>No notes yet for this department.</div>}
           {visible.map(n => (
-            <div key={n.id} style={{ borderTop: "1px solid #F2E7DB", padding: "10px 0" }}>
+            <div key={n.id} style={{ borderTop: "1px solid #FDFAF4", padding: "10px 0" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
                 <span style={{ fontSize: 12, fontWeight: 700, color: "#5A4A3B" }}>{n.author || "Unknown"}</span>
-                <span style={{ fontSize: 11, color: "#A99C8E" }}>{fmt(n.created)}</span>
+                <span style={{ fontSize: 11, color: "#A89C8D" }}>{fmt(n.created)}</span>
                 <VisibilityChip visibility={n.visibility} onClick={() => flip(n)} />
               </div>
-              <div style={{ fontSize: 13, color: "#332E29", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{n.body}</div>
+              <div style={{ fontSize: 13, color: "#2C2621", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{n.body}</div>
             </div>
           ))}
         </div>
@@ -2771,33 +2771,33 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
   // Which question's heatmap popup is open on mobile (index), or null. One at a time.
   const [openHeatmap, setOpenHeatmap] = useState(null);
   const sections = [
-    { key:"strengths",    label:"Strengths",            color:"#1F7A44", instruction:"Check to include. Uncheck to exclude. Click Edit to revise wording — it will appear exactly as written in the report." },
-    { key:"growth",       label:"Growth areas",         color:"#A96A12", instruction:"Check to include. Click Edit to revise wording." },
-    { key:"leadershipQs", label:"Leadership questions", color:"#3B3882", instruction:"Check to include. Select 1–2 maximum. Click Edit to revise." },
-    { key:"quotes",       label:"Staff quotes",         color:"#4B5563", instruction:"Check to include. Up to 4 quotes appear verbatim. Edit only to correct a translation." },
+    { key:"strengths",    label:"Strengths",            color:"#5C9A6D", instruction:"Check to include. Uncheck to exclude. Click Edit to revise wording — it will appear exactly as written in the report." },
+    { key:"growth",       label:"Growth areas",         color:"#C08636", instruction:"Check to include. Click Edit to revise wording." },
+    { key:"leadershipQs", label:"Leadership questions", color:"#B96524", instruction:"Check to include. Select 1–2 maximum. Click Edit to revise." },
+    { key:"quotes",       label:"Staff quotes",         color:"#5A4A3B", instruction:"Check to include. Up to 4 quotes appear verbatim. Edit only to correct a translation." },
   ];
 
   return (
     <div>
       {/* Dept header */}
       <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14, flexWrap:"wrap" }}>
-        <div style={{ fontSize:19, fontWeight:750, color:"#2A211C" }}>{dept.label}</div>
+        <div style={{ fontFamily:FONT_DISPLAY, fontSize:21, fontWeight:600, color:"#2C2621" }}>{dept.label}</div>
         <span style={{ fontSize:12, fontWeight:700, color:sc(dept.status), background:sb(dept.status), border:`1px solid ${sbd(dept.status)}`, borderRadius:20, padding:"3px 10px" }}>{dept.status}</span>
-        <span style={{ color:"#8C7D70", fontSize:12.5, fontVariantNumeric:"tabular-nums" }}>{dept.avg} avg · n={dept.n}</span>
+        <span style={{ color:"#7A6F63", fontSize:12.5, fontVariantNumeric:"tabular-nums" }}>{dept.avg} avg · n={dept.n}</span>
       </div>
 
       {/* Nested, collapsible review — one panel, drill in per part */}
-      <div style={{ background:"#FFFFFF", border:"1px solid #EDE3D6", borderRadius:12, overflow:"hidden",
+      <div style={{ background:"#FFFFFF", border:"1px solid #ECE2D2", borderRadius:12, overflow:"hidden",
         boxShadow:"0 1px 2px rgba(58,38,22,.06), 0 6px 22px -8px rgba(58,38,22,.10)" }}>
 
-        <Disclosure title="Question scores" count={`${(dept.questions||[]).length} questions`} dot="#DC5A12" defaultOpen flush>
+        <Disclosure title="Question scores" count={`${(dept.questions||[]).length} questions`} dot="#E0863C" defaultOpen flush>
         {/* Heatmap — Question Scores */}
         <div style={{ overflowX:"auto", marginBottom:0 }}>
           {/* Column headers */}
           <div style={{ display:"grid",
             gridTemplateColumns: isMobile ? "48px 1fr" : "90px 52px 60px 1fr 52px 290px", gap:0,
-            background:"#FFF4EC", borderBottom:"2px solid #EDE3D6", padding:"7px 12px",
-            fontSize:10, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:1.5 }}>
+            background:"#FBEFE4", borderBottom:"2px solid #ECE2D2", padding:"7px 12px",
+            fontSize:10, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5 }}>
             {isMobile ? <><span>Score</span><span>Question</span></> : <>
             <span>Section</span>
             <span>Score</span>
@@ -2817,92 +2817,92 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
             // Heatmap colours matching the Excel workbook
             // For burden (inverted): high SA = bad outcome, so colours flip
             const CELL_COLORS = q.burden
-              ? ["#1E8449","#5DBB8A","#F2C4CE","#E87F7F","#C0392B"] // SD=green, SA=red (burden inverted)
-              : ["#C0392B","#E87F7F","#F2C4CE","#5DBB8A","#1E8449"]; // SD=red, SA=green
+              ? ["#5C9A6D","#7FB894","#EBD0C8","#D89080","#BE6650"] // SD=green, SA=red (burden inverted)
+              : ["#BE6650","#D89080","#EBD0C8","#7FB894","#5C9A6D"]; // SD=red, SA=green
             const CELL_TEXT   = q.burden
-              ? ["white","white","#7B2D3E","white","white"]
+              ? ["white","white","#A34D3B","white","white"]
               : ["white","white","white","white","white"];
             const LABELS = ["SD","D","U","A","SA"];
             // Status row background
-            const statusRowBg = {Concern:"#FDF2F2", Watch:"#FFFBEB", Healthy:"#F0FDF4"}[q.status] || "#F8F8F8";
+            const statusRowBg = {Concern:"#F6E5DE", Watch:"#F7EEDC", Healthy:"#E9F1E9"}[q.status] || "#F6F1E8";
 
             return (
-              <div key={i} style={{ borderBottom:"1px solid #FFF1E6" }}>
+              <div key={i} style={{ borderBottom:"1px solid #FBEFE4" }}>
                 {/* Main row */}
                 <div style={{ display:"grid",
                   gridTemplateColumns: isMobile ? "48px 1fr" : "90px 52px 60px 1fr 52px 290px",
-                  gap:0, alignItems:"stretch", background: i%2===0?"#FFFFFF":"#FAFAF8",
+                  gap:0, alignItems:"stretch", background: i%2===0?"#FFFFFF":"#F6F1E8",
                   position: isMobile ? "relative" : "static" }}>
                   {/* Section type (Q or Burden) — hidden on mobile */}
                   {!isMobile && (
                   <div style={{ padding:"10px 8px", display:"flex", alignItems:"center",
-                    background: q.burden ? "#FFF8E1" : "#FFF4EC",
-                    borderRight:"1px solid #EDE3D6" }}>
+                    background: q.burden ? "#F7EEDC" : "#FBEFE4",
+                    borderRight:"1px solid #ECE2D2" }}>
                     <span style={{ fontSize:10, fontWeight:700,
-                      color: q.burden ? "#B45309" : "#8A7A6B" }}>
+                      color: q.burden ? "#C08636" : "#7A6F63" }}>
                       {q.burden ? "Burden [inv.]" : "Q"}
                     </span>
                   </div>)}
                   {/* Score */}
                   <div style={{ padding:"10px 8px", display:"flex", alignItems:"center",
-                    background:statusRowBg, borderRight: isMobile ? "none" : "1px solid #EDE3D6" }}>
+                    background:statusRowBg, borderRight: isMobile ? "none" : "1px solid #ECE2D2" }}>
                     <span style={{ fontSize:13, fontWeight:800, color:sc(q.status) }}>{q.score?.toFixed(2)}</span>
                   </div>
                   {/* Status — hidden on mobile (shown inside question block instead) */}
                   {!isMobile && (
                   <div style={{ padding:"10px 6px", display:"flex", alignItems:"center", justifyContent:"center",
-                    background:statusRowBg, borderRight:"1px solid #EDE3D6" }}>
+                    background:statusRowBg, borderRight:"1px solid #ECE2D2" }}>
                     <span style={{ fontSize:9, fontWeight:700, color:sc(q.status),
                       background:sb(q.status), border:`1px solid ${sbd(q.status)}`,
                       borderRadius:4, padding:"2px 5px", textAlign:"center" }}>{q.status}</span>
                   </div>)}
                   {/* Question text + Survey Basics inline */}
                   <div style={{ padding:"10px 12px", verticalAlign:"top",
-                    borderRight: isMobile ? "none" : "1px solid #EDE3D6", position:"relative" }}>
+                    borderRight: isMobile ? "none" : "1px solid #ECE2D2", position:"relative" }}>
                     {isMobile && (
                       <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
                         <span style={{ fontSize:9, fontWeight:700, color:sc(q.status),
                           background:sb(q.status), border:`1px solid ${sbd(q.status)}`,
                           borderRadius:4, padding:"2px 6px" }}>{q.status}</span>
-                        {q.burden && <span style={{ fontSize:9, color:"#B45309" }}>Burden [inv.]</span>}
+                        {q.burden && <span style={{ fontSize:9, color:"#C08636" }}>Burden [inv.]</span>}
                         <button onClick={() => setOpenHeatmap(openHeatmap===i ? null : i)}
-                          style={{ marginLeft:"auto", fontSize:11, fontWeight:600, color:"#DC5A12",
-                            background:"#FFEBDA", border:"0.5px solid #FFA766", borderRadius:5,
+                          style={{ marginLeft:"auto", fontSize:11, fontWeight:600, color:"#E0863C",
+                            background:"#F7E7D5", border:"0.5px solid #E0A56F", borderRadius:5,
                             padding:"3px 10px", cursor:"pointer" }}>
                           {openHeatmap===i ? "Close" : "Heatmap"}
                         </button>
                       </div>
                     )}
-                    <div style={{ fontSize:12, color:"#1E1B3A", lineHeight:1.5, marginBottom:6 }}>
-                      {q.en}{q.burden && !isMobile ? <span style={{ color:"#B45309", fontSize:10, marginLeft:4 }}>[Burden]</span> : ""}
+                    <div style={{ fontSize:12, color:"#2C2621", lineHeight:1.5, marginBottom:6 }}>
+                      {q.en}{q.burden && !isMobile ? <span style={{ color:"#C08636", fontSize:10, marginLeft:4 }}>[Burden]</span> : ""}
                     </div>
                     {/* Mobile heatmap popup — overlays the question, one at a time */}
                     {isMobile && openHeatmap===i && (
                       <div style={{ position:"absolute", top:4, left:8, right:8, zIndex:20,
-                        background:"#FFFFFF", border:"1px solid #E8D9CA", borderRadius:10,
+                        background:"#FFFFFF", border:"1px solid #ECE2D2", borderRadius:10,
                         boxShadow:"0 8px 24px rgba(0,0,0,0.18)", padding:12 }}>
                         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-                          <span style={{ fontSize:11, fontWeight:700, color:"#1E1B3A" }}>Response breakdown</span>
+                          <span style={{ fontSize:11, fontWeight:700, color:"#2C2621" }}>Response breakdown</span>
                           <button onClick={() => setOpenHeatmap(null)} aria-label="Close"
-                            style={{ fontSize:12, color:"#9C8F82", background:"none", border:"none",
+                            style={{ fontSize:12, color:"#7A6F63", background:"none", border:"none",
                               cursor:"pointer", padding:"2px 6px" }}>✕</button>
                         </div>
                         <div style={{ display:"flex", gap:4 }}>
                           {counts.map((c, ci) => (
                             <div key={ci} style={{ flex:1, textAlign:"center" }}>
-                              <div style={{ background: c>0?CELL_COLORS[ci]:"#FFF4EC", color: c>0?CELL_TEXT[ci]:"#C8C4E8",
+                              <div style={{ background: c>0?CELL_COLORS[ci]:"#FBEFE4", color: c>0?CELL_TEXT[ci]:"#F0DFCE",
                                 borderRadius:5, padding:"8px 0", fontSize:13, fontWeight:700,
-                                border: c>0?"none":"1px solid #EDE3D6" }}>{c}</div>
-                              <div style={{ fontSize:8, fontWeight:600, color:"#9C8F82", marginTop:4, lineHeight:1.2 }}>
+                                border: c>0?"none":"1px solid #ECE2D2" }}>{c}</div>
+                              <div style={{ fontSize:8, fontWeight:600, color:"#7A6F63", marginTop:4, lineHeight:1.2 }}>
                                 {LABELS[ci]}
                               </div>
-                              <div style={{ fontSize:8, color:"#C9BCAF", marginTop:2 }}>
+                              <div style={{ fontSize:8, color:"#A89C8D", marginTop:2 }}>
                                 {c>0 ? Math.round(c/n*100)+"%" : ""}
                               </div>
                             </div>
                           ))}
                         </div>
-                        <div style={{ fontSize:10, color:"#7A6E62", marginTop:10 }}>{n} respondents · mean {q.score?.toFixed(2)}</div>
+                        <div style={{ fontSize:10, color:"#7A6F63", marginTop:10 }}>{n} respondents · mean {q.score?.toFixed(2)}</div>
                       </div>
                     )}
                     {(() => {
@@ -2923,23 +2923,23 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                       return (
                         <div>
                           <div style={{ display:"flex", alignItems:"flex-start", gap:6,
-                            background:"#F8F7F4", borderRadius:5, padding:"5px 8px" }}>
-                            <span style={{ fontSize:9, fontWeight:700, color:"#9C8F82",
+                            background:"#F6F1E8", borderRadius:5, padding:"5px 8px" }}>
+                            <span style={{ fontSize:9, fontWeight:700, color:"#7A6F63",
                               textTransform:"uppercase", letterSpacing:.5,
                               whiteSpace:"nowrap", paddingTop:1, flexShrink:0 }}>Survey Basics</span>
-                            <span style={{ fontSize:11, color: override ? "#1E1B3A" : "#7A6E62",
+                            <span style={{ fontSize:11, color: override ? "#2C2621" : "#7A6F63",
                               fontStyle:"italic", lineHeight:1.4, flex:1 }}>
                               {sbText}
                               {override && <span style={{ fontStyle:"normal", fontSize:9, fontWeight:700,
-                                color:"#DC5A12", marginLeft:6 }}>(edited)</span>}
+                                color:"#E0863C", marginLeft:6 }}>(edited)</span>}
                             </span>
                             <button
                               onClick={() => {
                                 const el = document.getElementById(editId);
                                 if (el) el.style.display = el.style.display === "block" ? "none" : "block";
                               }}
-                              style={{ fontSize:10, color:"#DC5A12", background:"#FFEBDA",
-                                border:"0.5px solid #FFA766", borderRadius:4, padding:"2px 8px",
+                              style={{ fontSize:10, color:"#E0863C", background:"#F7E7D5",
+                                border:"0.5px solid #E0A56F", borderRadius:4, padding:"2px 8px",
                                 cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
                               Edit
                             </button>
@@ -2950,11 +2950,11 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                               placeholder="Type your own interpretation if this doesn't match what you see on your team."
                               onBlur={(e) => saveSbOverride && saveSbOverride(dept.key, q.en, e.target.value)}
                               style={{ width:"100%", border:"0.5px solid #F0DFCE", borderRadius:5,
-                                padding:"6px 8px", fontSize:11, color:"#1E1B3A",
+                                padding:"6px 8px", fontSize:11, color:"#2C2621",
                                 background:"white", resize:"vertical", minHeight:44,
                                 fontFamily:"inherit", lineHeight:1.5 }}
                             />
-                            <div style={{ fontSize:9, color:"#9C8F82", marginTop:3 }}>
+                            <div style={{ fontSize:9, color:"#7A6F63", marginTop:3 }}>
                               Saves automatically when you click away. Clear the box to restore the default.
                             </div>
                             {/* Admin-only: promote this rewrite to the master Survey Basics for all reports */}
@@ -2962,21 +2962,21 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                               <div style={{ marginTop:6, display:"flex", alignItems:"center", gap:8 }}>
                                 <button
                                   onClick={() => promoteSbToMaster && promoteSbToMaster(sbKey, q.en, level, override)}
-                                  style={{ fontSize:10, fontWeight:600, color:"white", background:"#DC5A12",
+                                  style={{ fontSize:10, fontWeight:600, color:"white", background:"#E0863C",
                                     border:"none", borderRadius:4, padding:"3px 10px", cursor:"pointer" }}>
                                   ★ Promote to master ({level})
                                 </button>
-                                <span style={{ fontSize:9, color:"#9C8F82" }}>
+                                <span style={{ fontSize:9, color:"#7A6F63" }}>
                                   Makes this the default {level==="low"?"Concern":level==="mid"?"Watch":"Healthy"} interpretation for this question in every future report.
                                 </span>
                               </div>
                             )}
                             {isAdmin && masterText && (
-                              <div style={{ marginTop:4, fontSize:9, color:"#166534" }}>
+                              <div style={{ marginTop:4, fontSize:9, color:"#3E7A50" }}>
                                 ★ A promoted master interpretation is active for this question ({level}).
                                 {" "}
                                 <button onClick={() => promoteSbToMaster && promoteSbToMaster(sbKey, q.en, level, "")}
-                                  style={{ fontSize:9, color:"#C0392B", background:"none", border:"none",
+                                  style={{ fontSize:9, color:"#BE6650", background:"none", border:"none",
                                     cursor:"pointer", textDecoration:"underline", padding:0 }}>
                                   Remove from master
                                 </button>
@@ -2990,9 +2990,9 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                   {/* Scale — hidden on mobile */}
                   {!isMobile && (
                   <div style={{ padding:"10px 6px", display:"flex", alignItems:"center", justifyContent:"center",
-                    borderRight:"1px solid #EDE3D6" }}>
-                    <span style={{ fontSize:10, fontWeight:700, color:"#8A7A6B",
-                      background:"#FFF4EC", borderRadius:4, padding:"2px 6px" }}>
+                    borderRight:"1px solid #ECE2D2" }}>
+                    <span style={{ fontSize:10, fontWeight:700, color:"#7A6F63",
+                      background:"#FBEFE4", borderRadius:4, padding:"2px 6px" }}>
                       {q.scale.toUpperCase()}
                     </span>
                   </div>)}
@@ -3005,17 +3005,17 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                         {/* Coloured cell — fixed height so zeros don't shift labels */}
                         <div style={{
                           width:"100%", height:32,
-                          background: c > 0 ? CELL_COLORS[ci] : "#FFF4EC",
+                          background: c > 0 ? CELL_COLORS[ci] : "#FBEFE4",
                           borderRadius:5, flexShrink:0,
                           display:"flex", alignItems:"center", justifyContent:"center",
                           fontSize:13, fontWeight:700,
-                          color: c > 0 ? "white" : "#C8C4E8",
-                          border: c > 0 ? "none" : "1px solid #EDE3D6",
+                          color: c > 0 ? "white" : "#F0DFCE",
+                          border: c > 0 ? "none" : "1px solid #ECE2D2",
                         }}>
                           {c}
                         </div>
                         {/* Full label — fixed two-line height */}
-                        <div style={{ fontSize:8, fontWeight:600, color:"#9C8F82",
+                        <div style={{ fontSize:8, fontWeight:600, color:"#7A6F63",
                           textAlign:"center", lineHeight:1.25, height:22 }}>
                           {ci===0 && <><span>Strongly</span><br/><span>Disagree</span></>}
                           {ci===1 && <span>Disagree</span>}
@@ -3024,7 +3024,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                           {ci===4 && <><span>Strongly</span><br/><span>Agree</span></>}
                         </div>
                         {/* Percentage — fixed height so row stays aligned */}
-                        <div style={{ fontSize:8, color:"#C9BCAF", textAlign:"center", height:12 }}>
+                        <div style={{ fontSize:8, color:"#A89C8D", textAlign:"center", height:12 }}>
                           {c > 0 ? Math.round(c/n*100)+"%" : ""}
                         </div>
                       </div>
@@ -3048,25 +3048,25 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
           defaultOpen={sec.key === "growth"} flush>
           {sec.key === "quotes" && dept.openQLabel && (
             <div style={{ margin:"0 14px 8px", padding:"6px 10px",
-              background:"#FBF0E6", borderLeft:"3px solid #DC5A12", borderRadius:4 }}>
-              <span style={{ fontSize:9, fontWeight:700, color:"#B84A0E",
+              background:"#FDFAF4", borderLeft:"3px solid #E0863C", borderRadius:4 }}>
+              <span style={{ fontSize:9, fontWeight:700, color:"#B96524",
                 textTransform:"uppercase", letterSpacing:.5, marginRight:6 }}>Responding to</span>
-              <span style={{ fontSize:12, color:"#5C5048", fontStyle:"italic" }}>"{dept.openQLabel}"</span>
+              <span style={{ fontSize:12, color:"#5A4A3B", fontStyle:"italic" }}>"{dept.openQLabel}"</span>
             </div>
           )}
-          <div style={{ color:"#8C7D70", fontSize:11, margin:"0 14px 8px" }}>{sec.instruction}</div>
+          <div style={{ color:"#7A6F63", fontSize:11, margin:"0 14px 8px" }}>{sec.instruction}</div>
           {secItems.map((item, idx) => {
             const editId = `item-edit-${dept.key}-${sec.key}-${idx}`;
             return (
-              <div key={idx} style={{ borderBottom:"1px solid #FFF1E6",
-                background: item.include ? "white" : "#FAF9FE",
+              <div key={idx} style={{ borderBottom:"1px solid #FBEFE4",
+                background: item.include ? "white" : "#FDFAF4",
                 opacity: item.include ? 1 : 0.6 }}>
                 {/* Main row — tight, single line */}
                 <div style={{ display:"flex", alignItems:"center", gap:10, padding: isMobile ? "11px 12px" : "9px 14px" }}>
                   <input type="checkbox" checked={item.include} disabled={!canEdit}
                     onChange={() => canEdit && toggleItem(dept.key, sec.key, idx)}
                     title={canEdit ? undefined : "You can only edit your own department"}
-                    style={{ flexShrink:0, cursor: canEdit ? "pointer" : "default", accentColor:"#DC5A12",
+                    style={{ flexShrink:0, cursor: canEdit ? "pointer" : "default", accentColor:"#E0863C",
                       width: isMobile ? 20 : 15, height: isMobile ? 20 : 15, opacity: canEdit ? 1 : 0.55 }} />
                   <div style={{ flex:1 }}>
                     {(() => {
@@ -3075,13 +3075,13 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                       return (
                         <>
                           <div style={{ fontSize:12, lineHeight:1.5,
-                            color: item.include ? "#1E1B3A" : "#9C8F82",
+                            color: item.include ? "#2C2621" : "#7A6F63",
                             textDecoration: item.include ? "none" : "line-through",
                             fontStyle: nonEng ? "italic" : "normal" }}>
                             {displayText}
                             {item.isRefined && !item.rewrite && (
-                              <span style={{ marginLeft:8, fontSize:9, color:"#DC5A12",
-                                fontWeight:600, background:"#FFEBDA", borderRadius:4,
+                              <span style={{ marginLeft:8, fontSize:9, color:"#E0863C",
+                                fontWeight:600, background:"#F7E7D5", borderRadius:4,
                                 padding:"1px 5px" }}>✦ refined</span>
                             )}
                           </div>
@@ -3090,13 +3090,13 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                         borderLeft:"2px solid #F0DFCE", paddingLeft:8 }}>
                         {item.translation ? (
                           <>
-                            <span style={{ fontSize:9, fontWeight:700, color:"#9C8F82",
+                            <span style={{ fontSize:9, fontWeight:700, color:"#7A6F63",
                               textTransform:"uppercase", letterSpacing:.5,
                               marginRight:6 }}>English translation</span>
-                            <span style={{ color:"#5C5048" }}>{item.translation}</span>
+                            <span style={{ color:"#5A4A3B" }}>{item.translation}</span>
                           </>
                         ) : (
-                          <span style={{ fontSize:10, color:"#C9BCAF", fontStyle:"italic" }}>
+                          <span style={{ fontSize:10, color:"#A89C8D", fontStyle:"italic" }}>
                             Original language response — translation not yet available
                           </span>
                         )}
@@ -3114,8 +3114,8 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                         const opening = el.style.display !== "block";
                         el.style.display = opening ? "block" : "none";
                       }}
-                      style={{ fontSize: isMobile ? 12 : 10, color:"#DC5A12", background:"#FFEBDA",
-                        border:"0.5px solid #FFA766", borderRadius:5,
+                      style={{ fontSize: isMobile ? 12 : 10, color:"#E0863C", background:"#F7E7D5",
+                        border:"0.5px solid #E0A56F", borderRadius:5,
                         padding: isMobile ? "8px 14px" : "3px 9px", minHeight: isMobile ? 36 : "auto",
                         cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
                       {item.rewrite.trim() ? "Edited ✓" : "Edit"}
@@ -3135,8 +3135,8 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                       placeholder={sec.key==="quotes"
                         ? "Leave blank to use as-is. Edit only if correcting a translation."
                         : "Type here to override wording exactly as it will appear in the report. Saves for future countries."}
-                      style={{ width:"100%", background:"#FFF4EC", border:"0.5px solid #F0DFCE",
-                        borderRadius:6, padding:"7px 10px", color:"#1E1B3A", fontSize:12,
+                      style={{ width:"100%", background:"#FBEFE4", border:"0.5px solid #F0DFCE",
+                        borderRadius:6, padding:"7px 10px", color:"#2C2621", fontSize:12,
                         resize:"vertical", minHeight:52, fontFamily:"inherit",
                         lineHeight:1.5, boxSizing:"border-box" }}
                     />
@@ -3146,7 +3146,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
             );
           })}
           {!secItems.length && (
-            <div style={{ padding:"8px 14px", color:"#8C7D70", fontSize:13, fontStyle:"italic" }}>No items generated for this section.</div>
+            <div style={{ padding:"8px 14px", color:"#7A6F63", fontSize:13, fontStyle:"italic" }}>No items generated for this section.</div>
           )}
         </Disclosure>
           );
@@ -3256,37 +3256,37 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
   };
 
   return (
-    <div style={{ minHeight:"100vh", background:"#F8F7F4", fontFamily:"'Inter',system-ui,sans-serif" }}>
+    <div style={{ minHeight:"100vh", background:"#F6F1E8", fontFamily:"'Inter',system-ui,sans-serif" }}>
       {/* Toolbar */}
-      <div className="no-print" style={{ background:"white", borderBottom:"1px solid #EDE3D6", padding: isMobile ? "10px 14px" : "12px 24px", display:"flex", gap:12, alignItems:"center", flexWrap: isMobile ? "wrap" : "nowrap", position:"sticky", top:0, zIndex:10 }}>
-        <button onClick={()=>setView("__back__")} style={{ ...navBtn, background:"transparent", border:"1px solid #EDE3D6" }}>← Back</button>
-        <div style={{ flex:1, order: isMobile ? 3 : 0, color:"#DC5A12", fontWeight:700, fontSize: isMobile ? 11 : 13, letterSpacing:1, whiteSpace: isMobile ? "normal" : "nowrap" }}>
+      <div className="no-print" style={{ background:"white", borderBottom:"1px solid #ECE2D2", padding: isMobile ? "10px 14px" : "12px 24px", display:"flex", gap:12, alignItems:"center", flexWrap: isMobile ? "wrap" : "nowrap", position:"sticky", top:0, zIndex:10 }}>
+        <button onClick={()=>setView("__back__")} style={{ ...navBtn, background:"transparent", border:"1px solid #ECE2D2" }}>← Back</button>
+        <div style={{ flex:1, order: isMobile ? 3 : 0, color:"#E0863C", fontWeight:700, fontSize: isMobile ? 11 : 13, letterSpacing:1, whiteSpace: isMobile ? "normal" : "nowrap" }}>
           JOSIAH VENTURE · {country.toUpperCase()} {year}
         </div>
-        <button onClick={()=>window.print()} style={{ ...navBtn, background:"#DC5A12", color:"white" }}>Download PDF</button>
+        <button onClick={()=>window.print()} style={{ ...navBtn, background:"#E0863C", color:"white" }}>Download PDF</button>
       </div>
 
       <div style={{ maxWidth:960, margin:"0 auto", padding: isMobile ? "24px 16px" : "40px 24px" }}>
 
         {/* ── SUMMARY PAGE ── */}
-        <div style={{ background:"white", borderRadius:16, padding: isMobile ? 18 : 40, marginBottom:32, border:"1px solid #EDE3D6", boxShadow:"0 2px 8px rgba(124,111,224,0.08)" }}>
+        <div style={{ background:"white", borderRadius:16, padding: isMobile ? 18 : 40, marginBottom:32, border:"1px solid #ECE2D2", boxShadow:"0 2px 8px rgba(124,111,224,0.08)" }}>
 
           {/* Header */}
-          <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:32, paddingBottom:24, borderBottom:"2px solid #FFF4EC" }}>
+          <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:32, paddingBottom:24, borderBottom:"2px solid #FBEFE4" }}>
             <div>
-              <div style={{ fontSize:11, fontWeight:700, color:"#DC5A12", letterSpacing:3, textTransform:"uppercase", marginBottom:8 }}>Josiah Venture</div>
-              <div style={{ fontSize:32, fontWeight:800, color:"#1E1B3A", marginBottom:4 }}>{country} Staff Pulse Report</div>
-              <div style={{ fontSize:15, color:"#9C8F82" }}>{year} · {totalN} respondents across {depts.length} departments</div>
+              <div style={{ fontSize:11, fontWeight:700, color:"#E0863C", letterSpacing:3, textTransform:"uppercase", marginBottom:8 }}>Josiah Venture</div>
+              <div style={{ fontFamily:FONT_DISPLAY, fontSize:34, fontWeight:600, color:"#2C2621", marginBottom:4, letterSpacing:-.4 }}>{country} Staff Pulse Report</div>
+              <div style={{ fontSize:15, color:"#7A6F63" }}>{year} · {totalN} respondents across {depts.length} departments</div>
             </div>
             <div style={{ textAlign:"right" }}>
               <div style={{ fontSize:42, fontWeight:800, color:sc(overallAvg>=3.5?"Healthy":overallAvg>=2.5?"Watch":"Concern") }}>{overallAvg}</div>
-              <div style={{ fontSize:11, color:"#9C8F82", marginTop:2 }}>Overall avg</div>
+              <div style={{ fontSize:11, color:"#7A6F63", marginTop:2 }}>Overall avg</div>
             </div>
           </div>
 
           {/* Score bar chart — all departments */}
           <div style={{ marginBottom:32 }}>
-            <div style={{ fontSize:11, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Department Scores</div>
+            <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Department Scores</div>
             {summaryDepts.map(d => (
               <div key={d.key} onClick={()=>openDept(d.key)}
                 style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 12px", marginBottom:4,
@@ -3294,24 +3294,24 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
                   background: activeDept===d.key ? sb(d.status) : "transparent",
                   border: activeDept===d.key ? `1px solid ${sbd(d.status)}` : "1px solid transparent",
                   transition:"all 0.15s" }}>
-                <div style={{ width: isMobile ? "100%" : 180, fontSize:13, fontWeight:600, color:"#1E1B3A", flexShrink:0 }}>{d.label}</div>
-                <div style={{ flex:1, background:"#F1EFF9", borderRadius:6, height:10, overflow:"hidden" }}>
+                <div style={{ width: isMobile ? "100%" : 180, fontSize:13, fontWeight:600, color:"#2C2621", flexShrink:0 }}>{d.label}</div>
+                <div style={{ flex:1, background:"#FDFAF4", borderRadius:6, height:10, overflow:"hidden" }}>
                   <div style={{ width:`${((d.avg-1)/4)*100}%`, background:sc(d.status), height:"100%", borderRadius:6, transition:"width 0.6s ease" }} />
                 </div>
                 <div style={{ fontWeight:800, color:sc(d.status), fontSize:15, width:40, textAlign:"right" }}>{d.avg}</div>
                 <span style={{ fontSize:10, fontWeight:700, color:sc(d.status), background:sb(d.status), border:`1px solid ${sbd(d.status)}`, borderRadius:4, padding:"2px 7px", width:60, textAlign:"center", flexShrink:0 }}>{d.status}</span>
-                <div style={{ color:"#9C8F82", fontSize:11, width:40, textAlign:"right" }}>n={d.n}</div>
+                <div style={{ color:"#7A6F63", fontSize:11, width:40, textAlign:"right" }}>n={d.n}</div>
               </div>
             ))}
           </div>
 
           {/* Status group summary */}
           <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap:12 }}>
-            {[["Concern","#FDF2F2","#C0392B",concerns],["Watch","#FFFBEB","#D68910",watches],["Healthy","#F0FDF4","#1E8449",healthys]].map(([label,bg,color,group])=>(
+            {[["Concern","#F6E5DE","#BE6650",concerns],["Watch","#F7EEDC","#C08636",watches],["Healthy","#E9F1E9","#5C9A6D",healthys]].map(([label,bg,color,group])=>(
               <div key={label} style={{ background:bg, borderRadius:10, padding:"14px 16px" }}>
                 <div style={{ fontSize:11, fontWeight:700, color, textTransform:"uppercase", letterSpacing:1.5, marginBottom:8 }}>{label} · {group.length}</div>
                 {group.map(d=>(
-                  <div key={d.key} style={{ fontSize:12, color:"#1E1B3A", padding:"3px 0", borderBottom:"1px solid rgba(0,0,0,0.05)" }}>{d.label}</div>
+                  <div key={d.key} style={{ fontSize:12, color:"#2C2621", padding:"3px 0", borderBottom:"1px solid rgba(0,0,0,0.05)" }}>{d.label}</div>
                 ))}
                 {!group.length && <div style={{ fontSize:12, color, opacity:0.5 }}>None</div>}
               </div>
@@ -3343,7 +3343,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
         ) : (
           // No tab selected — show all for print
           <div>
-            <div className="no-print" style={{ textAlign:"center", color:"#9C8F82", fontSize:13, padding:"16px 0 32px" }}>
+            <div className="no-print" style={{ textAlign:"center", color:"#7A6F63", fontSize:13, padding:"16px 0 32px" }}>
               Select a department above to focus, or download PDF to get the full report.
             </div>
             <div className="print-only">
@@ -3363,7 +3363,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
           .pulse-disc-body { display:block !important; }
           .pulse-disc-chev, .pulse-disc-head { pointer-events:none; }
           .pulse-disc-chev { display:none !important; }
-          .pulse-disc { border-top:1px solid #EDE3D6 !important; }
+          .pulse-disc { border-top:1px solid #ECE2D2 !important; }
         }
         .print-only { display:none; }
       `}</style>
@@ -3390,8 +3390,8 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
       <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:12,
         marginBottom:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontSize:22, fontWeight:800, color:"#2A211C", marginBottom:2 }}>{dept.label}</div>
-          <div style={{ fontSize:13, color:"#8C7D70" }}>n = {dept.n} respondents</div>
+          <div style={{ fontFamily:FONT_DISPLAY, fontSize:24, fontWeight:600, color:"#2C2621", marginBottom:2 }}>{dept.label}</div>
+          <div style={{ fontSize:13, color:"#7A6F63" }}>n = {dept.n} respondents</div>
         </div>
         <div style={{ textAlign:"right" }}>
           <div style={{ fontSize:34, fontWeight:800, color:statusColor, lineHeight:1, fontVariantNumeric:"tabular-nums" }}>{dept.avg}</div>
@@ -3403,14 +3403,14 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
       </div>
 
       {/* Nested panel — each part its own section, all open (and print-safe) */}
-      <div style={{ background:"#FFFFFF", border:"1px solid #EDE3D6", borderRadius:12, overflow:"hidden", boxShadow: C.shadow }}>
+      <div style={{ background:"#FFFFFF", border:"1px solid #ECE2D2", borderRadius:12, overflow:"hidden", boxShadow: C.shadow }}>
 
       {strengths.length > 0 && (
-        <Disclosure title="What's working" count={`${strengths.length}`} dot="#1F7A44" defaultOpen>
+        <Disclosure title="What's working" count={`${strengths.length}`} dot="#5C9A6D" defaultOpen>
           {strengths.map((s,i) => (
             <div key={i} style={{ display:"flex", gap:10, marginBottom:8, alignItems:"flex-start" }}>
-              <span style={{ color:"#1F7A44", fontWeight:700, fontSize:14, marginTop:1, flexShrink:0 }}>✓</span>
-              <span style={{ fontSize:13, color:"#2A211C", lineHeight:1.6 }}>{s}</span>
+              <span style={{ color:"#5C9A6D", fontWeight:700, fontSize:14, marginTop:1, flexShrink:0 }}>✓</span>
+              <span style={{ fontSize:13, color:"#2C2621", lineHeight:1.6 }}>{s}</span>
             </div>
           ))}
         </Disclosure>
@@ -3421,22 +3421,22 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
           {growth.map((g,i) => (
             <div key={i} style={{ display:"flex", gap:10, marginBottom:8, alignItems:"flex-start" }}>
               <span style={{ color:statusColor, fontWeight:700, fontSize:14, marginTop:1, flexShrink:0 }}>→</span>
-              <span style={{ fontSize:13, color:"#2A211C", lineHeight:1.6 }}>{g}</span>
+              <span style={{ fontSize:13, color:"#2C2621", lineHeight:1.6 }}>{g}</span>
             </div>
           ))}
         </Disclosure>
       )}
 
       {/* Question scores table */}
-      <Disclosure title="Question scores" count={`${(dept.questions||[]).length} questions`} dot="#DC5A12" defaultOpen flush>
+      <Disclosure title="Question scores" count={`${(dept.questions||[]).length} questions`} dot="#E0863C" defaultOpen flush>
         <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
         <table style={{ width:"100%", minWidth: isMobile ? 460 : "auto", borderCollapse:"collapse", fontSize:12 }}>
           <thead>
-            <tr style={{ background:"#FFF4EC", borderRadius:6 }}>
-              <th style={{ textAlign:"left", padding:"8px 10px", color:"#9C8F82", fontWeight:600, borderRadius:"6px 0 0 6px" }}>Question</th>
-              <th style={{ textAlign:"center", padding:"8px 10px", color:"#9C8F82", fontWeight:600, width:55 }}>Score</th>
-              <th style={{ textAlign:"center", padding:"8px 10px", color:"#9C8F82", fontWeight:600, width:75 }}>Status</th>
-              <th style={{ textAlign:"center", padding:"8px 10px", color:"#9C8F82", fontWeight:600, width:45, borderRadius:"0 6px 6px 0" }}>Scale</th>
+            <tr style={{ background:"#FBEFE4", borderRadius:6 }}>
+              <th style={{ textAlign:"left", padding:"8px 10px", color:"#7A6F63", fontWeight:600, borderRadius:"6px 0 0 6px" }}>Question</th>
+              <th style={{ textAlign:"center", padding:"8px 10px", color:"#7A6F63", fontWeight:600, width:55 }}>Score</th>
+              <th style={{ textAlign:"center", padding:"8px 10px", color:"#7A6F63", fontWeight:600, width:75 }}>Status</th>
+              <th style={{ textAlign:"center", padding:"8px 10px", color:"#7A6F63", fontWeight:600, width:45, borderRadius:"0 6px 6px 0" }}>Scale</th>
             </tr>
           </thead>
           <tbody>
@@ -3444,9 +3444,9 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
               const o={Concern:0,Watch:1,Healthy:2};
               return (o[a.status]??1)-(o[b.status]??1) || a.score-b.score;
             }).map((q,i)=>(
-              <tr key={i} style={{ borderBottom:"1px solid #FFF4EC" }}>
-                <td style={{ padding:"8px 10px", color:"#1E1B3A", lineHeight:1.5 }}>
-                  {q.en}{q.burden ? <span style={{ color:"#9C8F82", fontSize:10 }}> [Burden]</span> : ""}
+              <tr key={i} style={{ borderBottom:"1px solid #FBEFE4" }}>
+                <td style={{ padding:"8px 10px", color:"#2C2621", lineHeight:1.5 }}>
+                  {q.en}{q.burden ? <span style={{ color:"#7A6F63", fontSize:10 }}> [Burden]</span> : ""}
                   {(() => {
                     const sbMatch = findSurveyBasics(dept.key, q.en);
                     if (!sbMatch) return null;
@@ -3457,7 +3457,7 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
                     const text = (sbOverrides && sbOverrides[ovKey]) || (sbMaster && sbMaster[masterKey]) || sbMatch[level];
                     if (!text) return null;
                     return (
-                      <div style={{ fontSize:11, color:"#7A6E62", fontStyle:"italic",
+                      <div style={{ fontSize:11, color:"#7A6F63", fontStyle:"italic",
                         lineHeight:1.4, marginTop:4 }}>
                         {text}
                       </div>
@@ -3469,7 +3469,7 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
                   <span style={{ fontSize:10, fontWeight:700, color:sc(q.status), background:sb(q.status),
                     border:`1px solid ${sbd(q.status)}`, borderRadius:4, padding:"2px 6px" }}>{q.status}</span>
                 </td>
-                <td style={{ textAlign:"center", padding:"8px 10px", color:"#9C8F82", fontSize:10 }}>{q.scale.toUpperCase()}</td>
+                <td style={{ textAlign:"center", padding:"8px 10px", color:"#7A6F63", fontSize:10 }}>{q.scale.toUpperCase()}</td>
               </tr>
             ))}
           </tbody>
@@ -3479,13 +3479,13 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
 
       {/* Leadership Questions */}
       {leadershipQs.length > 0 && (
-        <Disclosure title="Questions for leadership" count={`${leadershipQs.length}`} dot="#3B3882" defaultOpen>
+        <Disclosure title="Questions for leadership" count={`${leadershipQs.length}`} dot="#B96524" defaultOpen>
           {leadershipQs.map((q,i) => (
             <div key={i} style={{ display:"flex", gap:12, marginBottom:10, alignItems:"flex-start" }}>
-              <span style={{ background:"#DC5A12", color:"white", borderRadius:"50%", width:20, height:20,
+              <span style={{ background:"#E0863C", color:"white", borderRadius:"50%", width:20, height:20,
                 display:"flex", alignItems:"center", justifyContent:"center",
                 fontSize:11, fontWeight:700, flexShrink:0, marginTop:1 }}>{i+1}</span>
-              <span style={{ fontSize:13, color:"#2A211C", lineHeight:1.6 }}>{q}</span>
+              <span style={{ fontSize:13, color:"#2C2621", lineHeight:1.6 }}>{q}</span>
             </div>
           ))}
         </Disclosure>
@@ -3493,9 +3493,9 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
 
       {/* Staff Quotes */}
       {quotes.length > 0 && (
-        <Disclosure title="What staff said" count={`${quotes.length}`} dot="#4B5563" defaultOpen>
+        <Disclosure title="What staff said" count={`${quotes.length}`} dot="#5A4A3B" defaultOpen>
           {dept.openQLabel && (
-            <div style={{ fontSize:12, color:"#7A6E62", fontStyle:"italic", marginBottom:12 }}>
+            <div style={{ fontSize:12, color:"#7A6F63", fontStyle:"italic", marginBottom:12 }}>
               In response to: "{dept.openQLabel}"
             </div>
           )}
@@ -3506,17 +3506,17 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
               const trans = isObj ? q.translation : null;
               const isOrig = (isObj ? q.isOriginalLang : false) || looksNonEnglish(orig);
               return (
-                <div key={i} style={{ background:"#F5EFE6", borderLeft:"3px solid #E0D4C4",
+                <div key={i} style={{ background:"#FDFAF4", borderLeft:"3px solid #E2D3C2",
                   borderRadius:"0 8px 8px 0", padding:"12px 16px" }}>
-                  <div style={{ fontSize:13, color:"#2A211C", lineHeight:1.7,
+                  <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.7,
                     fontStyle: isOrig ? "italic" : "normal" }}>
                     "{orig}"
                   </div>
                   {isOrig && trans && (
-                    <div style={{ marginTop:6, fontSize:11, color:"#8A7A6B",
+                    <div style={{ marginTop:6, fontSize:11, color:"#7A6F63",
                       fontStyle:"normal", lineHeight:1.4,
-                      borderLeft:"2px solid #E0D4C4", paddingLeft:8, marginLeft:0 }}>
-                      <span style={{ fontSize:9, fontWeight:700, color:"#9C8F82",
+                      borderLeft:"2px solid #E2D3C2", paddingLeft:8, marginLeft:0 }}>
+                      <span style={{ fontSize:9, fontWeight:700, color:"#7A6F63",
                         textTransform:"uppercase", letterSpacing:.5, marginRight:6 }}>
                         Translation
                       </span>
@@ -3561,21 +3561,21 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
   }
 
   return (
-    <div style={{ minHeight:"100vh", background:"#F8F7F4", fontFamily:"'Inter',system-ui,sans-serif" }}>
-      <div style={{ background:"#FFFFFF", borderBottom:"1px solid #EDE3D6", padding: isMobile ? "12px 16px" : "14px 24px", display:"flex", alignItems:"center", gap: isMobile ? 10 : 16, flexWrap:"wrap" }}>
-        <button onClick={()=>setView("__back__")} style={{ ...navBtn, background:"transparent", border:"1px solid #EDE3D6" }}>← Back</button>
-        <div style={{ flex:1, color:"#1E1B3A", fontWeight:700 }}>{lockCountry ? `${lockCountry} Dashboard` : "P&C Dashboard"}</div>
+    <div style={{ minHeight:"100vh", background:"#F6F1E8", fontFamily:"'Inter',system-ui,sans-serif" }}>
+      <div style={{ background:"#FFFFFF", borderBottom:"1px solid #ECE2D2", padding: isMobile ? "12px 16px" : "14px 24px", display:"flex", alignItems:"center", gap: isMobile ? 10 : 16, flexWrap:"wrap" }}>
+        <button onClick={()=>setView("__back__")} style={{ ...navBtn, background:"transparent", border:"1px solid #ECE2D2" }}>← Back</button>
+        <div style={{ flex:1, fontFamily:FONT_DISPLAY, fontSize:18, color:"#2C2621", fontWeight:600 }}>{lockCountry ? `${lockCountry} Dashboard` : "P&C Dashboard"}</div>
         {!lockCountry && (
           <select value={dashCountry} onChange={e=>setDashCountry(e.target.value)}
-            style={{ background:"#F8F7F4", border:"1px solid #EDE3D6", borderRadius:6, color:"#1E1B3A", padding:"6px 12px", fontSize:13 }}>
+            style={{ background:"#F6F1E8", border:"1px solid #ECE2D2", borderRadius:6, color:"#2C2621", padding:"6px 12px", fontSize:13 }}>
             <option value="all">All Countries</option>
             {countries.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         )}
         {authUser && (
-          <span style={{ fontSize:12, color:"#8C7D70", whiteSpace:"nowrap" }}>
+          <span style={{ fontSize:12, color:"#7A6F63", whiteSpace:"nowrap" }}>
             {authUser.name} · <button onClick={onSignOut}
-              style={{ background:"none", border:"none", padding:0, cursor:"pointer", color:"#B84A0E", fontWeight:600, fontSize:12 }}>Sign out</button>
+              style={{ background:"none", border:"none", padding:0, cursor:"pointer", color:"#B96524", fontWeight:600, fontSize:12 }}>Sign out</button>
           </span>
         )}
       </div>
@@ -3585,7 +3585,7 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
         {/* JV-wide overview grid */}
         {effDashCountry === "all" && (
           <>
-            <div style={{ fontSize:13, fontWeight:700, color:"#8C7D70", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Latest Results by Country</div>
+            <div style={{ fontSize:13, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Latest Results by Country</div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:16, marginBottom:40 }}>
               {Object.values(latestByCountry).map(run => {
                 const concern = run.depts?.filter(d=>d.status==="Concern").length||0;
@@ -3596,16 +3596,16 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
                   <div key={run.id} style={{ ...card, cursor:"pointer" }} onClick={()=>setDashCountry(run.country)}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16 }}>
                       <div>
-                        <div style={{ color:"#1E1B3A", fontWeight:700, fontSize:16 }}>{run.country}</div>
-                        <div style={{ color:"#9C8F82", fontSize:12 }}>{run.year}</div>
+                        <div style={{ fontFamily:FONT_DISPLAY, color:"#2C2621", fontWeight:600, fontSize:18 }}>{run.country}</div>
+                        <div style={{ color:"#7A6F63", fontSize:12 }}>{run.year}</div>
                       </div>
                       <span style={{ fontSize:11, fontWeight:700, color:sc(overallStatus), background:sb(overallStatus), border:`1px solid ${sbd(overallStatus)}`, borderRadius:6, padding:"3px 10px" }}>{overallStatus}</span>
                     </div>
                     <div style={{ display:"flex", gap:8 }}>
-                      {[["Concern",concern,"#BE3B2E"],["Watch",watch,"#A96A12"],["Healthy",healthy,"#1F7A44"]].map(([l,n,c])=>(
-                        <div key={l} style={{ flex:1, textAlign:"center", background:"#F5EFE6", borderRadius:8, padding:"10px 4px" }}>
-                          <div style={{ fontSize:22, fontWeight:800, color:c, fontVariantNumeric:"tabular-nums" }}>{n}</div>
-                          <div style={{ fontSize:10, fontWeight:600, color:"#8C7D70", textTransform:"uppercase", letterSpacing:.5 }}>{l}</div>
+                      {[["Concern",concern,"#BE6650"],["Watch",watch,"#C08636"],["Healthy",healthy,"#5C9A6D"]].map(([l,n,c])=>(
+                        <div key={l} style={{ flex:1, textAlign:"center", background:"#FDFAF4", borderRadius:8, padding:"10px 4px" }}>
+                          <div style={{ fontFamily:FONT_DISPLAY, fontSize:24, fontWeight:600, color:c, fontVariantNumeric:"tabular-nums" }}>{n}</div>
+                          <div style={{ fontSize:10, fontWeight:600, color:"#7A6F63", textTransform:"uppercase", letterSpacing:.5 }}>{l}</div>
                         </div>
                       ))}
                     </div>
@@ -3615,28 +3615,28 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
             </div>
 
             {/* Cross-country dept heatmap */}
-            <div style={{ fontSize:13, fontWeight:700, color:"#8C7D70", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Department Health — All Countries</div>
-            <div style={{ background:"#FFFFFF", border:"1px solid #EDE3D6", boxShadow:C.shadow, borderRadius:12, overflow:"hidden", overflowX:"auto", WebkitOverflowScrolling:"touch", marginBottom:40 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Department Health — All Countries</div>
+            <div style={{ background:"#FFFFFF", border:"1px solid #ECE2D2", boxShadow:C.shadow, borderRadius:12, overflow:"hidden", overflowX:"auto", WebkitOverflowScrolling:"touch", marginBottom:40 }}>
               <table style={{ width:"100%", minWidth: isMobile ? 520 : "auto", borderCollapse:"collapse", fontSize:12 }}>
                 <thead>
-                  <tr style={{ borderBottom:"1px solid #EDE3D6" }}>
-                    <th style={{ textAlign:"left", padding:"12px 16px", color:"#9C8F82" }}>Department</th>
+                  <tr style={{ borderBottom:"1px solid #ECE2D2" }}>
+                    <th style={{ textAlign:"left", padding:"12px 16px", color:"#7A6F63" }}>Department</th>
                     {Object.keys(latestByCountry).map(c => (
-                      <th key={c} style={{ textAlign:"center", padding:"12px 10px", color:"#9C8F82", fontWeight:600 }}>{c}</th>
+                      <th key={c} style={{ textAlign:"center", padding:"12px 10px", color:"#7A6F63", fontWeight:600 }}>{c}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {DEPTS_ORDER.map(dk => (
-                    <tr key={dk} style={{ borderBottom:"1px solid #EDE3D6" }}>
-                      <td style={{ padding:"10px 16px", color:"#7A6E62", fontWeight:500 }}>{dk}</td>
+                    <tr key={dk} style={{ borderBottom:"1px solid #ECE2D2" }}>
+                      <td style={{ padding:"10px 16px", color:"#7A6F63", fontWeight:500 }}>{dk}</td>
                       {Object.values(latestByCountry).map(run => {
                         const d = run.depts?.find(dep=>dep.key===dk||dep.group===dk);
                         return (
                           <td key={run.country} style={{ textAlign:"center", padding:"10px" }}>
                             {d ? (
                               <span style={{ fontSize:11, fontWeight:700, color:sc(d.status), background:sb(d.status), borderRadius:4, padding:"2px 8px" }}>{d.avg}</span>
-                            ) : <span style={{ color:"#EDE3D6" }}>—</span>}
+                            ) : <span style={{ color:"#ECE2D2" }}>—</span>}
                           </td>
                         );
                       })}
@@ -3651,14 +3651,14 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
         {/* Single country trend view */}
         {effDashCountry !== "all" && (
           <>
-            <div style={{ fontSize:13, fontWeight:700, color:"#8C7D70", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>{effDashCountry} — Department Health</div>
+            <div style={{ fontSize:13, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>{effDashCountry} — Department Health</div>
             {(runsByCountry[effDashCountry]||[]).map(run => (
               <div key={run.id} style={{ marginBottom:32 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12, flexWrap:"wrap" }}>
-                  <span style={{ color:"#DC5A12", fontWeight:700, fontSize:13 }}>{run.year}</span>
+                  <span style={{ color:"#E0863C", fontWeight:700, fontSize:13 }}>{run.year}</span>
                   {openReport && (
                     <button onClick={() => openReport(run)}
-                      style={{ ...navBtn, fontSize:12, padding:"5px 12px", background:"#DC5A12", color:"#fff", border:"1px solid transparent" }}>
+                      style={{ ...navBtn, fontSize:12, padding:"5px 12px", background:"#E0863C", color:"#fff", border:"1px solid transparent" }}>
                       View report →
                     </button>
                   )}
@@ -3671,12 +3671,12 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
                     return (parseFloat(a.avg)||0)-(parseFloat(b.avg)||0);
                   }).map(d => (
                     <div key={d.key} style={{ background:"#FFFFFF", borderRadius:10, padding:"14px 16px", border:`1px solid ${sbd(d.status)}` }}>
-                      <div style={{ color:"#7A6E62", fontSize:11, marginBottom:6 }}>{d.label}</div>
+                      <div style={{ color:"#7A6F63", fontSize:11, marginBottom:6 }}>{d.label}</div>
                       <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
-                        <span style={{ fontSize:22, fontWeight:800, color:sc(d.status) }}>{d.avg}</span>
+                        <span style={{ fontFamily:FONT_DISPLAY, fontSize:24, fontWeight:600, color:sc(d.status) }}>{d.avg}</span>
                         <span style={{ fontSize:10, fontWeight:700, color:sc(d.status) }}>{d.status}</span>
                       </div>
-                      <div style={{ color:"#8A7A6B", fontSize:10, marginTop:4 }}>n={d.n}</div>
+                      <div style={{ color:"#7A6F63", fontSize:10, marginTop:4 }}>n={d.n}</div>
                     </div>
                   ))}
                 </div>
@@ -3685,14 +3685,14 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
 
             {/* Trend chart (text-based for now) */}
             {(runsByCountry[effDashCountry]||[]).length > 1 && (
-              <div style={{ background:"#FFFFFF", border:"1px solid #EDE3D6", boxShadow:C.shadow, borderRadius:12, padding:20, marginTop:24, overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
-                <div style={{ fontSize:11, fontWeight:700, color:"#8C7D70", textTransform:"uppercase", letterSpacing:1.5, marginBottom:16 }}>Trend — Year over Year</div>
+              <div style={{ background:"#FFFFFF", border:"1px solid #ECE2D2", boxShadow:C.shadow, borderRadius:12, padding:20, marginTop:24, overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
+                <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5, marginBottom:16 }}>Trend — Year over Year</div>
                 <table style={{ width:"100%", minWidth: isMobile ? 420 : "auto", borderCollapse:"collapse", fontSize:12 }}>
                   <thead>
-                    <tr style={{ borderBottom:"1px solid #EDE3D6" }}>
-                      <th style={{ textAlign:"left", padding:"8px 12px", color:"#9C8F82" }}>Department</th>
+                    <tr style={{ borderBottom:"1px solid #ECE2D2" }}>
+                      <th style={{ textAlign:"left", padding:"8px 12px", color:"#7A6F63" }}>Department</th>
                       {[...(runsByCountry[effDashCountry]||[])].sort((a,b)=>a.year-b.year).map(r=>(
-                        <th key={r.year} style={{ textAlign:"center", padding:"8px 12px", color:"#9C8F82" }}>{r.year}</th>
+                        <th key={r.year} style={{ textAlign:"center", padding:"8px 12px", color:"#7A6F63" }}>{r.year}</th>
                       ))}
                     </tr>
                   </thead>
@@ -3702,13 +3702,13 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
                         .map(r => r.depts?.find(d=>d.key===dk||d.group===dk));
                       if (rows.every(r=>!r)) return null;
                       return (
-                        <tr key={dk} style={{ borderBottom:"1px solid #EDE3D6" }}>
-                          <td style={{ padding:"8px 12px", color:"#7A6E62" }}>{dk}</td>
+                        <tr key={dk} style={{ borderBottom:"1px solid #ECE2D2" }}>
+                          <td style={{ padding:"8px 12px", color:"#7A6F63" }}>{dk}</td>
                           {rows.map((d,i)=>(
                             <td key={i} style={{ textAlign:"center", padding:"8px 12px" }}>
                               {d ? (
                                 <span style={{ fontWeight:700, color:sc(d.status) }}>{d.avg}</span>
-                              ) : <span style={{ color:"#EDE3D6" }}>—</span>}
+                              ) : <span style={{ color:"#ECE2D2" }}>—</span>}
                             </td>
                           ))}
                         </tr>
@@ -3720,9 +3720,9 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
             )}
 
             {/* OKR placeholder */}
-            <div style={{ background:"#FFFFFF", borderRadius:12, padding:24, marginTop:24, border:"1px dashed #EDE3D6" }}>
-              <div style={{ fontSize:11, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:1.5, marginBottom:8 }}>OKR Integration</div>
-              <div style={{ color:"#8A7A6B", fontSize:13 }}>Key Results tied to staff health metrics will appear here once OKR system integration is connected.</div>
+            <div style={{ background:"#FFFFFF", borderRadius:12, padding:24, marginTop:24, border:"1px dashed #ECE2D2" }}>
+              <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5, marginBottom:8 }}>OKR Integration</div>
+              <div style={{ color:"#7A6F63", fontSize:13 }}>Key Results tied to staff health metrics will appear here once OKR system integration is connected.</div>
             </div>
           </>
         )}
@@ -3730,7 +3730,7 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
       {isLeader && (
       <div style={{ marginTop:32 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-          <div style={{ fontSize:13, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:2 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:2 }}>
             Saved Refinements ({Object.keys(refinements).length})
           </div>
           {Object.keys(refinements).length > 0 && (
@@ -3739,11 +3739,11 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
                 setRefinements({});
                 try { localStorage.removeItem("pulse:refinements"); } catch {}
               }
-            }} style={{ ...navBtn, background:"#C0392B", fontSize:12 }}>Clear All</button>
+            }} style={{ ...navBtn, background:"#BE6650", fontSize:12 }}>Clear All</button>
           )}
         </div>
         {Object.keys(refinements).length === 0 ? (
-          <div style={{ color:"#8A7A6B", fontSize:13, fontStyle:"italic" }}>
+          <div style={{ color:"#7A6F63", fontSize:13, fontStyle:"italic" }}>
             No refinements saved yet. When directors edit wording in the Director Review, those edits are saved here and pre-filled in future country reports.
           </div>
         ) : (
@@ -3754,19 +3754,19 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
                 <div key={key} style={{ background:"#FFFFFF", borderRadius:8, padding:"12px 16px", display:"flex", alignItems:"flex-start", gap:12 }}>
                   <div style={{ flex:1 }}>
                     <div style={{ display:"flex", gap:8, marginBottom:4 }}>
-                      <span style={{ fontSize:10, fontWeight:700, color:"#DC5A12", background:"#FFEBDA", borderRadius:4, padding:"2px 8px" }}>{deptKey}</span>
-                      <span style={{ fontSize:10, fontWeight:700, color:"#9C8F82", background:"#F8F7F4", borderRadius:4, padding:"2px 8px" }}>{section}</span>
-                      <span style={{ fontSize:10, color:"#8A7A6B" }}>#{parseInt(idx)+1}</span>
+                      <span style={{ fontSize:10, fontWeight:700, color:"#E0863C", background:"#F7E7D5", borderRadius:4, padding:"2px 8px" }}>{deptKey}</span>
+                      <span style={{ fontSize:10, fontWeight:700, color:"#7A6F63", background:"#F6F1E8", borderRadius:4, padding:"2px 8px" }}>{section}</span>
+                      <span style={{ fontSize:10, color:"#7A6F63" }}>#{parseInt(idx)+1}</span>
                     </div>
-                    <div style={{ color:"#1E1B3A", fontSize:13, lineHeight:1.5 }}>{val.text}</div>
-                    <div style={{ color:"#8A7A6B", fontSize:10, marginTop:4 }}>Saved {new Date(val.savedAt).toLocaleDateString()}</div>
+                    <div style={{ color:"#2C2621", fontSize:13, lineHeight:1.5 }}>{val.text}</div>
+                    <div style={{ color:"#7A6F63", fontSize:10, marginTop:4 }}>Saved {new Date(val.savedAt).toLocaleDateString()}</div>
                   </div>
                   <button onClick={() => {
                     const updated = { ...refinements };
                     delete updated[key];
                     setRefinements(updated);
                     try { localStorage.setItem("pulse:refinements", JSON.stringify(updated)); } catch {}
-                  }} style={{ color:"#9C8F82", background:"none", border:"none", cursor:"pointer", fontSize:16, lineHeight:1 }}>×</button>
+                  }} style={{ color:"#7A6F63", background:"none", border:"none", cursor:"pointer", fontSize:16, lineHeight:1 }}>×</button>
                 </div>
               );
             })}
