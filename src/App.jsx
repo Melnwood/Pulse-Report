@@ -7,7 +7,8 @@ import Login from "./components/Login";
 import UsersView from "./components/UsersView";
 import { authStatus, tokenValid, getUser, logout } from "./authClient";
 import SURVEY_BASICS from "./surveyBasics.json";
-import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility } from "./airtable";
+import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, loadMeasures } from "./airtable";
+import MeasurePanel from "./components/MeasurePanel";
 
 // Map app department keys (HR, LD, LC1/LC2, JVK1/JVK2, ...) to surveyBasics.json keys
 // (which are lowercase and un-split: hr, ld, lc, jvk, ...).
@@ -2335,7 +2336,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
           {dept && deptTab === "notes" && (
             <DeptNotesTab
               dept={dept} country={country} year={year}
-              me={me} saveMe={saveMe} isPCLead={isPCLead}
+              me={me} saveMe={saveMe} isPCLead={isPCLead} canEdit={canEdit(dept.key)}
               sbOverrides={sbOverrides} sbMaster={sbMaster}
             />
           )}
@@ -2574,8 +2575,15 @@ function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes
 
 // The "Notes" tab of a department page — notes at every level:
 // general department log, a thread per section, and a thread per question.
-function DeptNotesTab({ dept, country, year, me, saveMe, isPCLead, sbOverrides, sbMaster }) {
+function DeptNotesTab({ dept, country, year, me, saveMe, isPCLead, canEdit = true, sbOverrides, sbMaster }) {
   const [qNotes, setQNotes] = useState(null);   // all question+section notes for this run+dept
+  const [measures, setMeasures] = useState([]); // behavioural-change measures for this dept, by question
+  const measureFor = (question) => measures.find(x => x.question === question) || null;
+  const upsertMeasureLocal = (saved) => setMeasures(prev => {
+    const i = prev.findIndex(x => x.id === saved.id || x.question === saved.question);
+    if (i >= 0) { const next = prev.slice(); next[i] = saved; return next; }
+    return [saved, ...prev];
+  });
 
   // The Survey Basics interpretation shown next to a question — same resolution
   // the report/heatmap use: run override first, then promoted master, then the
@@ -2600,7 +2608,12 @@ function DeptNotesTab({ dept, country, year, me, saveMe, isPCLead, sbOverrides, 
     try { setQNotes(await loadQuestionNotes(country, year, dept.key)); }
     catch { setQNotes([]); }
   };
-  useEffect(() => { setQNotes(null); reload(); /* eslint-disable-next-line */ }, [country, year, dept.key]);
+  useEffect(() => {
+    setQNotes(null); reload();
+    // Behavioural-change measures are threaded by country+dept (not run), loaded once.
+    loadMeasures(country, dept.key).then(setMeasures).catch(() => setMeasures([]));
+    /* eslint-disable-next-line */
+  }, [country, year, dept.key]);
 
   const notesFor = (label) => (qNotes || []).filter(n => n.question === label);
   const flip = async (n) => {
@@ -2653,14 +2666,20 @@ function DeptNotesTab({ dept, country, year, me, saveMe, isPCLead, sbOverrides, 
                   </div>
                 }
                 sub={
-                  /* 3) Survey Basics — what this score means, so directors know what they're noting */
-                  <div style={{ marginTop:6, borderLeft:"2px solid #F0DFCE", paddingLeft:8 }}>
-                    <span style={{ fontSize:9, fontWeight:700, color:"#7A6F63",
-                      textTransform:"uppercase", letterSpacing:.5, display:"block", marginBottom:2 }}>Survey Basics</span>
-                    <span style={{ fontSize:12, color:"#5A4A3B", lineHeight:1.45, fontStyle: sbText ? "normal" : "italic" }}>
-                      {sbText || "No Survey Basics interpretation is on file for this question."}
-                    </span>
-                  </div>
+                  <>
+                    {/* 3) Survey Basics — what this score means, so directors know what they're noting */}
+                    <div style={{ marginTop:6, borderLeft:"2px solid #F0DFCE", paddingLeft:8 }}>
+                      <span style={{ fontSize:9, fontWeight:700, color:"#7A6F63",
+                        textTransform:"uppercase", letterSpacing:.5, display:"block", marginBottom:2 }}>Survey Basics</span>
+                      <span style={{ fontSize:12, color:"#5A4A3B", lineHeight:1.45, fontStyle: sbText ? "normal" : "italic" }}>
+                        {sbText || "No Survey Basics interpretation is on file for this question."}
+                      </span>
+                    </div>
+                    {/* 4) Behavioural-change tracking (threaded across runs) */}
+                    <MeasurePanel country={country} deptKey={dept.key} question={q.en}
+                      currentScore={q.score} author={me} canEdit={canEdit}
+                      measure={measureFor(q.en)} onSaved={upsertMeasureLocal} />
+                  </>
                 } />
               );
             })}

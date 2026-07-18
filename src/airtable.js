@@ -463,4 +463,71 @@ export async function setQuestionNoteVisibility(noteId, visibility) {
     records: [{ id: noteId, fields: { "Visibility": visibility === "Public" ? "Public" : "Private" } }] });
 }
 
+// ─── MEASURES (behavioural-change tracking) ──────────────────────────────────
+// One record per Country + Department + Question, threaded across runs. Stores a
+// baseline/target and behaviour, plus interventions[] {date,action} and
+// checks[] {date,value,source} as JSON in long-text fields (like Survey Data
+// JSON). Addressed by name via the proxy; the server scopes writes by Country.
+const parseJSONArr = (s) => { try { const v = JSON.parse(s || ""); return Array.isArray(v) ? v : []; } catch { return []; } };
+const measureFromRec = (r) => ({
+  id: r.id,
+  country: r.fields["Country"] || "",
+  deptKey: r.fields["Department"] || "",
+  question: r.fields["Question"] || "",
+  baseline: r.fields["Baseline"] ?? null,
+  target: r.fields["Target"] ?? null,
+  behavior: r.fields["Behavior"] || "",
+  interventions: parseJSONArr(r.fields["Interventions"]),
+  checks: parseJSONArr(r.fields["Checks"]),
+  status: r.fields["Status"] || "Open",
+  author: r.fields["Author"] || "",
+  created: r.fields["Created"] || null,
+  updated: r.fields["Updated"] || null,
+});
+
+// All measures for a country+department (every tracked question), newest first.
+export async function loadMeasures(country, deptKey) {
+  const res = await call({ action: "list", table: "measures",
+    filterByFormula: `AND({Country} = ${q(country)}, {Department} = ${q(deptKey)})` });
+  return (res.records || []).map(measureFromRec)
+    .sort((a, b) => new Date(b.updated || b.created || 0) - new Date(a.updated || a.created || 0));
+}
+
+// The single measure tracking one question (or null if none exists yet).
+export async function loadMeasure(country, deptKey, question) {
+  const res = await call({ action: "list", table: "measures",
+    filterByFormula: `AND({Country} = ${q(country)}, {Department} = ${q(deptKey)}, {Question} = ${q(question)})`,
+    params: { pageSize: 1 } });
+  const r = (res.records || [])[0];
+  return r ? measureFromRec(r) : null;
+}
+
+// Create or update the measure for a question. interventions/checks are arrays
+// and get serialized here. Upserts by record id when present. Returns the saved
+// measure.
+export async function saveMeasure(m) {
+  const now = new Date().toISOString().slice(0, 10);
+  const fields = {
+    "Name": `${m.country} · ${m.deptKey} · ${String(m.question || "").slice(0, 60)}`,
+    "Country": m.country,
+    "Department": m.deptKey,
+    "Question": m.question || "",
+    "Baseline": m.baseline != null ? Number(m.baseline) : undefined,
+    "Target": m.target != null ? Number(m.target) : undefined,
+    "Behavior": m.behavior || "",
+    "Interventions": JSON.stringify(m.interventions || []),
+    "Checks": JSON.stringify(m.checks || []),
+    "Status": m.status || "Open",
+    "Author": m.author || "",
+    "Updated": now,
+  };
+  if (m.id) {
+    const res = await call({ action: "update", table: "measures", records: [{ id: m.id, fields }] });
+    return measureFromRec(res.records[0]);
+  }
+  fields["Created"] = now;
+  const res = await call({ action: "create", table: "measures", records: [{ fields }] });
+  return measureFromRec(res.records[0]);
+}
+
 export { F as AIRTABLE_FIELDS };

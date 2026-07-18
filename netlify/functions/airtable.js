@@ -22,6 +22,7 @@ const TABLES = {
   team:        "tblmucsQUIbfADmI1",
   deptNotes:     "Department Notes",
   questionNotes: "Question Notes",
+  measures:      "Measures",
 };
 
 exports.handler = async (event) => {
@@ -100,6 +101,9 @@ exports.handler = async (event) => {
     if (tbl === "runs") return startsWithCountry(fields.Run) || String(fields.Country || "").toLowerCase() === country.toLowerCase();
     if (tbl === "departments") return startsWithCountry(fields["Department Key"]);
     if (tbl === "deptNotes" || tbl === "questionNotes") return startsWithCountry(fields.Run);
+    // Measures thread across runs, so they carry an explicit Country field
+    // rather than a "Country Year" Run string.
+    if (tbl === "measures") return String(fields.Country || "").toLowerCase() === country.toLowerCase();
     if (tbl === "selections") { const set = await allowedDeptIds(); const id = linkId(fields.Department); return !!id && set.has(id); }
     return false; // unknown table → deny for non-leaders
   };
