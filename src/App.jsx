@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useIsMobile, sc, sb, sbd, card, navBtn, lbl, inp, C } from "./theme";
 import Disclosure from "./components/Disclosure";
 import { VisibilityPicker, VisibilityChip } from "./components/Visibility";
-import { IconHelp, IconUpload, IconGlobe, IconSparkle } from "./components/Icons";
+import { IconHelp, IconUpload } from "./components/Icons";
 import SURVEY_BASICS from "./surveyBasics.json";
 import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility } from "./airtable";
 
@@ -649,61 +649,6 @@ async function translateMissingQuotes(quotes) {
     if (byIdx[i]) return { ...q, translation: byIdx[i], isOriginalLang: true };
     return q;
   });
-}
-
-// Generate exactly two thoughtful, status-aware leadership questions for one
-// department, on demand. Uses the department's status + weakest questions.
-// Returns an array of two strings, or throws a descriptive error.
-async function generateLeadershipQuestions(dept) {
-  const concernQs = (dept.questions || []).filter(q => q.status === 'Concern')
-    .map(q => `- ${q.score?.toFixed(2)} "${q.en}"`).join("\n") || "None";
-  const watchQs = (dept.questions || []).filter(q => q.status === 'Watch')
-    .map(q => `- ${q.score?.toFixed(2)} "${q.en}"`).join("\n") || "None";
-
-  const prompt = `You are helping prepare a JV (Josiah Venture) People & Culture Pulse Report for the ${dept.label} department. This goes to the department's leader.
-
-Department overall status: ${dept.status} (average ${dept.avg} out of 5, n=${dept.n}).
-Scoring: Healthy >= 3.50, Watch 2.50-3.49, Concern < 2.50. Lower means staff are struggling more.
-
-Concern-level questions:
-${concernQs}
-
-Watch-level questions:
-${watchQs}
-
-Write exactly TWO leadership questions for this department's leader. Their purpose is to help the leader personally reflect and figure out how to GO LEARN what is really happening with their team — not to hand them a conclusion.
-
-- Ground them in this department's actual weakest areas above.
-- Calibrate to the overall status: Concern = help them honestly confront a significant gap; Watch = help them investigate something mixed before it worsens; Healthy = help them protect a strength while staying curious about blind spots.
-- Each should prompt the leader to think about HOW they'll find this out — what conversations to have, what to observe, who to ask.
-- Open, non-defensive, thought-provoking. No yes/no questions. No jargon.
-
-Return ONLY a JSON array of exactly two strings, no markdown:
-["first question", "second question"]`;
-
-  const res = await fetch("/.netlify/functions/claude", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 1500,
-      messages: [{ role: "user", content: prompt }]
-    })
-  });
-
-  const rawBody = await res.text();
-  if (!res.ok) throw new Error(`Function returned HTTP ${res.status}: ${rawBody.slice(0,300)}`);
-  let data;
-  try { data = JSON.parse(rawBody); }
-  catch { throw new Error(`Function response was not JSON: ${rawBody.slice(0,300)}`); }
-  if (data.error) throw new Error(`API error: ${typeof data.error === "string" ? data.error : JSON.stringify(data.error).slice(0,300)}`);
-  const text = data.content?.find(b => b.type === "text")?.text;
-  if (!text) throw new Error(`Unexpected response shape: ${JSON.stringify(data).slice(0,300)}`);
-  let arr;
-  try { arr = JSON.parse(text.replace(/\`\`\`json|\`\`\`/g, "").trim()); }
-  catch { throw new Error(`Question JSON parse failed. Model returned: ${text.slice(0,300)}`); }
-  if (!Array.isArray(arr) || !arr.length) throw new Error("Model did not return a question array.");
-  return arr.slice(0, 2).map(String);
 }
 
 async function generateDeptContent(dept) {
@@ -1795,8 +1740,6 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
   const [activeDept, setActiveDept] = useState(null);
   const [deptTab, setDeptTab] = useState("review");   // "review" | "notes" — which tab of the department page
   const [showHelp, setShowHelp] = useState(false);
-  const [translating, setTranslating] = useState(false);
-  const [genQs, setGenQs] = useState(false);
   const [atBusy, setAtBusy] = useState(false);
   const [importMsg, setImportMsg] = useState(null);
   const importInputRef = useRef(null);
@@ -1846,6 +1789,12 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
               if (!Object.keys(imported).length) {
                 setImportMsg({ status:"error", lines:["No matching department sheets found in that file."] });
               } else {
+                // Auto-translate any non-English quotes the import brought in — the
+                // upload flow already does this, so imports match without a button.
+                setImportMsg({ status:"working", lines:["Imported — translating any non-English quotes…"] });
+                for (const dk of Object.keys(imported)) {
+                  try { imported[dk] = { ...imported[dk], quotes: await translateMissingQuotes(imported[dk].quotes || []) }; } catch {}
+                }
                 // Merge into existing selections so untouched depts are preserved
                 setSelections(prev => ({ ...prev, ...imported }));
                 try { localStorage.setItem(`pulse:sel:${country}:${year}`, JSON.stringify({ ...(selections||{}), ...imported })); } catch {}
@@ -1877,58 +1826,6 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
         <button onClick={() => importInputRef.current?.click()}
           style={{ ...navBtn, display:"inline-flex", alignItems:"center", gap:6, background:"white", border:"1px solid #EDE3D6", color:"#1E1B3A" }}>
           <IconUpload/> Import director review (Excel)
-        </button>
-        <button
-          disabled={translating}
-          onClick={async () => {
-            setTranslating(true);
-            try {
-              const updated = {};
-              for (const dk of Object.keys(selections)) {
-                const secs = selections[dk];
-                const newQuotes = await translateMissingQuotes(secs.quotes || []);
-                updated[dk] = { ...secs, quotes: newQuotes };
-              }
-              setSelections(updated);
-              try { localStorage.setItem(`pulse:sel:${country}:${year}`, JSON.stringify(updated)); } catch {}
-              setImportMsg({ status:"done", lines:["Translations updated for all non-English quotes."] });
-            } catch(e) {
-              setImportMsg({ status:"error", lines:["Translation failed: " + e.message] });
-            }
-            setTranslating(false);
-          }}
-          style={{ ...navBtn, display:"inline-flex", alignItems:"center", gap:6, background:"white", border:"1px solid #EDE3D6",
-            color: translating ? "#9C8F82" : "#1E1B3A", cursor: translating ? "wait" : "pointer" }}>
-          {translating ? "Translating…" : <><IconGlobe/> Translate quotes</>}
-        </button>
-        <button
-          disabled={genQs}
-          onClick={async () => {
-            setGenQs(true);
-            try {
-              const updated = { ...selections };
-              const targets = dept ? [dept] : depts;   // active dept, or all if none active
-              let count = 0;
-              for (const d of targets) {
-                if (!updated[d.key]) continue;
-                const qs = await generateLeadershipQuestions(d);
-                updated[d.key] = {
-                  ...updated[d.key],
-                  leadershipQs: qs.map(text => ({ text, include:true, rewrite:"", isRefined:false })),
-                };
-                count += qs.length;
-              }
-              setSelections(updated);
-              try { localStorage.setItem(`pulse:sel:${country}:${year}`, JSON.stringify(updated)); } catch {}
-              setImportMsg({ status:"done", lines:[`Generated ${count} leadership question${count===1?"":"s"} for ${dept ? dept.label : "all departments"}.`] });
-            } catch(e) {
-              setImportMsg({ status:"error", lines:["Leadership question generation failed: " + e.message] });
-            }
-            setGenQs(false);
-          }}
-          style={{ ...navBtn, display:"inline-flex", alignItems:"center", gap:6, background:"white", border:"1px solid #EDE3D6",
-            color: genQs ? "#9C8F82" : "#1E1B3A", cursor: genQs ? "wait" : "pointer" }}>
-          {genQs ? "Generating…" : <><IconSparkle/> Generate leadership questions</>}
         </button>
         </>)}
         {/* Quiet auto-sync indicator — replaces the manual push and save buttons.
