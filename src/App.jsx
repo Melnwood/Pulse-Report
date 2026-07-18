@@ -961,7 +961,10 @@ export default function App() {
         const runName = `${country} ${year}`;
         const d = surveyData.depts[deptKey];
         const runId = await upsertRun({ country, year, status: "In Review",
-          overallAvg: null, respondents: surveyData?.raw?.length ?? null });
+          // Only send a count when we actually have the raw rows (a fresh upload).
+          // A reloaded run has raw=[] → length 0; sending 0 would clobber the
+          // stored unique count, so pass null to leave the run's value intact.
+          overallAvg: null, respondents: surveyData?.raw?.length || null });
         await upsertDepartment(runId, runName, {
           key: deptKey, label: d.label, avg: d.avg, status: d.status, n: d.n,
           openQLabel: d.openQLabel,
@@ -1059,7 +1062,9 @@ export default function App() {
           overallAvg: surveyData?.depts
             ? (() => { const d = Object.values(surveyData.depts).filter(x=>x.avg); return d.length ? d.reduce((a,x)=>a+parseFloat(x.avg||0),0)/d.length : null; })()
             : null,
-          respondents: surveyData?.raw?.length ?? null,
+          // See note above: 0 (reloaded run) → null so we never overwrite the
+          // stored unique respondent count with a double-counted/empty value.
+          respondents: surveyData?.raw?.length || null,
         });
         for (const [deptKey, sel] of Object.entries(selections)) {
           const d = surveyData?.depts?.[deptKey];
@@ -1089,6 +1094,10 @@ export default function App() {
     const run = {
       id: `${country}-${year}-${Date.now()}`,
       country, year,
+      // Run-level unique respondents = number of survey rows (one per person).
+      // Never derive this by summing per-department n's — staff who serve on
+      // more than one team answer for each, so a sum double-counts them.
+      respondents: data?.raw?.length || null,
       depts: Object.values(data.depts).map(d => ({
         key: d.key, label: d.label, group: d.group,
         avg: d.avg, status: d.status, n: d.n,
@@ -1347,6 +1356,8 @@ export default function App() {
     <ReportView
       country={country} year={year}
       surveyData={surveyData} getApproved={getApproved}
+      // Run-level unique respondent count (survives reload; raw rows don't).
+      runRespondents={allRuns.find(r => r.country === country && String(r.year) === String(year))?.respondents ?? null}
       setView={setView}
       sbOverrides={sbOverrides} sbMaster={sbMaster}
     />
@@ -1470,7 +1481,12 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
   const withStatus = allDepts.filter(d => d.status);
   const counts = { Concern: 0, Watch: 0, Healthy: 0 };
   withStatus.forEach(d => { if (counts[d.status] != null) counts[d.status]++; });
-  const totalResp = allDepts.reduce((s, d) => s + (Number(d.n) || 0), 0);
+  // Unique respondents org-wide = sum of each country's run-level unique count
+  // (one survey row per person). Different countries are different people, so
+  // summing across runs is correct — but NEVER sum per-department n's within a
+  // run, since staff on multiple teams answer once per team and would be counted
+  // twice. Runs missing the stored count (older/local) contribute 0.
+  const totalResp = latestRuns.reduce((s, r) => s + (Number(r.respondents) || 0), 0);
   const finishedCt = allDepts.filter(d => d.reviewDone).length;
   const attention = withStatus
     .filter(d => d.status === "Concern" || d.status === "Watch")
@@ -1633,6 +1649,7 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(90px,1fr))", gap:10, marginBottom:24 }}>
               <Tile n={latestRuns.length} label={latestRuns.length===1?"Country":"Countries"} />
               <Tile n={withStatus.length} label="Departments" />
+              {totalResp > 0 && <Tile n={totalResp} label={totalResp===1?"Respondent":"Respondents"} />}
               <Tile n={counts.Concern} label="Concern" color="#BE6650" />
               <Tile n={counts.Watch} label="Watch" color="#C08636" />
               <Tile n={counts.Healthy} label="Healthy" color="#5C9A6D" />
@@ -3157,7 +3174,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
 }
 
 // ─── REPORT VIEW ──────────────────────────────────────────────────────────────
-function ReportView({ country, year, surveyData, getApproved, setView, sbOverrides, sbMaster }) {
+function ReportView({ country, year, surveyData, getApproved, setView, sbOverrides, sbMaster, runRespondents }) {
   const isMobile = useIsMobile();
   const [activeDept, setActiveDept] = useState(null);
   // Same ordering as the review sidebar: Concern → Watch → Healthy, worst score first.
@@ -3206,7 +3223,12 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
   const watches  = summaryDepts.filter(d=>d.status==="Watch");
   const healthys = summaryDepts.filter(d=>d.status==="Healthy");
   const overallAvg = summaryDepts.length ? (summaryDepts.reduce((a,d)=>a+d.avg,0)/summaryDepts.length).toFixed(2) : "—";
-  const totalN = surveyData?.raw?.length ?? depts.reduce((a,d)=>Math.max(a,d.n),0);
+  // Unique respondents for the run: prefer the raw rows when present (a fresh
+  // upload), else the stored run-level count. Never sum per-department n's — a
+  // staff member on two teams answers twice and would be double-counted; the
+  // Math.max fallback is only a last resort when no run-level count exists.
+  const totalN = (surveyData?.raw?.length || null) ?? runRespondents
+    ?? (depts.length ? depts.reduce((a,d)=>Math.max(a, Number(d.n)||0), 0) : null);
 
   // Tab ordering: keep culture-split pairs together, slotted by their COMBINED score,
   // with the worse half first inside each pair; standalone depts sort by their own score.
@@ -3276,7 +3298,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
             <div>
               <div style={{ fontSize:11, fontWeight:700, color:"#E0863C", letterSpacing:3, textTransform:"uppercase", marginBottom:8 }}>Josiah Venture</div>
               <div style={{ fontFamily:FONT_DISPLAY, fontSize:34, fontWeight:600, color:"#2C2621", marginBottom:4, letterSpacing:-.4 }}>{country} Staff Pulse Report</div>
-              <div style={{ fontSize:15, color:"#7A6F63" }}>{year} · {totalN} respondents across {depts.length} departments</div>
+              <div style={{ fontSize:15, color:"#7A6F63" }}>{year}{totalN ? ` · ${totalN} respondents` : ""} across {depts.length} departments</div>
             </div>
             <div style={{ textAlign:"right" }}>
               <div style={{ fontSize:42, fontWeight:800, color:sc(overallAvg>=3.5?"Healthy":overallAvg>=2.5?"Watch":"Concern") }}>{overallAvg}</div>
