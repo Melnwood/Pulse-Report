@@ -1364,6 +1364,15 @@ export default function App() {
     />
   );
 
+  if (view === "workspace") return (
+    <WorkspaceView
+      allRuns={allRuns} setView={setView}
+      authRole={authRole} authUser={authUser} authDept={authDept}
+      canEditDept={canEditDept} me={effMe} isPCLead={effIsPCLead}
+      sbOverrides={sbOverrides} sbMaster={sbMaster}
+    />
+  );
+
   if (view === "dashboard") return (
     <DashboardView
       allRuns={allRuns} dashCountry={dashCountry}
@@ -1389,6 +1398,8 @@ function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin, authUser, onSig
       blurb: "Each country's latest pulse report and how it's trending over time." },
     { key: "pc", title: "People & Culture", to: "home", roles: ["leader", "director"],
       blurb: "Director's review, department pages, and notes across every pulse." },
+    { key: "workspace", title: "Question workspace", to: "workspace", roles: ["leader", "director"],
+      blurb: "Work question by question — notes and behaviour-change tracking for your department." },
     { key: "leadership", title: "Leadership", to: "leadership", roles: ["leader"],
       blurb: "Everything across the org, with an overall dashboard. Mel & Chris." },
   ];
@@ -2684,6 +2695,189 @@ function DeptNotesTab({ dept, country, year, me, saveMe, isPCLead, canEdit = tru
               );
             })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── QUESTION WORKSPACE ───────────────────────────────────────────────────────
+// A question-first surface for directors (and leaders): pick a department and
+// work through its questions one by one — read the score + Survey Basics, jot
+// notes, and track behaviour change. Reuses Question Notes + the Measures panel;
+// adds a progress summary and filters so a director can focus on what matters.
+function WorkspaceView({ allRuns, setView, authRole, authUser, authDept, canEditDept, me, isPCLead, sbOverrides, sbMaster }) {
+  const isMobile = useIsMobile();
+  const countries = [...new Set((allRuns || []).map(r => r.country))].filter(Boolean).sort();
+  const lockedCountry = authRole === "director" || authRole === "country" ? (authUser && authUser.country) : null;
+  const [country, setCountry] = useState(lockedCountry || countries[0] || "");
+
+  // Latest run for the chosen country drives the question set.
+  const latestRun = (allRuns || []).filter(r => r.country === country)
+    .sort((a, b) => Number(b.year) - Number(a.year))[0];
+  const year = latestRun && latestRun.year;
+
+  const [sd, setSd] = useState(null);          // { depts } for the run (null = loading)
+  const [deptKey, setDeptKey] = useState(authDept || null);
+  const [notes, setNotes] = useState([]);
+  const [measures, setMeasures] = useState([]);
+  const [filter, setFilter] = useState("attention");   // all | attention | tracked
+
+  // Load the run's survey data when country/year changes.
+  useEffect(() => {
+    if (!country || !year) { setSd(null); return; }
+    let alive = true;
+    setSd(null);
+    loadRunSurveyData(country, year).then(d => {
+      if (!alive) return;
+      setSd(d || { depts: {} });
+      const codes = Object.keys((d && d.depts) || {});
+      // Directors are pinned to their department; others default to the first.
+      setDeptKey(prev => (authDept && codes.includes(authDept)) ? authDept : (codes.includes(prev) ? prev : codes[0] || null));
+    }).catch(() => { if (alive) setSd({ depts: {} }); });
+    return () => { alive = false; };
+    // eslint-disable-next-line
+  }, [country, year]);
+
+  // Load notes + measures when the department changes.
+  const reloadNotes = () => loadQuestionNotes(country, year, deptKey).then(setNotes).catch(() => setNotes([]));
+  useEffect(() => {
+    if (!country || !deptKey) { setNotes([]); setMeasures([]); return; }
+    reloadNotes();
+    loadMeasures(country, deptKey).then(setMeasures).catch(() => setMeasures([]));
+    // eslint-disable-next-line
+  }, [country, year, deptKey]);
+
+  const canEdit = deptKey ? canEditDept(deptKey) : false;
+  const dept = sd && deptKey ? sd.depts[deptKey] : null;
+  const measureFor = (qtext) => measures.find(x => x.question === qtext) || null;
+  const upsertMeasureLocal = (saved) => setMeasures(prev => {
+    const i = prev.findIndex(x => x.id === saved.id || x.question === saved.question);
+    if (i >= 0) { const n = prev.slice(); n[i] = saved; return n; }
+    return [saved, ...prev];
+  });
+  const notesFor = (qtext) => notes.filter(n => n.question === qtext);
+  const flip = async (n) => {
+    const next = n.visibility === "Public" ? "Private" : "Public";
+    setNotes(prev => prev.map(x => x.id === n.id ? { ...x, visibility: next } : x));
+    try { await setQuestionNoteVisibility(n.id, next); } catch { reloadNotes(); }
+  };
+  const sbTextFor = (q) => {
+    const m = findSurveyBasics(deptKey, q.en);
+    if (!m) return "";
+    const level = q.status === 'Healthy' ? 'high' : q.status === 'Watch' ? 'mid' : 'low';
+    const sbKey = SB_KEY[deptKey] || String(deptKey || "").toLowerCase();
+    const ovKey = `${country}:${year}:${deptKey}:${normQ(q.en)}`;
+    const masterKey = `${sbKey}:${normQ(q.en)}:${level}`;
+    return (sbOverrides && sbOverrides[ovKey]) || (sbMaster && sbMaster[masterKey]) || m[level] || "";
+  };
+
+  // Measure summary + progress.
+  const latestOf = (mm) => mm.checks && mm.checks.length ? Number(mm.checks[mm.checks.length - 1].value) : (mm.baseline != null ? Number(mm.baseline) : null);
+  const tracked = measures.length;
+  const achieved = measures.filter(mm => mm.status === "Achieved" || (mm.target != null && latestOf(mm) != null && latestOf(mm) >= Number(mm.target))).length;
+  const moves = measures.map(mm => (latestOf(mm) != null && mm.baseline != null) ? latestOf(mm) - Number(mm.baseline) : null).filter(v => v != null);
+  const avgMove = moves.length ? (moves.reduce((a, b) => a + b, 0) / moves.length) : null;
+
+  const allQs = (dept && dept.questions) || [];
+  const questions = allQs
+    .filter(q => filter === "all" ? true : filter === "tracked" ? !!measureFor(q.en) : (q.status === "Concern" || q.status === "Watch"))
+    .sort((a, b) => (parseFloat(a.score) || 9) - (parseFloat(b.score) || 9));
+
+  const depts = sd ? Object.values(sd.depts) : [];
+  const Tile = ({ n, label, color }) => (
+    <div style={{ ...card, padding: "12px 14px", textAlign: "center", minWidth: 0 }}>
+      <div style={{ fontFamily: FONT_DISPLAY, fontSize: 24, fontWeight: 600, color: color || "#2C2621", fontVariantNumeric: "tabular-nums" }}>{n}</div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: "#7A6F63", textTransform: "uppercase", letterSpacing: .5, marginTop: 2 }}>{label}</div>
+    </div>
+  );
+  const filterBtn = (key, label) => (
+    <button onClick={() => setFilter(key)} style={{
+      fontSize: 12, fontWeight: 600, padding: "6px 12px", borderRadius: 20, cursor: "pointer",
+      background: filter === key ? "#2C2621" : "#FFFFFF", color: filter === key ? "#fff" : "#5A4A3B",
+      border: `1px solid ${filter === key ? "#2C2621" : "#E2D3C2"}` }}>{label}</button>
+  );
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#F6F1E8", fontFamily: "'Inter',system-ui,sans-serif", padding: isMobile ? "20px 14px" : "28px 20px" }}>
+      <div style={{ maxWidth: 760, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
+          <button onClick={() => setView("__back__")} style={{ ...navBtn }}>← Back</button>
+          <span style={{ fontFamily: FONT_DISPLAY, fontSize: 22, fontWeight: 600, color: "#2C2621" }}>Question workspace</span>
+        </div>
+
+        {/* Scope pickers */}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
+          {!lockedCountry && countries.length > 0 && (
+            <select value={country} onChange={e => setCountry(e.target.value)}
+              style={{ fontSize: 13, padding: "8px 12px", border: "1px solid #E2D3C2", borderRadius: 8, background: "#fff", color: "#2C2621" }}>
+              {countries.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
+          {!authDept && depts.length > 0 && (
+            <select value={deptKey || ""} onChange={e => setDeptKey(e.target.value)}
+              style={{ fontSize: 13, padding: "8px 12px", border: "1px solid #E2D3C2", borderRadius: 8, background: "#fff", color: "#2C2621" }}>
+              {depts.map(d => <option key={d.key} value={d.key}>{d.label || d.key}</option>)}
+            </select>
+          )}
+          {country && <span style={{ alignSelf: "center", fontSize: 12, color: "#A89C8D" }}>{country}{year ? ` · ${year}` : ""}</span>}
+        </div>
+
+        {sd === null ? (
+          <div style={{ ...card, color: "#7A6F63", fontSize: 13, fontStyle: "italic" }}>Loading the latest pulse…</div>
+        ) : !dept ? (
+          <div style={{ ...card, color: "#7A6F63", fontSize: 13 }}>
+            {latestRun ? "No question data for this department in the latest run." : "No pulse run found for this country yet."}
+          </div>
+        ) : (
+          <>
+            <div style={{ fontFamily: FONT_DISPLAY, fontSize: 18, fontWeight: 600, color: "#2C2621", marginBottom: 12 }}>{dept.label || dept.key}</div>
+
+            {/* Tracking summary */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(90px,1fr))", gap: 10, marginBottom: 16 }}>
+              <Tile n={allQs.length} label="Questions" />
+              <Tile n={tracked} label="Tracked" color="#B96524" />
+              <Tile n={achieved} label="At target" color="#5C9A6D" />
+              <Tile n={avgMove == null ? "–" : `${avgMove >= 0 ? "+" : ""}${avgMove.toFixed(2)}`} label="Avg movement" color={avgMove == null ? "#A89C8D" : avgMove >= 0 ? "#5C9A6D" : "#BE6650"} />
+            </div>
+
+            {/* Filters */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+              {filterBtn("attention", "Needs attention")}
+              {filterBtn("tracked", "Tracked")}
+              {filterBtn("all", "All questions")}
+            </div>
+
+            {/* Question rows */}
+            <div style={{ ...card, padding: 0, overflow: "hidden" }}>
+              {questions.length === 0 ? (
+                <div style={{ padding: "16px", fontSize: 13, color: "#7A6F63" }}>Nothing here — try another filter.</div>
+              ) : questions.map((q, i) => (
+                <div key={i} style={{ padding: isMobile ? "12px 14px" : "14px 16px", borderTop: i ? "1px solid #F3EBE1" : "none" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+                    <span style={{ fontFamily: FONT_DISPLAY, fontSize: 17, fontWeight: 600, color: sc(q.status) }}>{q.score != null ? Number(q.score).toFixed(2) : "–"}</span>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: sc(q.status), background: sb(q.status), border: `1px solid ${sbd(q.status)}`, borderRadius: 4, padding: "2px 7px" }}>{q.status}</span>
+                    {q.burden && <span style={{ fontSize: 9, color: "#C08636" }}>Burden [inv.]</span>}
+                  </div>
+                  <div style={{ fontSize: 13.5, color: "#2C2621", lineHeight: 1.5 }}>{q.en}</div>
+                  {sbTextFor(q) && (
+                    <div style={{ marginTop: 6, borderLeft: "2px solid #F0DFCE", paddingLeft: 8 }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: "#7A6F63", textTransform: "uppercase", letterSpacing: .5, display: "block", marginBottom: 2 }}>Survey Basics</span>
+                      <span style={{ fontSize: 12, color: "#5A4A3B", lineHeight: 1.45 }}>{sbTextFor(q)}</span>
+                    </div>
+                  )}
+                  <MeasurePanel country={country} deptKey={deptKey} question={q.en}
+                    currentScore={q.score} author={me} canEdit={canEdit}
+                    measure={measureFor(q.en)} onSaved={upsertMeasureLocal} />
+                  <div style={{ marginTop: 6 }}>
+                    <NoteThread country={country} year={year} deptKey={deptKey}
+                      questionLabel={q.en} displayLabel={<span style={{ fontSize: 12, color: "#7A6F63" }}>Notes</span>}
+                      notes={notesFor(q.en)} me={me} isPCLead={isPCLead} onAdded={reloadNotes} onFlip={flip} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
