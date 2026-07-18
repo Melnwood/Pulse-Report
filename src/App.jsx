@@ -827,6 +827,26 @@ export default function App() {
   };
   // P&C leadership (Mel & Chris) see every note regardless of private/public.
   const isPCLead = isAdmin;   // admins are Mel & Chris — the P&C leadership
+
+  // ── Role wiring ── When login is on, the account's role decides access (the
+  // manual lock only applies in the auth-off state). Leader = full admin;
+  // country/director = not. Identity for notes comes from the account.
+  const authed = !!authUser && authGate === "authed";
+  const authRole = authUser && authUser.role;
+  const effIsAdmin  = authed ? authRole === "leader" : isAdmin;
+  const effIsPCLead = authed ? authRole === "leader" : isPCLead;
+  const effMe       = authed ? (authUser.name || me) : me;
+  const authDept    = authed && authRole === "director" ? (authUser.department || null) : null;
+  // A director may edit only their own department; leaders (and the auth-off
+  // state) edit any; a country leader edits none. The server enforces country
+  // isolation regardless — this is the in-app guardrail.
+  const canEditDept = (deptKey) => {
+    if (!authed) return true;
+    if (authRole === "leader") return true;
+    if (authRole === "director") return deptKey === authDept;
+    return false; // country (view-only)
+  };
+
   const [country, setCountry]     = useState("");
   const [year, setYear]           = useState(new Date().getFullYear().toString());
   const [surveyData, setSurveyData] = useState(null);
@@ -1243,8 +1263,8 @@ export default function App() {
   // ── VIEWS ──────────────────────────────────────────────────────────────────
 
   if (view === "sections") return (
-    <SectionsView setView={setView} isPCLead={isPCLead} isAdmin={isAdmin} toggleAdmin={toggleAdmin}
-      authUser={authUser} onSignOut={signOut} />
+    <SectionsView setView={setView} isPCLead={effIsPCLead} isAdmin={effIsAdmin} toggleAdmin={toggleAdmin}
+      authUser={authUser} onSignOut={signOut} authRole={authRole} />
   );
 
   if (view === "country") return (
@@ -1258,8 +1278,9 @@ export default function App() {
       country={country} setCountry={setCountry} year={year} setYear={setYear}
       fileRef={fileRef} handleFile={handleFile}
       generating={generating} genProgress={genProgress}
-      isAdmin={isAdmin} toggleAdmin={toggleAdmin} setView={setView}
-      allRuns={allRuns} reloadRuns={reloadRuns} runsLoading={runsLoading} openRun={openRunShared} />
+      isAdmin={effIsAdmin} toggleAdmin={toggleAdmin} setView={setView}
+      allRuns={allRuns} reloadRuns={reloadRuns} runsLoading={runsLoading} openRun={openRunShared}
+      authUser={authUser} onSignOut={signOut} />
   );
 
   if (view === "home") return (
@@ -1273,8 +1294,9 @@ export default function App() {
       setSbOverrides={setSbOverrides}
       setOpenToDept={setOpenToDept}
       setCountry2={setCountry} setYear2={setYear}
-      isAdmin={isAdmin} toggleAdmin={toggleAdmin}
+      isAdmin={effIsAdmin} toggleAdmin={toggleAdmin}
       runsLoading={runsLoading}
+      authUser={authUser} onSignOut={signOut}
     />
   );
 
@@ -1286,13 +1308,14 @@ export default function App() {
       saveSelections={saveSelections} saved={saved}
       saveRefinement={saveRefinement} refinements={refinements}
       setView={setView} setSelections={setSelections}
-      isAdmin={isAdmin} toggleAdmin={toggleAdmin}
+      isAdmin={effIsAdmin} toggleAdmin={toggleAdmin}
       sbOverrides={sbOverrides} saveSbOverride={saveSbOverride} setSbOverrides={setSbOverrides}
       sbMaster={sbMaster} promoteSbToMaster={promoteSbToMaster}
       cloudLoading={cloudLoading} syncStatus={syncStatus}
-      me={me} saveMe={saveMe} isPCLead={isPCLead}
+      me={effMe} saveMe={saveMe} isPCLead={effIsPCLead}
       openToDept={openToDept} setOpenToDept={setOpenToDept}
       toggleDeptFinished={toggleDeptFinished}
+      canEditDept={canEditDept} authRole={authRole} authUser={authUser} onSignOut={signOut} authDept={authDept}
     />
   );
 
@@ -1319,16 +1342,18 @@ export default function App() {
 // Top level of the app, organized by audience: Country dashboards (for each
 // country), People & Culture (for directors — review + department pages + notes),
 // and Leadership (for Mel & Chris — sees everything, overall dashboard).
-function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin, authUser, onSignOut }) {
+function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin, authUser, onSignOut, authRole }) {
   const isMobile = useIsMobile();
-  const cards = [
-    { key: "country", title: "Country dashboards", to: "country",
+  const allCards = [
+    { key: "country", title: "Country dashboards", to: "country", roles: ["leader", "country"],
       blurb: "Each country's latest pulse report and how it's trending over time." },
-    { key: "pc", title: "People & Culture", to: "home",
+    { key: "pc", title: "People & Culture", to: "home", roles: ["leader", "director"],
       blurb: "Director's review, department pages, and notes across every pulse." },
-    { key: "leadership", title: "Leadership", to: "leadership",
+    { key: "leadership", title: "Leadership", to: "leadership", roles: ["leader"],
       blurb: "Everything across the org, with an overall dashboard. Mel & Chris." },
   ];
+  // With login on, show only the sections this role can use; otherwise show all.
+  const cards = authRole ? allCards.filter(c => c.roles.includes(authRole)) : allCards;
   return (
     <div style={{ minHeight:"100vh", background:"#FBF7F2", padding: isMobile ? "28px 16px" : "40px 24px" }}>
       <div style={{ maxWidth:900, margin:"0 auto" }}>
@@ -1342,11 +1367,13 @@ function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin, authUser, onSig
                   style={{ background:"none", border:"none", padding:0, cursor:"pointer", color:"#B84A0E", fontWeight:600, fontSize:12 }}>Sign out</button>
               </span>
             )}
-            <button onClick={toggleAdmin} title="Admin tools for Mel & Chris"
-              style={{ fontSize:12, color: isAdmin ? "#2E7D32" : "#B4A897",
-                background:"transparent", border:"none", cursor:"pointer" }}>
-              {isAdmin ? "🔓 admin" : "🔒"}
-            </button>
+            {!authUser && (
+              <button onClick={toggleAdmin} title="Admin tools for Mel & Chris"
+                style={{ fontSize:12, color: isAdmin ? "#2E7D32" : "#B4A897",
+                  background:"transparent", border:"none", cursor:"pointer" }}>
+                {isAdmin ? "🔓 admin" : "🔒"}
+              </button>
+            )}
           </div>
         </div>
         <div style={{ fontSize:14, color:"#7A6E62", marginBottom:28 }}>Where would you like to go?</div>
@@ -1390,7 +1417,7 @@ function ComingSoonSection({ title, blurb, setView }) {
 // For Mel & Chris. Home of survey upload/processing (a leadership action), with the
 // overall dashboard to be added here later.
 function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFile,
-  generating, genProgress, isAdmin, toggleAdmin, setView, allRuns = [], reloadRuns, runsLoading, openRun }) {
+  generating, genProgress, isAdmin, toggleAdmin, setView, allRuns = [], reloadRuns, runsLoading, openRun, authUser, onSignOut }) {
   const isMobile = useIsMobile();
 
   // Live updates: refresh the shared review progress on open and every 30s, so
@@ -1410,11 +1437,18 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
           <button onClick={() => setView("sections")}
             style={{ ...navBtn, background:"transparent", border:"1px solid #EDE3D6" }}>← Sections</button>
           <span style={{ fontSize:20, fontWeight:700, color:"#1E1B3A" }}>Leadership</span>
-          <button onClick={toggleAdmin} title="Admin tools for Mel & Chris"
-            style={{ marginLeft:"auto", fontSize:12, color: isAdmin ? "#2E7D32" : "#B4A897",
-              background:"transparent", border:"none", cursor:"pointer" }}>
-            {isAdmin ? "🔓 admin on" : "🔒 admin off"}
-          </button>
+          {authUser ? (
+            <span style={{ marginLeft:"auto", fontSize:12, color:"#8C7D70" }}>
+              {authUser.name} · <button onClick={onSignOut}
+                style={{ background:"none", border:"none", padding:0, cursor:"pointer", color:"#B84A0E", fontWeight:600, fontSize:12 }}>Sign out</button>
+            </span>
+          ) : (
+            <button onClick={toggleAdmin} title="Admin tools for Mel & Chris"
+              style={{ marginLeft:"auto", fontSize:12, color: isAdmin ? "#2E7D32" : "#B4A897",
+                background:"transparent", border:"none", cursor:"pointer" }}>
+              {isAdmin ? "🔓 admin on" : "🔒 admin off"}
+            </button>
+          )}
         </div>
 
         {!isAdmin && (
@@ -1606,7 +1640,7 @@ function pctDone(run) {
 // ─── HOME VIEW ────────────────────────────────────────────────────────────────
 function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
   generating, genProgress, allRuns, setAllRuns, setView, setSurveyData, setSelections,
-  setCountry2, setYear2, isAdmin, toggleAdmin, runsLoading, setSbOverrides, setOpenToDept }) {
+  setCountry2, setYear2, isAdmin, toggleAdmin, runsLoading, setSbOverrides, setOpenToDept, authUser, onSignOut }) {
 
   const isMobile = useIsMobile();
   const countries = [...new Set(allRuns.map(r=>r.country))].sort();
@@ -1684,13 +1718,20 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
           <button onClick={() => setView("dashboard")} style={navBtn}>
             P&C Dashboard
           </button>
-          {/* Discreet admin toggle — only Mel & Chris use this. */}
-          <button onClick={toggleAdmin}
-            title={isAdmin ? "Admin mode ON — click to hide admin tools" : "Admin mode"}
-            style={{ background:"transparent", border:"none", cursor:"pointer",
-              fontSize:16, color: isAdmin ? "#DC5A12" : "#EAD9C9", padding:"4px 8px", lineHeight:1 }}>
-            {isAdmin ? "🔓" : "🔒"}
-          </button>
+          {authUser ? (
+            <span style={{ fontSize:12, color:"#8C7D70", whiteSpace:"nowrap" }}>
+              {authUser.name} · <button onClick={onSignOut}
+                style={{ background:"none", border:"none", padding:0, cursor:"pointer", color:"#B84A0E", fontWeight:600, fontSize:12 }}>Sign out</button>
+            </span>
+          ) : (
+            /* Discreet admin toggle — only Mel & Chris use this (auth-off only). */
+            <button onClick={toggleAdmin}
+              title={isAdmin ? "Admin mode ON — click to hide admin tools" : "Admin mode"}
+              style={{ background:"transparent", border:"none", cursor:"pointer",
+                fontSize:16, color: isAdmin ? "#DC5A12" : "#EAD9C9", padding:"4px 8px", lineHeight:1 }}>
+              {isAdmin ? "🔓" : "🔒"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -1773,7 +1814,8 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 }
 
 // ─── REVIEW VIEW ──────────────────────────────────────────────────────────────
-function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, sbMaster, promoteSbToMaster, cloudLoading, syncStatus, me, saveMe, isPCLead, openToDept, setOpenToDept, toggleDeptFinished }) {
+function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, sbMaster, promoteSbToMaster, cloudLoading, syncStatus, me, saveMe, isPCLead, openToDept, setOpenToDept, toggleDeptFinished, canEditDept, authRole, authUser, onSignOut, authDept }) {
+  const canEdit = (d) => (canEditDept ? canEditDept(d) : true);
   const isMobile = useIsMobile();
   const [activeDept, setActiveDept] = useState(null);
   const [deptTab, setDeptTab] = useState("review");   // "review" | "notes" — which tab of the department page
@@ -1880,14 +1922,21 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
           Generate Report →
         </button>
         )}
-        {/* Discreet admin toggle — only Mel & Chris use this. Small lock at the far right. */}
-        <button
-          onClick={toggleAdmin}
-          title={isAdmin ? "Admin mode ON — click to hide admin tools" : "Admin mode"}
-          style={{ marginLeft:"auto", background:"transparent", border:"none", cursor:"pointer",
-            fontSize:14, color: isAdmin ? "#DC5A12" : "#EAD9C9", padding:"4px 8px", lineHeight:1 }}>
-          {isAdmin ? "🔓" : "🔒"}
-        </button>
+        {authUser ? (
+          <span style={{ marginLeft:"auto", fontSize:12, color:"#8C7D70", whiteSpace:"nowrap" }}>
+            {authUser.name} · <button onClick={onSignOut}
+              style={{ background:"none", border:"none", padding:0, cursor:"pointer", color:"#B84A0E", fontWeight:600, fontSize:12 }}>Sign out</button>
+          </span>
+        ) : (
+          /* Discreet admin toggle — only Mel & Chris use this (auth-off only). */
+          <button
+            onClick={toggleAdmin}
+            title={isAdmin ? "Admin mode ON — click to hide admin tools" : "Admin mode"}
+            style={{ marginLeft:"auto", background:"transparent", border:"none", cursor:"pointer",
+              fontSize:14, color: isAdmin ? "#DC5A12" : "#EAD9C9", padding:"4px 8px", lineHeight:1 }}>
+            {isAdmin ? "🔓" : "🔒"}
+          </button>
+        )}
       </div>
 
       {showHelp && <ScoringHelpPanel onClose={()=>setShowHelp(false)} />}
@@ -1990,15 +2039,18 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
               <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12, flexWrap:"wrap" }}>
                 <span style={{ fontSize:20, fontWeight:700, color:"#1E1B3A" }}>{dept.label}</span>
                 <span style={{ fontSize:12, color:"#9C8F82" }}>{country} {year}</span>
-                {/* The director marks THIS department done here; the progress bar above just shows it. */}
-                <button onClick={() => toggleDeptFinished(dept.key)}
-                  style={{ marginLeft: isMobile ? 0 : "auto", fontSize:13, fontWeight:700, cursor:"pointer",
-                    borderRadius:8, padding:"8px 14px", minHeight:38,
-                    color: dept.reviewDone ? "#1F7A44" : "#fff",
-                    background: dept.reviewDone ? "#E7F3EC" : "#1F7A44",
-                    border: `1px solid ${dept.reviewDone ? "#BFE0CC" : "#1F7A44"}` }}>
-                  {dept.reviewDone ? "✓ Finished · Reopen" : "✓ Mark finished"}
-                </button>
+                {/* The director marks THEIR department done here; only editable by
+                    whoever owns it (or a leader). */}
+                {canEdit(dept.key) && (
+                  <button onClick={() => toggleDeptFinished(dept.key)}
+                    style={{ marginLeft: isMobile ? 0 : "auto", fontSize:13, fontWeight:700, cursor:"pointer",
+                      borderRadius:8, padding:"8px 14px", minHeight:38,
+                      color: dept.reviewDone ? "#1F7A44" : "#fff",
+                      background: dept.reviewDone ? "#E7F3EC" : "#1F7A44",
+                      border: `1px solid ${dept.reviewDone ? "#BFE0CC" : "#1F7A44"}` }}>
+                    {dept.reviewDone ? "✓ Finished · Reopen" : "✓ Mark finished"}
+                  </button>
+                )}
               </div>
               <div style={{ display:"flex", gap:4 }}>
                 {["review","notes"].map(tab => (
@@ -2025,7 +2077,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
               dept={dept} sel={selections[dept.key]}
               toggleItem={toggleItem} setRewrite={setRewrite}
               saveRefinement={saveRefinement} refinements={refinements}
-              country={country} year={year}
+              country={country} year={year} canEdit={canEdit(dept.key)}
               sbOverrides={sbOverrides} saveSbOverride={saveSbOverride}
               sbMaster={sbMaster} promoteSbToMaster={promoteSbToMaster} isAdmin={isAdmin}
               me={me} saveMe={saveMe} isPCLead={isPCLead}
@@ -2482,7 +2534,7 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
   );
 }
 
-function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, refinements, country, year, sbOverrides, saveSbOverride, sbMaster, promoteSbToMaster, isAdmin, me, saveMe, isPCLead }) {
+function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, refinements, country, year, canEdit = true, sbOverrides, saveSbOverride, sbMaster, promoteSbToMaster, isAdmin, me, saveMe, isPCLead }) {
   const isMobile = useIsMobile();
   // Which question's heatmap popup is open on mobile (index), or null. One at a time.
   const [openHeatmap, setOpenHeatmap] = useState(null);
@@ -2779,10 +2831,11 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                 opacity: item.include ? 1 : 0.6 }}>
                 {/* Main row — tight, single line */}
                 <div style={{ display:"flex", alignItems:"center", gap:10, padding: isMobile ? "11px 12px" : "9px 14px" }}>
-                  <input type="checkbox" checked={item.include}
-                    onChange={() => toggleItem(dept.key, sec.key, idx)}
-                    style={{ flexShrink:0, cursor:"pointer", accentColor:"#DC5A12",
-                      width: isMobile ? 20 : 15, height: isMobile ? 20 : 15 }} />
+                  <input type="checkbox" checked={item.include} disabled={!canEdit}
+                    onChange={() => canEdit && toggleItem(dept.key, sec.key, idx)}
+                    title={canEdit ? undefined : "You can only edit your own department"}
+                    style={{ flexShrink:0, cursor: canEdit ? "pointer" : "default", accentColor:"#DC5A12",
+                      width: isMobile ? 20 : 15, height: isMobile ? 20 : 15, opacity: canEdit ? 1 : 0.55 }} />
                   <div style={{ flex:1 }}>
                     {(() => {
                       const displayText = item.rewrite.trim() || item.text;
@@ -2821,7 +2874,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                       );
                     })()}
                   </div>
-                  {item.include && (
+                  {item.include && canEdit && (
                     <button
                       onClick={() => {
                         const el = document.getElementById(editId);
