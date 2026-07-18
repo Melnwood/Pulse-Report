@@ -44,8 +44,16 @@ exports.handler = async (event) => {
     if (!user) return fail(401, "Please sign in.");
   }
   const role = user && user.role;
-  const scoped = !!user && role !== "leader";              // non-leaders are country-scoped
   const country = (user && user.country) || "";
+  // A director owns one or more departments (by code) and works ACROSS every
+  // country: they READ all data but may only WRITE within their departments.
+  // A country leader is READ-ONLY within a single country. A leader (and the
+  // auth-off state) is unrestricted.
+  const deptSet = new Set(String((user && user.department) || "")
+    .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean));
+  const readScoped   = role === "country";                 // only country leaders are read-filtered
+  const writeBlocked = role === "country";                 // country leaders are read-only
+  const writeByDept  = role === "director";                // directors write within their departments
 
   let body;
   try { body = JSON.parse(event.body || "{}"); }
@@ -83,62 +91,104 @@ exports.handler = async (event) => {
     return JSON.parse(await res.text());
   };
 
-  // ── Country scoping helpers ──
-  const startsWithCountry = (s) =>
-    typeof s === "string" && s.toLowerCase().startsWith((country + " ").toLowerCase());
-  let deptIdSet = null; // department record ids belonging to the caller's country
-  const allowedDeptIds = async () => {
-    if (deptIdSet) return deptIdSet;
-    const recs = await listAll(TABLES.departments);
-    deptIdSet = new Set(recs.filter(r => startsWithCountry(r.fields && r.fields["Department Key"])).map(r => r.id));
-    return deptIdSet;
-  };
+  // ── Scoping helpers ──
+  // Some tables are written by field ID (runs/departments/selections), others by
+  // field name (notes/measures). Scoping reads must therefore accept either key.
+  const FIELD = { deptCode: "fldcCWQxrxNd5gJSI", deptKey: "fldwrkz5V5OF3mZbT", selDept: "fldSOi2rf84bWvz1L" };
   const linkId = (link) => Array.isArray(link) && link.length
     ? (typeof link[0] === "object" ? link[0].id : link[0]) : null;
-  // Does a record (by its fields) belong to the caller's country?
+  const selectionDeptId = (fields) => linkId(fields.Department || fields[FIELD.selDept]);
+  // A department record's dept code (e.g. "hr"), from whichever key is present.
+  const codeOf = (fields) => {
+    const dc = fields["Dept Code"] !== undefined ? fields["Dept Code"] : fields[FIELD.deptCode];
+    const key = fields["Department Key"] !== undefined ? fields["Department Key"] : fields[FIELD.deptKey];
+    const c = (dc && dc.name) || dc || String(key || "").split("·").pop().trim();
+    return String(c || "").trim().toLowerCase();
+  };
+
+  // Country scoping — for the country-leader READ filter only.
+  const startsWithCountry = (s) =>
+    typeof s === "string" && s.toLowerCase().startsWith((country + " ").toLowerCase());
+  let countryDeptIds = null;
+  const allowedCountryDeptIds = async () => {
+    if (countryDeptIds) return countryDeptIds;
+    const recs = await listAll(TABLES.departments);
+    countryDeptIds = new Set(recs.filter(r => startsWithCountry(r.fields && r.fields["Department Key"])).map(r => r.id));
+    return countryDeptIds;
+  };
   const recordInCountry = async (tbl, fields) => {
     fields = fields || {};
     if (tbl === "runs") return startsWithCountry(fields.Run) || String(fields.Country || "").toLowerCase() === country.toLowerCase();
     if (tbl === "departments") return startsWithCountry(fields["Department Key"]);
     if (tbl === "deptNotes" || tbl === "questionNotes") return startsWithCountry(fields.Run);
-    // Measures thread across runs, so they carry an explicit Country field
-    // rather than a "Country Year" Run string.
     if (tbl === "measures") return String(fields.Country || "").toLowerCase() === country.toLowerCase();
-    if (tbl === "selections") { const set = await allowedDeptIds(); const id = linkId(fields.Department); return !!id && set.has(id); }
-    return false; // unknown table → deny for non-leaders
+    if (tbl === "selections") { const set = await allowedCountryDeptIds(); const id = selectionDeptId(fields); return !!id && set.has(id); }
+    return false;
+  };
+
+  // Department scoping — for director WRITES (any country, matched by dept code).
+  let myDeptIds = null;
+  const myDepartmentIds = async () => {
+    if (myDeptIds) return myDeptIds;
+    const recs = await listAll(TABLES.departments);
+    myDeptIds = new Set(recs.filter(r => deptSet.has(codeOf(r.fields || {}))).map(r => r.id));
+    return myDeptIds;
+  };
+  const recordInDept = async (tbl, fields) => {
+    fields = fields || {};
+    if (tbl === "runs") return true; // shared run metadata; directors work across all countries
+    if (tbl === "departments") return deptSet.has(codeOf(fields));
+    if (tbl === "deptNotes" || tbl === "questionNotes") return deptSet.has(String(fields.Department || "").trim().toLowerCase());
+    if (tbl === "measures") return deptSet.has(String(fields.Department || "").trim().toLowerCase());
+    if (tbl === "selections") { const set = await myDepartmentIds(); const id = selectionDeptId(fields); return !!id && set.has(id); }
+    return false;
   };
 
   try {
     // ── LIST ──
     if (action === "list") {
       let all = await listAll(tableId, filterByFormula, params && params.pageSize, params && params.sort);
-      if (scoped) {
+      // Country leaders see only their own country; directors and leaders read everything.
+      if (readScoped) {
         const kept = [];
         for (const r of all) { if (await recordInCountry(table, r.fields)) kept.push(r); }
         all = kept;
+      }
+      // Notes carry a visibility. Non-leaders never receive someone else's PRIVATE
+      // note — a country leader gets public notes only; a director also gets their
+      // own. (Enforced here on the server, not just hidden in the client.)
+      if ((table === "deptNotes" || table === "questionNotes") && role && role !== "leader") {
+        const myName = String((user && user.name) || "");
+        all = all.filter(r => {
+          const f = r.fields || {};
+          if ((f.Visibility || "Private") === "Public") return true;
+          return role === "director" && myName !== "" && String(f.Author || "") === myName;
+        });
       }
       return { statusCode: 200, headers, body: JSON.stringify({ records: all }) };
     }
 
     // ── WRITES: create / update / delete ──
     if (action === "create" || action === "update" || action === "delete") {
-      if (scoped) {
-        if (role === "country") return fail(403, "Read-only access.");
-        // director: every affected record must be within their country
+      if (writeBlocked) return fail(403, "Read-only access.");
+      if (writeByDept) {
+        // director: every affected record must belong to one of their departments
+        // (in any country). Updates/deletes fetch the record so the check uses
+        // Airtable's name-keyed fields even when the write payload used field ids.
         if (action === "create") {
           for (const rec of (records || [])) {
-            if (!(await recordInCountry(table, rec.fields))) return fail(403, "Outside your country.");
+            if (!(await recordInDept(table, rec.fields))) return fail(403, "Outside your department.");
           }
         } else if (action === "update") {
           for (const rec of (records || [])) {
-            let ok = await recordInCountry(table, rec.fields);
-            if (!ok) { const f = await getRecord(tableId, rec.id); ok = f && await recordInCountry(table, f.fields); }
-            if (!ok) return fail(403, "Outside your country.");
+            let ok = await recordInDept(table, rec.fields);
+            if (!ok) { const f = await getRecord(tableId, rec.id); ok = f && await recordInDept(table, f.fields); }
+            if (!ok) return fail(403, "Outside your department.");
           }
         } else if (action === "delete") {
           for (const id of (recordIds || [])) {
             const f = await getRecord(tableId, id);
-            if (!f || !(await recordInCountry(table, f.fields))) return fail(403, "Outside your country.");
+            if (!f || !(await recordInDept(table, f.fields))) return fail(403, "Outside your department.");
           }
         }
       }
