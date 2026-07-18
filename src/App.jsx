@@ -10,6 +10,7 @@ import SURVEY_BASICS from "./surveyBasics.json";
 import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, loadMeasures } from "./airtable";
 import MeasurePanel from "./components/MeasurePanel";
 import NotesDigest from "./components/NotesDigest";
+import CountryTrends from "./components/CountryTrends";
 
 // Map app department keys (HR, LD, LC1/LC2, JVK1/JVK2, ...) to surveyBasics.json keys
 // (which are lowercase and un-split: hr, ld, lc, jvk, ...).
@@ -1302,12 +1303,6 @@ export default function App() {
     <UsersView setView={setView} me={effMe} />
   );
 
-  if (view === "country") return (
-    <ComingSoonSection title="Country dashboards"
-      blurb="Each country's latest pulse report and key info synthesized over time as new pulses are added. Coming next."
-      setView={setView} />
-  );
-
   if (view === "leadership") return (
     <LeadershipView
       country={country} setCountry={setCountry} year={year} setYear={setYear}
@@ -1449,21 +1444,6 @@ function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin, authUser, onSig
   );
 }
 
-// Placeholder for sections not yet built — keeps navigation coherent.
-function ComingSoonSection({ title, blurb, setView }) {
-  return (
-    <div style={{ minHeight:"100vh", background:"#F6F1E8", padding:"40px 24px" }}>
-      <div style={{ maxWidth:720, margin:"0 auto" }}>
-        <button onClick={() => setView("__back__")}
-          style={{ ...navBtn, background:"transparent", border:"1px solid #ECE2D2", marginBottom:24 }}>← Back</button>
-        <div style={{ background:"#fff", border:"1px solid #ECE2D2", borderRadius:14, padding:"36px 28px" }}>
-          <div style={{ fontSize:20, fontWeight:700, color:"#2C2621", marginBottom:8 }}>{title}</div>
-          <div style={{ fontSize:14, color:"#7A6F63", lineHeight:1.6 }}>{blurb}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── LEADERSHIP VIEW ──────────────────────────────────────────────────────────
 // For Mel & Chris. Home of survey upload/processing (a leadership action), with the
@@ -3927,47 +3907,8 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
               </div>
             ))}
 
-            {/* Trend chart (text-based for now) */}
-            {(runsByCountry[effDashCountry]||[]).length > 1 && (
-              <div style={{ background:"#FFFFFF", border:"1px solid #ECE2D2", boxShadow:C.shadow, borderRadius:12, padding:20, marginTop:24, overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
-                <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5, marginBottom:16 }}>Trend — Year over Year</div>
-                <table style={{ width:"100%", minWidth: isMobile ? 420 : "auto", borderCollapse:"collapse", fontSize:12 }}>
-                  <thead>
-                    <tr style={{ borderBottom:"1px solid #ECE2D2" }}>
-                      <th style={{ textAlign:"left", padding:"8px 12px", color:"#7A6F63" }}>Department</th>
-                      {[...(runsByCountry[effDashCountry]||[])].sort((a,b)=>a.year-b.year).map(r=>(
-                        <th key={r.year} style={{ textAlign:"center", padding:"8px 12px", color:"#7A6F63" }}>{r.year}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {DEPTS_ORDER.map(dk => {
-                      const rows = [...(runsByCountry[effDashCountry]||[])].sort((a,b)=>a.year-b.year)
-                        .map(r => r.depts?.find(d=>d.key===dk||d.group===dk));
-                      if (rows.every(r=>!r)) return null;
-                      return (
-                        <tr key={dk} style={{ borderBottom:"1px solid #ECE2D2" }}>
-                          <td style={{ padding:"8px 12px", color:"#7A6F63" }}>{dk}</td>
-                          {rows.map((d,i)=>(
-                            <td key={i} style={{ textAlign:"center", padding:"8px 12px" }}>
-                              {d ? (
-                                <span style={{ fontWeight:700, color:sc(d.status) }}>{d.avg}</span>
-                              ) : <span style={{ color:"#ECE2D2" }}>—</span>}
-                            </td>
-                          ))}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {/* OKR placeholder */}
-            <div style={{ background:"#FFFFFF", borderRadius:12, padding:24, marginTop:24, border:"1px dashed #ECE2D2" }}>
-              <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5, marginBottom:8 }}>OKR Integration</div>
-              <div style={{ color:"#7A6F63", fontSize:13 }}>Key Results tied to staff health metrics will appear here once OKR system integration is connected.</div>
-            </div>
+            {/* Over-time trends — sparkline per department, anchored on 2026 */}
+            <CountryTrends country={effDashCountry} runs={runsByCountry[effDashCountry] || []} deptsOrder={DEPTS_ORDER} baselineYear={2026} />
           </>
         )}
       {/* Refinements manager — leaders only (cross-country wording edits) */}
