@@ -1232,6 +1232,40 @@ export default function App() {
     } catch (e) { console.warn("Run reload failed:", e.message); }
   };
 
+  // Open a run into the Director Review — used by the leaders' dashboard to
+  // drill into a run for the full detail. Loads local cache first, then merges
+  // the shared Airtable data (survey scores, selections, sb overrides).
+  const openRunShared = async (run) => {
+    setCountry(run.country); setYear(run.year);
+    setOpenToDept(null);
+    let haveData = false;
+    try {
+      const _v = localStorage.getItem(`pulse:data:${run.country}:${run.year}`);
+      if (_v) { setSurveyData(JSON.parse(_v)); haveData = true; }
+      const _s = localStorage.getItem(`pulse:sel:${run.country}:${run.year}`);
+      if (_s) setSelections(JSON.parse(_s));
+    } catch {}
+    setView("review");
+    try {
+      const sd = await loadRunSurveyData(run.country, run.year);
+      if (sd?.sbOverrides && Object.keys(sd.sbOverrides).length) {
+        setSbOverrides(prev => { const m = { ...prev, ...sd.sbOverrides };
+          try { localStorage.setItem("pulse:sbOverrides", JSON.stringify(m)); } catch {} return m; });
+      }
+      if (sd && Object.keys(sd.depts).length) {
+        setSurveyData(sd);
+        try { localStorage.setItem(`pulse:data:${run.country}:${run.year}`, JSON.stringify(sd)); } catch {}
+      }
+      if (!haveData) {
+        const shared = await loadRunSelections(run.country, run.year);
+        if (shared && Object.keys(shared).length) {
+          setSelections(shared);
+          try { localStorage.setItem(`pulse:sel:${run.country}:${run.year}`, JSON.stringify(shared)); } catch {}
+        }
+      }
+    } catch (e) { console.warn("Open run failed:", e.message); }
+  };
+
   // ── VIEWS ──────────────────────────────────────────────────────────────────
 
   if (view === "sections") return (
@@ -1250,7 +1284,7 @@ export default function App() {
       fileRef={fileRef} handleFile={handleFile}
       generating={generating} genProgress={genProgress}
       isAdmin={isAdmin} toggleAdmin={toggleAdmin} setView={setView}
-      allRuns={allRuns} reloadRuns={reloadRuns} runsLoading={runsLoading} />
+      allRuns={allRuns} reloadRuns={reloadRuns} runsLoading={runsLoading} openRun={openRunShared} />
   );
 
   if (view === "home") return (
@@ -1373,7 +1407,7 @@ function ComingSoonSection({ title, blurb, setView }) {
 // For Mel & Chris. Home of survey upload/processing (a leadership action), with the
 // overall dashboard to be added here later.
 function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFile,
-  generating, genProgress, isAdmin, toggleAdmin, setView, allRuns = [], reloadRuns, runsLoading }) {
+  generating, genProgress, isAdmin, toggleAdmin, setView, allRuns = [], reloadRuns, runsLoading, openRun }) {
   const isMobile = useIsMobile();
 
   // Live updates: refresh the shared review progress on open and every 30s, so
@@ -1407,8 +1441,9 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
         )}
 
         {isAdmin && (
-        <div style={card}>
-          <div style={{ fontSize:13, fontWeight:700, color:"#DC5A12", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>New Survey Run</div>
+        <div style={{ ...card, padding:0, overflow:"hidden" }}>
+          <Disclosure title="Upload a new survey run" dot="#DC5A12"
+            count=".xlsx or .csv" defaultOpen={allRuns.length === 0}>
           <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap:16, marginBottom:24 }}>
             <div>
               <label style={lbl}>Country</label>
@@ -1441,7 +1476,7 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
                 if (file) handleFile(file);
               }}
               style={{
-                border:"2px dashed #EDE3D6", borderRadius:12, padding: isMobile ? 24 : 48,
+                border:"2px dashed #EDE3D6", borderRadius:12, padding: isMobile ? 20 : 30,
                 textAlign:"center", cursor: country&&year ? "pointer":"not-allowed",
                 opacity: country&&year ? 1 : 0.5,
                 transition:"border-color 0.2s",
@@ -1456,6 +1491,7 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
                 onChange={e => e.target.files[0] && handleFile(e.target.files[0])} />
             </div>
           )}
+          </Disclosure>
         </div>
         )}
 
@@ -1467,8 +1503,8 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
             Updates automatically; leaders can't change state from here. */}
         <div style={{ marginTop:28 }}>
           <div style={{ display:"flex", alignItems:"baseline", gap:10, marginBottom:14, flexWrap:"wrap" }}>
-            <span style={{ fontSize:13, fontWeight:700, color:"#9C8F82", textTransform:"uppercase", letterSpacing:2 }}>Director Review Progress</span>
-            <span style={{ fontSize:11, color:"#C9BCAF" }}>updates automatically</span>
+            <span style={{ fontSize:13, fontWeight:700, color:"#8C7D70", textTransform:"uppercase", letterSpacing:2 }}>Director Review Progress</span>
+            <span style={{ fontSize:11, color:"#C9BCAF" }}>updates automatically · click a run to open it</span>
           </div>
 
           {(!allRuns || allRuns.length === 0) ? (
@@ -1509,7 +1545,12 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
                           const total = depts.length;
                           const allDone = total > 0 && done === total;
                           return (
-                            <div key={`${run.country}-${run.year}`} style={{ ...card,
+                            <div key={`${run.country}-${run.year}`}
+                              onClick={() => openRun && openRun(run)}
+                              title={openRun ? "Open this run's review" : undefined}
+                              onMouseEnter={e => { if (openRun) e.currentTarget.style.borderColor = "#DC5A12"; }}
+                              onMouseLeave={e => { e.currentTarget.style.borderColor = allDone ? "#A5D6A7" : "#EFE3D6"; }}
+                              style={{ ...card, cursor: openRun ? "pointer" : "default", transition:"border-color .12s",
                               border: `1px solid ${allDone ? "#A5D6A7" : "#EFE3D6"}`,
                               background: allDone ? "#F5FBF6" : "#FFFFFF", padding: isMobile ? 16 : 20 }}>
                               <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom: total>0?10:0, flexWrap:"wrap" }}>
@@ -1520,6 +1561,7 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
                                   border: `1px solid ${allDone ? "#A5D6A7" : "#F0DCC9"}` }}>
                                   {total === 0 ? "No departments yet" : allDone ? `${done} / ${total} · ready ✓` : `${done} / ${total} finished`}
                                 </span>
+                                {openRun && <span style={{ color:"#B7A896", fontSize:15, fontWeight:700 }} aria-hidden="true">→</span>}
                               </div>
                               {total > 0 && (
                                 // Compact horizontal strip — one initials chip per
