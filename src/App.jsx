@@ -1458,9 +1458,43 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
     const id = setInterval(() => reloadRef.current?.(), 30000);
     return () => clearInterval(id);
   }, []);
+
+  // ── Org-wide rollup from the latest run of each country (fast: uses the
+  // department summaries already loaded, no per-run fetches). ──
+  const latestByCountry = {};
+  allRuns.forEach(r => { if (!latestByCountry[r.country] || Number(r.year) > Number(latestByCountry[r.country].year)) latestByCountry[r.country] = r; });
+  const latestRuns = Object.values(latestByCountry);
+  const allDepts = latestRuns.flatMap(r => (r.depts || []).map(d => ({ ...d, country: r.country, year: r.year })));
+  const withStatus = allDepts.filter(d => d.status);
+  const counts = { Concern: 0, Watch: 0, Healthy: 0 };
+  withStatus.forEach(d => { if (counts[d.status] != null) counts[d.status]++; });
+  const totalResp = allDepts.reduce((s, d) => s + (Number(d.n) || 0), 0);
+  const finishedCt = allDepts.filter(d => d.reviewDone).length;
+  const attention = withStatus
+    .filter(d => d.status === "Concern" || d.status === "Watch")
+    .sort((a, b) => (a.status === b.status ? 0 : a.status === "Concern" ? -1 : 1) || (parseFloat(a.avg) || 9) - (parseFloat(b.avg) || 9));
+  // Group by department type across countries (collapse culture splits LC1/LC2, JVK1/JVK2).
+  const deptGroup = (d) => (d.group || String(d.key || "").replace(/([A-Za-z]+)[12]$/, "$1") || d.label);
+  const byDept = {};
+  withStatus.forEach(d => {
+    const g = deptGroup(d);
+    const e = byDept[g] || (byDept[g] = { label: (d.label || g).replace(/\s*\((1st|2nd).*?\)/i, "").trim() || g, Concern: 0, Watch: 0, Healthy: 0, concernCountries: [], total: 0 });
+    if (e[d.status] != null) e[d.status]++;
+    e.total++;
+    if (d.status === "Concern") e.concernCountries.push(d.country);
+  });
+  const deptPattern = Object.values(byDept).sort((a, b) => (b.Concern - a.Concern) || (b.Watch - a.Watch) || a.label.localeCompare(b.label));
+
+  const Tile = ({ n, label, color }) => (
+    <div style={{ ...card, padding:"14px 16px", textAlign:"center", minWidth:0 }}>
+      <div style={{ fontSize:26, fontWeight:800, color: color || "#2A211C", fontVariantNumeric:"tabular-nums" }}>{n}</div>
+      <div style={{ fontSize:10.5, fontWeight:700, color:"#8C7D70", textTransform:"uppercase", letterSpacing:.6, marginTop:2 }}>{label}</div>
+    </div>
+  );
+
   return (
     <div style={{ minHeight:"100vh", background:"#FBF7F2", padding: isMobile ? "24px 16px" : "40px 24px" }}>
-      <div style={{ maxWidth:720, margin:"0 auto" }}>
+      <div style={{ maxWidth:900, margin:"0 auto" }}>
         <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:24 }}>
           <button onClick={() => setView("__back__")}
             style={{ ...navBtn, background:"transparent", border:"1px solid #EDE3D6" }}>← Back</button>
@@ -1541,6 +1575,77 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
           )}
           </Disclosure>
         </div>
+        )}
+
+        {/* ── Org overview ── */}
+        {allDepts.length > 0 && (
+          <div style={{ marginBottom:32 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:"#8C7D70", textTransform:"uppercase", letterSpacing:2, marginBottom:14 }}>
+              Across the org <span style={{ fontWeight:500, color:"#C9BCAF", letterSpacing:0, textTransform:"none" }}>· latest pulse per country</span>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(90px,1fr))", gap:10, marginBottom:24 }}>
+              <Tile n={latestRuns.length} label={latestRuns.length===1?"Country":"Countries"} />
+              <Tile n={withStatus.length} label="Departments" />
+              <Tile n={counts.Concern} label="Concern" color="#BE3B2E" />
+              <Tile n={counts.Watch} label="Watch" color="#A96A12" />
+              <Tile n={counts.Healthy} label="Healthy" color="#1F7A44" />
+              <Tile n={`${finishedCt}/${allDepts.length}`} label="Reviews done" color={finishedCt===allDepts.length?"#1F7A44":"#2A211C"} />
+            </div>
+
+            {/* Needs attention — every Concern/Watch dept across all countries */}
+            {attention.length > 0 && (
+              <div style={{ marginBottom:24 }}>
+                <div style={{ fontSize:12, fontWeight:700, color:"#8A5A2B", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>
+                  Needs attention <span style={{ color:"#C9BCAF", fontWeight:500 }}>· {attention.length} department{attention.length===1?"":"s"}</span>
+                </div>
+                <div style={{ ...card, padding:0, overflow:"hidden" }}>
+                  {attention.map((d,i) => (
+                    <div key={`${d.country}-${d.key}-${i}`} style={{ display:"flex", alignItems:"center", gap:10, padding: isMobile?"9px 12px":"9px 14px", borderTop: i?"1px solid #F3EBE1":"none" }}>
+                      <span style={{ width:8, height:8, borderRadius:"50%", background:sc(d.status), flexShrink:0 }} />
+                      <span style={{ fontFamily:"ui-monospace,Menlo,monospace", fontSize:13, fontWeight:700, color:sc(d.status), width:42, flexShrink:0 }}>{d.avg}</span>
+                      <span style={{ flex:1, fontSize:13, color:"#2A211C", minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                        <b style={{ fontWeight:650 }}>{d.country}</b> · {d.label || d.key}
+                      </span>
+                      {!d.reviewDone && <span style={{ fontSize:10, color:"#B7A896", flexShrink:0 }}>review pending</span>}
+                      <span style={{ fontSize:10, fontWeight:700, color:sc(d.status), background:sb(d.status), border:`1px solid ${sbd(d.status)}`, borderRadius:5, padding:"2px 8px", flexShrink:0 }}>{d.status}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* By department across the org — spot systemic patterns */}
+            {deptPattern.length > 0 && (
+              <div>
+                <div style={{ fontSize:12, fontWeight:700, color:"#8C7D70", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>
+                  By department, across countries
+                </div>
+                <div style={{ ...card, padding:0, overflow:"hidden" }}>
+                  {deptPattern.map((e,i) => {
+                    const total = e.Concern + e.Watch + e.Healthy || 1;
+                    return (
+                      <div key={e.label+i} style={{ display:"flex", alignItems:"center", gap:12, padding: isMobile?"9px 12px":"10px 14px", borderTop: i?"1px solid #F3EBE1":"none", flexWrap:"wrap" }}>
+                        <span style={{ fontSize:13, fontWeight:650, color:"#2A211C", width: isMobile?"100%":150, flexShrink:0 }}>{e.label}</span>
+                        <div style={{ flex:1, minWidth:120, display:"flex", height:8, borderRadius:5, overflow:"hidden", background:"#F5EFE6" }}>
+                          {e.Concern>0 && <div style={{ width:`${e.Concern/total*100}%`, background:"#BE3B2E" }} />}
+                          {e.Watch>0 &&   <div style={{ width:`${e.Watch/total*100}%`, background:"#A96A12" }} />}
+                          {e.Healthy>0 && <div style={{ width:`${e.Healthy/total*100}%`, background:"#1F7A44" }} />}
+                        </div>
+                        <span style={{ fontSize:11, color:"#8C7D70", fontVariantNumeric:"tabular-nums", flexShrink:0 }}>
+                          {[
+                            e.Concern>0 && <b key="c" style={{ color:"#BE3B2E" }}>{e.Concern}</b>,
+                            e.Watch>0   && <b key="w" style={{ color:"#A96A12" }}>{e.Watch}</b>,
+                            e.Healthy>0 && <b key="h" style={{ color:"#1F7A44" }}>{e.Healthy}</b>,
+                          ].filter(Boolean).map((el,ix) => <span key={ix}>{ix>0 && " · "}{el}</span>)}
+                          {e.concernCountries.length>0 && <span style={{ color:"#B7A896" }}> — {e.concernCountries.join(", ")}</span>}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {/* ── Director Review Progress — the leaders' dashboard ──
