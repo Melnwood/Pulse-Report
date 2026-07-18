@@ -31,6 +31,21 @@ export async function login(email, password) {
   return data.user;
 }
 
+// ── Leader-only user management (server verifies the caller is a leader) ──
+async function authed(payload) {
+  const token = getToken();
+  const res = await fetch("/.netlify/functions/auth", {
+    method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Request failed.");
+  return data;
+}
+export async function listUsers() { return (await authed({ action: "listUsers" })).users || []; }
+export async function saveUser(user) { return (await authed({ action: "saveUser", user })).user; }
+export async function deleteUser(id) { return authed({ action: "deleteUser", id }); }
+
 export function getToken() { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } }
 export function getUser() { try { const u = localStorage.getItem(USER_KEY); return u ? JSON.parse(u) : null; } catch { return null; } }
 export function logout() { try { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); } catch {} }

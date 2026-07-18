@@ -4,6 +4,7 @@ import Disclosure from "./components/Disclosure";
 import { VisibilityPicker, VisibilityChip } from "./components/Visibility";
 import { IconHelp, IconUpload } from "./components/Icons";
 import Login from "./components/Login";
+import UsersView from "./components/UsersView";
 import { authStatus, tokenValid, getUser, logout } from "./authClient";
 import SURVEY_BASICS from "./surveyBasics.json";
 import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility } from "./airtable";
@@ -1267,6 +1268,10 @@ export default function App() {
       authUser={authUser} onSignOut={signOut} authRole={authRole} />
   );
 
+  if (view === "users" && effIsAdmin) return (
+    <UsersView setView={setView} me={effMe} />
+  );
+
   if (view === "country") return (
     <ComingSoonSection title="Country dashboards"
       blurb="Each country's latest pulse report and key info synthesized over time as new pulses are added. Coming next."
@@ -1437,6 +1442,9 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
           <button onClick={() => setView("sections")}
             style={{ ...navBtn, background:"transparent", border:"1px solid #EDE3D6" }}>← Sections</button>
           <span style={{ fontSize:20, fontWeight:700, color:"#1E1B3A" }}>Leadership</span>
+          {authUser && authUser.role === "leader" && (
+            <button onClick={() => setView("users")} style={{ ...navBtn, fontSize:12, padding:"6px 12px" }}>Manage people</button>
+          )}
           {authUser ? (
             <span style={{ marginLeft:"auto", fontSize:12, color:"#8C7D70" }}>
               {authUser.name} · <button onClick={onSignOut}
