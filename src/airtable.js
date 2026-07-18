@@ -28,12 +28,21 @@ const SECTION_LABEL = { strengths: "Strength", growth: "Growth", leadershipQs: "
 const SECTION_KEY   = { "Strength": "strengths", "Growth": "growth", "Leadership Q": "leadershipQs", "Quote": "quotes" };
 
 async function call(payload) {
+  const headers = { "Content-Type": "application/json" };
+  let token = null;
+  try { token = localStorage.getItem("pulse:token"); } catch {}
+  if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch("/.netlify/functions/airtable", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(payload),
   });
   const text = await res.text();
+  if (res.status === 401) {
+    // Session expired / not signed in — clear it so the app returns to login.
+    try { localStorage.removeItem("pulse:token"); localStorage.removeItem("pulse:user"); } catch {}
+    throw new Error("Your session expired. Please sign in again.");
+  }
   if (!res.ok) throw new Error(`Airtable ${res.status}: ${text.slice(0, 300)}`);
   try { return JSON.parse(text); } catch { throw new Error(`Airtable returned non-JSON: ${text.slice(0, 200)}`); }
 }
