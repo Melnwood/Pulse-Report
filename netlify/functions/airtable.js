@@ -19,7 +19,6 @@ const TABLES = {
   runs:        "tblYtu8IEYKLcBfOD",
   departments: "tblgk8lmwqZlUMkcz",
   selections:  "tbl199XH5ESEIPtTW",
-  team:        "tblmucsQUIbfADmI1",
   deptNotes:     "Department Notes",
   questionNotes: "Question Notes",
   measures:      "Measures",
