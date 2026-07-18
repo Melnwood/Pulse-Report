@@ -1215,6 +1215,17 @@ export default function App() {
     });
   };
 
+  // Add a blank, included item to a section so a director can write one in when
+  // none were generated (e.g. JVK 1st-culture strengths). Autosync persists it.
+  const addItem = (deptKey, section) => {
+    setSelections(prev => {
+      const d = { ...(prev[deptKey] || {}) };
+      const list = Array.isArray(d[section]) ? d[section] : [];
+      d[section] = [...list, { text: "", rewrite: "", include: true, isRefined: false }];
+      return { ...prev, [deptKey]: d };
+    });
+  };
+
   const getApproved = (deptKey, section) =>
     (selections[deptKey]?.[section] || [])
       .filter(i => i.include)
@@ -1351,7 +1362,7 @@ export default function App() {
     <ReviewView
       country={country} year={year}
       surveyData={surveyData} selections={selections}
-      toggleItem={toggleItem} setRewrite={setRewrite}
+      toggleItem={toggleItem} setRewrite={setRewrite} addItem={addItem}
       saveSelections={saveSelections} saved={saved}
       saveRefinement={saveRefinement} refinements={refinements}
       setView={setView} setSelections={setSelections}
@@ -2073,7 +2084,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 }
 
 // ─── REVIEW VIEW ──────────────────────────────────────────────────────────────
-function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, sbMaster, saveSbMaster, cloudLoading, syncStatus, me, saveMe, isPCLead, openToDept, setOpenToDept, toggleDeptFinished, canEditDept, authRole, authUser, onSignOut, authDepts }) {
+function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, addItem, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, sbMaster, saveSbMaster, cloudLoading, syncStatus, me, saveMe, isPCLead, openToDept, setOpenToDept, toggleDeptFinished, canEditDept, authRole, authUser, onSignOut, authDepts }) {
   const canEdit = (d) => (canEditDept ? canEditDept(d) : true);
   const isMobile = useIsMobile();
   const [activeDept, setActiveDept] = useState(null);
@@ -2334,7 +2345,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
           {dept && deptTab === "review" && selections[dept.key] && (
             <DeptReviewPanel
               dept={dept} sel={selections[dept.key]}
-              toggleItem={toggleItem} setRewrite={setRewrite}
+              toggleItem={toggleItem} setRewrite={setRewrite} addItem={addItem}
               saveRefinement={saveRefinement} refinements={refinements}
               country={country} year={year} canEdit={canEdit(dept.key)}
               sbOverrides={sbOverrides} saveSbOverride={saveSbOverride}
@@ -3007,7 +3018,7 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
   );
 }
 
-function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, refinements, country, year, canEdit = true, sbOverrides, saveSbOverride, sbMaster, saveSbMaster, isAdmin, me, saveMe, isPCLead }) {
+function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, addItem, saveRefinement, refinements, country, year, canEdit = true, sbOverrides, saveSbOverride, sbMaster, saveSbMaster, isAdmin, me, saveMe, isPCLead }) {
   const isMobile = useIsMobile();
   // Which question's heatmap popup is open on mobile (index), or null. One at a time.
   const [openHeatmap, setOpenHeatmap] = useState(null);
@@ -3346,7 +3357,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                 </div>
                 {/* Edit area — hidden by default */}
                 {item.include && (
-                  <div id={editId} style={{ display:"none", padding:"0 14px 10px 38px" }}>
+                  <div id={editId} style={{ display: (!item.text && !item.rewrite.trim()) ? "block" : "none", padding:"0 14px 10px 38px" }}>
                     <textarea
                       value={item.rewrite}
                       onChange={e => setRewrite(dept.key, sec.key, idx, e.target.value)}
@@ -3356,7 +3367,9 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                       }}
                       placeholder={sec.key==="quotes"
                         ? "Leave blank to use as-is. Edit only if correcting a translation."
-                        : "Type here to override wording exactly as it will appear in the report. Saves for future countries."}
+                        : (!item.text
+                          ? `Write a new ${sec.label.replace(/s$/,"").toLowerCase()} — it appears exactly as written in the report.`
+                          : "Type here to override wording exactly as it will appear in the report. Saves for future countries.")}
                       style={{ width:"100%", background:"#FBEFE4", border:"0.5px solid #F0DFCE",
                         borderRadius:6, padding:"7px 10px", color:"#2C2621", fontSize:12,
                         resize:"vertical", minHeight:52, fontFamily:"inherit",
@@ -3368,7 +3381,18 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
             );
           })}
           {!secItems.length && (
-            <div style={{ padding:"8px 14px", color:"#7A6F63", fontSize:13, fontStyle:"italic" }}>No items generated for this section.</div>
+            <div style={{ padding:"8px 14px", color:"#7A6F63", fontSize:13, fontStyle:"italic" }}>None generated — add one below.</div>
+          )}
+          {/* Directors can write in an item when none were generated (or add more). Quotes come from staff, so they aren't hand-added. */}
+          {canEdit && sec.key !== "quotes" && (
+            <div style={{ padding:"8px 14px 12px" }}>
+              <button onClick={() => addItem(dept.key, sec.key)}
+                style={{ fontSize:12, fontWeight:600, color:"#B96524", background:"#FBEFE4",
+                  border:"1px dashed #E0A56F", borderRadius:7, padding: isMobile ? "9px 14px" : "7px 12px",
+                  cursor:"pointer" }}>
+                + Add {sec.label.replace(/s$/,"").toLowerCase()}
+              </button>
+            </div>
           )}
         </Disclosure>
           );
