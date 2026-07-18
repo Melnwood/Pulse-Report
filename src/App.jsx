@@ -799,7 +799,25 @@ export default function App() {
   }, []);
   const signOut = () => { logout(); setAuthUser(null); setAuthGate("needLogin"); };
 
-  const [view, setView]           = useState("sections");   // sections | home | review | report | dashboard | country | leadership
+  const [view, setViewRaw]        = useState("sections");   // sections | home | review | report | dashboard | country | leadership | users
+  // Navigation history so every "← Back" retraces the layers you came through,
+  // no matter which path you took to get here. setView() records the jump; goBack
+  // pops it. Same-view navigations aren't recorded (avoids dead back steps).
+  const [navHistory, setNavHistory] = useState([]);
+  const goBack = () => {
+    setNavHistory(h => {
+      if (!h.length) { setViewRaw("sections"); return h; }
+      setViewRaw(h[h.length - 1]);
+      return h.slice(0, -1);
+    });
+  };
+  // Any component can trigger a real "back" by calling setView("__back__") — no
+  // new prop needed. Other values push the current view onto the history stack.
+  const setView = (next) => {
+    if (next === "__back__") { goBack(); return; }
+    setNavHistory(h => (next !== view ? [...h, view] : h));
+    setViewRaw(next);
+  };
   const [openToDept, setOpenToDept] = useState(null);   // deptKey to jump to when the review opens (from the P&C home)
   // Admin mode (Mel & Chris only) — shared across screens, remembered per device.
   const [isAdmin, setIsAdmin] = useState(() => {
@@ -1412,8 +1430,8 @@ function ComingSoonSection({ title, blurb, setView }) {
   return (
     <div style={{ minHeight:"100vh", background:"#FBF7F2", padding:"40px 24px" }}>
       <div style={{ maxWidth:720, margin:"0 auto" }}>
-        <button onClick={() => setView("sections")}
-          style={{ ...navBtn, background:"transparent", border:"1px solid #EDE3D6", marginBottom:24 }}>← Sections</button>
+        <button onClick={() => setView("__back__")}
+          style={{ ...navBtn, background:"transparent", border:"1px solid #EDE3D6", marginBottom:24 }}>← Back</button>
         <div style={{ background:"#fff", border:"1px solid #EFE3D6", borderRadius:14, padding:"36px 28px" }}>
           <div style={{ fontSize:20, fontWeight:700, color:"#1E1B3A", marginBottom:8 }}>{title}</div>
           <div style={{ fontSize:14, color:"#7A6E62", lineHeight:1.6 }}>{blurb}</div>
@@ -1444,8 +1462,8 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
     <div style={{ minHeight:"100vh", background:"#FBF7F2", padding: isMobile ? "24px 16px" : "40px 24px" }}>
       <div style={{ maxWidth:720, margin:"0 auto" }}>
         <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:24 }}>
-          <button onClick={() => setView("sections")}
-            style={{ ...navBtn, background:"transparent", border:"1px solid #EDE3D6" }}>← Sections</button>
+          <button onClick={() => setView("__back__")}
+            style={{ ...navBtn, background:"transparent", border:"1px solid #EDE3D6" }}>← Back</button>
           <span style={{ fontSize:20, fontWeight:700, color:"#1E1B3A" }}>Leadership</span>
           {authUser && authUser.role === "leader" && (
             <button onClick={() => setView("users")} style={{ ...navBtn, fontSize:12, padding:"6px 12px" }}>Manage people</button>
@@ -1727,7 +1745,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
           <div style={{ fontSize:22, fontWeight:700, color:"#1E1B3A" }}>Pulse Report Platform</div>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <button onClick={() => setView("sections")} style={{ ...navBtn, background:"transparent", border:"1px solid #EDE3D6" }}>← Sections</button>
+          <button onClick={() => setView("__back__")} style={{ ...navBtn, background:"transparent", border:"1px solid #EDE3D6" }}>← Back</button>
           <button onClick={() => setView("dashboard")} style={navBtn}>
             P&C Dashboard
           </button>
@@ -1862,7 +1880,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
     <div style={{ height: isMobile ? "auto" : "100vh", minHeight:"100vh", background:"#F8F7F4", fontFamily:"'Inter',system-ui,sans-serif", display:"flex", flexDirection:"column", overflow: isMobile ? "visible" : "hidden" }}>
       {/* Top bar — on desktop it stays fixed at the top while only the content pane scrolls, keeping the action buttons (Translate, Import, Save, Generate) visible; on mobile it scrolls with the page since the whole shell scrolls normally */}
       <div style={{ background:"#FFFFFF", borderBottom:"1px solid #EDE3D6", padding: isMobile ? "12px 14px" : "14px 24px", display:"flex", alignItems:"center", gap: isMobile ? 8 : 16, flexShrink:0, zIndex:100, flexWrap:"wrap" }}>
-        <button onClick={()=>setView("home")} style={{ ...navBtn, background:"transparent", border:"1px solid #EDE3D6" }}>← Home</button>
+        <button onClick={()=>setView("__back__")} style={{ ...navBtn, background:"transparent", border:"1px solid #EDE3D6" }}>← Back</button>
         <div style={{ flex:1 }}>
           <span style={{ color:"#DC5A12", fontWeight:700, fontSize:13 }}>{country} {year}</span>
           <span style={{ color:"#9C8F82", marginLeft:8, fontSize:13 }}>Director Review</span>
@@ -3040,7 +3058,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
     <div style={{ minHeight:"100vh", background:"#F8F7F4", fontFamily:"'Inter',system-ui,sans-serif" }}>
       {/* Toolbar */}
       <div className="no-print" style={{ background:"white", borderBottom:"1px solid #EDE3D6", padding: isMobile ? "10px 14px" : "12px 24px", display:"flex", gap:12, alignItems:"center", flexWrap: isMobile ? "wrap" : "nowrap", position:"sticky", top:0, zIndex:10 }}>
-        <button onClick={()=>setView("review")} style={{ ...navBtn, background:"transparent", border:"1px solid #EDE3D6" }}>← Director Review</button>
+        <button onClick={()=>setView("__back__")} style={{ ...navBtn, background:"transparent", border:"1px solid #EDE3D6" }}>← Back</button>
         <div style={{ flex:1, order: isMobile ? 3 : 0, color:"#DC5A12", fontWeight:700, fontSize: isMobile ? 11 : 13, letterSpacing:1, whiteSpace: isMobile ? "normal" : "nowrap" }}>
           JOSIAH VENTURE · {country.toUpperCase()} {year}
         </div>
@@ -3344,7 +3362,7 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
   return (
     <div style={{ minHeight:"100vh", background:"#F8F7F4", fontFamily:"'Inter',system-ui,sans-serif" }}>
       <div style={{ background:"#FFFFFF", borderBottom:"1px solid #EDE3D6", padding: isMobile ? "12px 16px" : "14px 24px", display:"flex", alignItems:"center", gap: isMobile ? 10 : 16, flexWrap:"wrap" }}>
-        <button onClick={()=>setView(lockCountry ? "sections" : "home")} style={{ ...navBtn, background:"transparent", border:"1px solid #EDE3D6" }}>← Back</button>
+        <button onClick={()=>setView("__back__")} style={{ ...navBtn, background:"transparent", border:"1px solid #EDE3D6" }}>← Back</button>
         <div style={{ flex:1, color:"#1E1B3A", fontWeight:700 }}>{lockCountry ? `${lockCountry} Dashboard` : "P&C Dashboard"}</div>
         {!lockCountry && (
           <select value={dashCountry} onChange={e=>setDashCountry(e.target.value)}

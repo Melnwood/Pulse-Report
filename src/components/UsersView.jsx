@@ -40,7 +40,7 @@ export default function UsersView({ setView, me }) {
     <div style={{ minHeight: "100vh", background: "#FAF6F0", fontFamily: "'Inter',system-ui,sans-serif", padding: "28px 20px" }}>
       <div style={{ maxWidth: 820, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-          <button onClick={() => setView("leadership")} style={{ ...navBtn }}>← Leadership</button>
+          <button onClick={() => setView("__back__")} style={{ ...navBtn }}>← Back</button>
           <span style={{ fontSize: 20, fontWeight: 750, color: "#2A211C" }}>People &amp; accounts</span>
           <button onClick={startAdd} style={{ ...navBtn, marginLeft: "auto", background: "#DC5A12", color: "#fff", border: "1px solid transparent" }}>+ Add person</button>
         </div>
