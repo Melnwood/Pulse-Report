@@ -1447,6 +1447,8 @@ function ComingSoonSection({ title, blurb, setView }) {
 function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFile,
   generating, genProgress, isAdmin, toggleAdmin, setView, allRuns = [], reloadRuns, runsLoading, openRun, authUser, onSignOut }) {
   const isMobile = useIsMobile();
+  const [orgIssues, setOrgIssues] = useState(null);   // null = loading; array of question rows across the org
+  const issuesLoadedRef = useRef("");
 
   // Live updates: refresh the shared review progress on open and every 30s, so
   // leaders watching the dashboard see departments turn green as directors
@@ -1484,6 +1486,51 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
     if (d.status === "Concern") e.concernCountries.push(d.country);
   });
   const deptPattern = Object.values(byDept).sort((a, b) => (b.Concern - a.Concern) || (b.Watch - a.Watch) || a.label.localeCompare(b.label));
+
+  // ── Top issues (question level) ── Pull each country's latest run detail in
+  // the background and collect every question, so leaders can see the specific
+  // weak spots and recurring themes — not just department health.
+  const runsKey = latestRuns.map(r => `${r.country}:${r.year}`).sort().join("|");
+  useEffect(() => {
+    if (!latestRuns.length) { setOrgIssues([]); return; }
+    if (issuesLoadedRef.current === runsKey) return;
+    issuesLoadedRef.current = runsKey;
+    let alive = true;
+    setOrgIssues(null);
+    (async () => {
+      const rows = [];
+      await Promise.all(latestRuns.map(async (r) => {
+        try {
+          const sd = await loadRunSurveyData(r.country, r.year);
+          Object.values(sd?.depts || {}).forEach(dep => {
+            (dep.questions || []).forEach(q => {
+              if (q && q.score != null && q.en) rows.push({ en: q.en, score: q.score, status: q.status, burden: q.burden, country: r.country, deptLabel: dep.label || dep.key });
+            });
+          });
+        } catch {}
+      }));
+      if (alive) setOrgIssues(rows);
+    })();
+    return () => { alive = false; };
+  }, [runsKey]);
+
+  // Lowest-scoring questions org-wide (the specific pain points), worst first.
+  const topConcerns = (orgIssues || [])
+    .filter(q => q.status === "Concern" || q.status === "Watch")
+    .sort((a, b) => (parseFloat(a.score) || 9) - (parseFloat(b.score) || 9))
+    .slice(0, 10);
+  // Questions that are Concern/Watch in 2+ places — systemic, at the question level.
+  const recurring = (() => {
+    const g = {};
+    (orgIssues || []).filter(q => q.status === "Concern" || q.status === "Watch").forEach(q => {
+      const k = normQ(q.en);
+      const e = g[k] || (g[k] = { en: q.en, where: [], scores: [] });
+      e.where.push(`${q.country} · ${q.deptLabel}`); e.scores.push(parseFloat(q.score) || 0);
+    });
+    return Object.values(g).filter(e => e.where.length >= 2)
+      .map(e => ({ ...e, avg: (e.scores.reduce((s, x) => s + x, 0) / e.scores.length) }))
+      .sort((a, b) => b.where.length - a.where.length || a.avg - b.avg).slice(0, 6);
+  })();
 
   const Tile = ({ n, label, color }) => (
     <div style={{ ...card, padding:"14px 16px", textAlign:"center", minWidth:0 }}>
@@ -1644,6 +1691,55 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
                   })}
                 </div>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Top issues across the org (question level) ── */}
+        {allDepts.length > 0 && (
+          <div style={{ marginBottom:32 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:"#8C7D70", textTransform:"uppercase", letterSpacing:2, marginBottom:14 }}>
+              Top issues <span style={{ fontWeight:500, color:"#C9BCAF", letterSpacing:0, textTransform:"none" }}>· the specific questions staff scored lowest</span>
+            </div>
+
+            {orgIssues === null ? (
+              <div style={{ ...card, color:"#8C7D70", fontSize:13, fontStyle:"italic" }}>Reading the survey responses…</div>
+            ) : topConcerns.length === 0 ? (
+              <div style={{ ...card, color:"#8C7D70", fontSize:13 }}>No concern- or watch-level questions across the org right now.</div>
+            ) : (
+              <>
+                <div style={{ ...card, padding:0, overflow:"hidden", marginBottom: recurring.length ? 20 : 0 }}>
+                  {topConcerns.map((q,i) => (
+                    <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:11, padding: isMobile?"10px 12px":"10px 14px", borderTop: i?"1px solid #F3EBE1":"none" }}>
+                      <span style={{ fontFamily:"ui-monospace,Menlo,monospace", fontSize:13, fontWeight:700, color:sc(q.status), width:42, flexShrink:0, textAlign:"right" }}>{Number(q.score).toFixed(2)}</span>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:13, color:"#2A211C", lineHeight:1.4 }}>{q.en}{q.burden && <span style={{ color:"#A96A12", fontSize:10 }}> · burden</span>}</div>
+                        <div style={{ fontSize:11, color:"#8C7D70", marginTop:2 }}><b style={{ fontWeight:650 }}>{q.country}</b> · {q.deptLabel}</div>
+                      </div>
+                      <span style={{ fontSize:10, fontWeight:700, color:sc(q.status), background:sb(q.status), border:`1px solid ${sbd(q.status)}`, borderRadius:5, padding:"2px 8px", flexShrink:0 }}>{q.status}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {recurring.length > 0 && (
+                  <>
+                    <div style={{ fontSize:12, fontWeight:700, color:"#8A5A2B", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>
+                      Recurring across teams <span style={{ color:"#C9BCAF", fontWeight:500 }}>· same question low in multiple places</span>
+                    </div>
+                    <div style={{ ...card, padding:0, overflow:"hidden" }}>
+                      {recurring.map((e,i) => (
+                        <div key={i} style={{ padding: isMobile?"10px 12px":"10px 14px", borderTop: i?"1px solid #F3EBE1":"none" }}>
+                          <div style={{ display:"flex", alignItems:"baseline", gap:10 }}>
+                            <span style={{ fontSize:11, fontWeight:800, color:"#8A5A2B", flexShrink:0 }}>{e.where.length} teams</span>
+                            <span style={{ fontSize:13, color:"#2A211C", lineHeight:1.4 }}>{e.en}</span>
+                          </div>
+                          <div style={{ fontSize:11, color:"#8C7D70", marginTop:3 }}>{e.where.join("  ·  ")}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </>
             )}
           </div>
         )}
