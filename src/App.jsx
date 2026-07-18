@@ -858,14 +858,18 @@ export default function App() {
   const effIsAdmin  = authed ? authRole === "leader" : isAdmin;
   const effIsPCLead = authed ? authRole === "leader" : isPCLead;
   const effMe       = authed ? (authUser.name || me) : me;
-  const authDept    = authed && authRole === "director" ? (authUser.department || null) : null;
-  // A director may edit only their own department; leaders (and the auth-off
-  // state) edit any; a country leader edits none. The server enforces country
-  // isolation regardless — this is the in-app guardrail.
+  // P&C directors are international: they own one or more departments (comma-
+  // separated codes) and work ACROSS every country. authDepts is that set.
+  const authDepts   = authed && authRole === "director"
+    ? String(authUser.department || "").split(",").map(s => s.trim()).filter(Boolean)
+    : [];
+  // A director may edit only their own department(s), in any country; leaders
+  // (and the auth-off state) edit any; a country leader edits none. The server
+  // enforces this regardless — this is the in-app guardrail.
   const canEditDept = (deptKey) => {
     if (!authed) return true;
     if (authRole === "leader") return true;
-    if (authRole === "director") return deptKey === authDept;
+    if (authRole === "director") return authDepts.includes(deptKey);
     return false; // country (view-only)
   };
 
@@ -1345,7 +1349,7 @@ export default function App() {
       me={effMe} saveMe={saveMe} isPCLead={effIsPCLead}
       openToDept={openToDept} setOpenToDept={setOpenToDept}
       toggleDeptFinished={toggleDeptFinished}
-      canEditDept={canEditDept} authRole={authRole} authUser={authUser} onSignOut={signOut} authDept={authDept}
+      canEditDept={canEditDept} authRole={authRole} authUser={authUser} onSignOut={signOut} authDepts={authDepts}
     />
   );
 
@@ -1363,7 +1367,7 @@ export default function App() {
   if (view === "workspace") return (
     <WorkspaceView
       allRuns={allRuns} setView={setView}
-      authRole={authRole} authUser={authUser} authDept={authDept}
+      authRole={authRole} authUser={authUser} authDepts={authDepts}
       canEditDept={canEditDept} me={effMe} isPCLead={effIsPCLead}
       sbOverrides={sbOverrides} sbMaster={sbMaster}
     />
@@ -2056,7 +2060,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 }
 
 // ─── REVIEW VIEW ──────────────────────────────────────────────────────────────
-function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, sbMaster, promoteSbToMaster, cloudLoading, syncStatus, me, saveMe, isPCLead, openToDept, setOpenToDept, toggleDeptFinished, canEditDept, authRole, authUser, onSignOut, authDept }) {
+function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, sbMaster, promoteSbToMaster, cloudLoading, syncStatus, me, saveMe, isPCLead, openToDept, setOpenToDept, toggleDeptFinished, canEditDept, authRole, authUser, onSignOut, authDepts }) {
   const canEdit = (d) => (canEditDept ? canEditDept(d) : true);
   const isMobile = useIsMobile();
   const [activeDept, setActiveDept] = useState(null);
@@ -2690,10 +2694,13 @@ function DeptNotesTab({ dept, country, year, me, saveMe, isPCLead, canEdit = tru
 // work through its questions one by one — read the score + Survey Basics, jot
 // notes, and track behaviour change. Reuses Question Notes + the Measures panel;
 // adds a progress summary and filters so a director can focus on what matters.
-function WorkspaceView({ allRuns, setView, authRole, authUser, authDept, canEditDept, me, isPCLead, sbOverrides, sbMaster }) {
+function WorkspaceView({ allRuns, setView, authRole, authUser, authDepts = [], canEditDept, me, isPCLead, sbOverrides, sbMaster }) {
   const isMobile = useIsMobile();
   const countries = [...new Set((allRuns || []).map(r => r.country))].filter(Boolean).sort();
-  const lockedCountry = authRole === "director" || authRole === "country" ? (authUser && authUser.country) : null;
+  // Directors are international — they pick any country. Only country leaders lock.
+  const lockedCountry = authRole === "country" ? (authUser && authUser.country) : null;
+  // Directors are limited to their own department(s); everyone else sees all.
+  const myDeptCodes = authRole === "director" ? authDepts : null;   // null = no restriction
   const [country, setCountry] = useState(lockedCountry || countries[0] || "");
 
   // Latest run for the chosen country drives the question set.
@@ -2702,7 +2709,7 @@ function WorkspaceView({ allRuns, setView, authRole, authUser, authDept, canEdit
   const year = latestRun && latestRun.year;
 
   const [sd, setSd] = useState(null);          // { depts } for the run (null = loading)
-  const [deptKey, setDeptKey] = useState(authDept || null);
+  const [deptKey, setDeptKey] = useState((myDeptCodes && myDeptCodes[0]) || null);
   const [notes, setNotes] = useState([]);
   const [measures, setMeasures] = useState([]);
   const [filter, setFilter] = useState("attention");   // all | attention | tracked
@@ -2715,9 +2722,11 @@ function WorkspaceView({ allRuns, setView, authRole, authUser, authDept, canEdit
     loadRunSurveyData(country, year).then(d => {
       if (!alive) return;
       setSd(d || { depts: {} });
-      const codes = Object.keys((d && d.depts) || {});
-      // Directors are pinned to their department; others default to the first.
-      setDeptKey(prev => (authDept && codes.includes(authDept)) ? authDept : (codes.includes(prev) ? prev : codes[0] || null));
+      // Codes this viewer may open: a director's own department(s) that exist in
+      // this run, otherwise every department in the run.
+      const all = Object.keys((d && d.depts) || {});
+      const codes = myDeptCodes ? all.filter(c => myDeptCodes.includes(c)) : all;
+      setDeptKey(prev => (codes.includes(prev) ? prev : codes[0] || null));
     }).catch(() => { if (alive) setSd({ depts: {} }); });
     return () => { alive = false; };
     // eslint-disable-next-line
@@ -2798,10 +2807,10 @@ function WorkspaceView({ allRuns, setView, authRole, authUser, authDept, canEdit
               {countries.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           )}
-          {!authDept && depts.length > 0 && (
+          {(myDeptCodes ? depts.filter(d => myDeptCodes.includes(d.key)) : depts).length > 1 && (
             <select value={deptKey || ""} onChange={e => setDeptKey(e.target.value)}
               style={{ fontSize: 13, padding: "8px 12px", border: "1px solid #E2D3C2", borderRadius: 8, background: "#fff", color: "#2C2621" }}>
-              {depts.map(d => <option key={d.key} value={d.key}>{d.label || d.key}</option>)}
+              {(myDeptCodes ? depts.filter(d => myDeptCodes.includes(d.key)) : depts).map(d => <option key={d.key} value={d.key}>{d.label || d.key}</option>)}
             </select>
           )}
           {country && <span style={{ alignSelf: "center", fontSize: 12, color: "#A89C8D" }}>{country}{year ? ` · ${year}` : ""}</span>}
