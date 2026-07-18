@@ -530,4 +530,41 @@ export async function saveMeasure(m) {
   return measureFromRec(res.records[0]);
 }
 
+// ─── SURVEY BASICS (master interpretations) ──────────────────────────────────
+// The shared default text each report uses for a question in a score band. A
+// director editing a Survey Basics line writes here, so it becomes the default
+// everywhere going forward. Keyed by "<sbKey>:<normQuestion>:<level>" (the Key
+// field), which matches the app's masterKey exactly.
+
+// Load every master interpretation as { key: text }.
+export async function loadSurveyBasicsMaster() {
+  const res = await call({ action: "list", table: "surveyBasics" });
+  const out = {};
+  (res.records || []).forEach(r => {
+    const k = r.fields["Key"];
+    const t = r.fields["Text"];
+    if (k && t) out[k] = t;
+  });
+  return out;
+}
+
+// Upsert one master interpretation (by Key). Empty text deletes it (restore the
+// built-in default). Returns nothing.
+export async function saveSurveyBasicsMaster({ key, sbKey, question, level, text, author }) {
+  const existing = await call({ action: "list", table: "surveyBasics",
+    filterByFormula: `{Key} = ${q(key)}`, params: { pageSize: 1 } });
+  const rec = existing.records && existing.records[0];
+  const clean = (text || "").trim();
+  if (!clean) {
+    if (rec) await call({ action: "delete", table: "surveyBasics", recordIds: [rec.id] });
+    return;
+  }
+  const fields = {
+    "Key": key, "SB Key": sbKey, "Question": question || "", "Level": level,
+    "Text": clean, "Author": author || "", "Updated": new Date().toISOString().slice(0, 10),
+  };
+  if (rec) await call({ action: "update", table: "surveyBasics", records: [{ id: rec.id, fields }] });
+  else await call({ action: "create", table: "surveyBasics", records: [{ fields }] });
+}
+
 export { F as AIRTABLE_FIELDS };

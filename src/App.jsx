@@ -7,7 +7,7 @@ import Login from "./components/Login";
 import UsersView from "./components/UsersView";
 import { authStatus, tokenValid, getUser, logout } from "./authClient";
 import SURVEY_BASICS from "./surveyBasics.json";
-import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, loadMeasures } from "./airtable";
+import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, loadMeasures, loadSurveyBasicsMaster, saveSurveyBasicsMaster } from "./airtable";
 import MeasurePanel from "./components/MeasurePanel";
 import NotesDigest from "./components/NotesDigest";
 import CountryTrends from "./components/CountryTrends";
@@ -982,21 +982,34 @@ export default function App() {
     }, 1200);
   };
 
-  // MASTER Survey Basics overrides — promoted interpretations that become the default
-  // for ALL countries/years. Keyed sbKey:normalizedQuestion:level (e.g. "hr:...:low").
-  // (localStorage for now; syncs to Airtable once the master table is wired.)
+  // MASTER Survey Basics interpretations — the shared default each report uses for
+  // a question + score band. Editing a Survey Basics line writes here, so the edit
+  // becomes the default in every report going forward. Keyed sbKey:normQuestion:level
+  // (e.g. "hr:...:low"). Persisted to Airtable (shared) with a localStorage cache.
   const [sbMaster, setSbMaster] = useState(() => {
     try { const r = localStorage.getItem("pulse:sbMaster"); return r ? JSON.parse(r) : {}; }
     catch { return {}; }
   });
-  // Promote a rewrite into the master for a specific question + level.
-  const promoteSbToMaster = (sbKey, qText, level, text) => {
+  // Pull the shared masters from Airtable on load and cache them.
+  useEffect(() => {
+    loadSurveyBasicsMaster().then(m => {
+      if (m && Object.keys(m).length) {
+        setSbMaster(m);
+        try { localStorage.setItem("pulse:sbMaster", JSON.stringify(m)); } catch {}
+      }
+    }).catch(e => console.warn("Survey Basics master load failed:", e.message));
+  }, []);
+  // Save an edited interpretation as the master default (empty text restores the
+  // built-in default). Updates the cache immediately, then persists to Airtable.
+  const saveSbMaster = (sbKey, qText, level, text) => {
     const key = `${sbKey}:${normQ(qText)}:${level}`;
+    const clean = (text || "").trim();
     const updated = { ...sbMaster };
-    if (text && text.trim()) updated[key] = text.trim();
-    else delete updated[key];
+    if (clean) updated[key] = clean; else delete updated[key];
     setSbMaster(updated);
     try { localStorage.setItem("pulse:sbMaster", JSON.stringify(updated)); } catch(e) {}
+    saveSurveyBasicsMaster({ key, sbKey, question: qText, level, text: clean, author: effMe })
+      .catch(e => console.warn("Survey Basics master save failed:", e.message));
   };
 
   // Loading indicator while pulling the shared version from Airtable.
@@ -1344,7 +1357,7 @@ export default function App() {
       setView={setView} setSelections={setSelections}
       isAdmin={effIsAdmin} toggleAdmin={toggleAdmin}
       sbOverrides={sbOverrides} saveSbOverride={saveSbOverride} setSbOverrides={setSbOverrides}
-      sbMaster={sbMaster} promoteSbToMaster={promoteSbToMaster}
+      sbMaster={sbMaster} saveSbMaster={saveSbMaster}
       cloudLoading={cloudLoading} syncStatus={syncStatus}
       me={effMe} saveMe={saveMe} isPCLead={effIsPCLead}
       openToDept={openToDept} setOpenToDept={setOpenToDept}
@@ -2060,7 +2073,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 }
 
 // ─── REVIEW VIEW ──────────────────────────────────────────────────────────────
-function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, sbMaster, promoteSbToMaster, cloudLoading, syncStatus, me, saveMe, isPCLead, openToDept, setOpenToDept, toggleDeptFinished, canEditDept, authRole, authUser, onSignOut, authDepts }) {
+function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, sbMaster, saveSbMaster, cloudLoading, syncStatus, me, saveMe, isPCLead, openToDept, setOpenToDept, toggleDeptFinished, canEditDept, authRole, authUser, onSignOut, authDepts }) {
   const canEdit = (d) => (canEditDept ? canEditDept(d) : true);
   const isMobile = useIsMobile();
   const [activeDept, setActiveDept] = useState(null);
@@ -2325,7 +2338,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
               saveRefinement={saveRefinement} refinements={refinements}
               country={country} year={year} canEdit={canEdit(dept.key)}
               sbOverrides={sbOverrides} saveSbOverride={saveSbOverride}
-              sbMaster={sbMaster} promoteSbToMaster={promoteSbToMaster} isAdmin={isAdmin}
+              sbMaster={sbMaster} saveSbMaster={saveSbMaster} isAdmin={isAdmin}
               me={me} saveMe={saveMe} isPCLead={isPCLead}
             />
           )}
@@ -2591,7 +2604,7 @@ function DeptNotesTab({ dept, country, year, me, saveMe, isPCLead, canEdit = tru
     const sbKey = SB_KEY[dept.key] || String(dept.key || "").toLowerCase();
     const ovKey = `${country}:${year}:${dept.key}:${normQ(q.en)}`;
     const masterKey = `${sbKey}:${normQ(q.en)}:${level}`;
-    return (sbOverrides && sbOverrides[ovKey]) || (sbMaster && sbMaster[masterKey]) || m[level] || "";
+    return (sbMaster && sbMaster[masterKey]) || (sbOverrides && sbOverrides[ovKey]) || m[level] || "";
   };
   const SECTIONS = [
     { key: "§ Strengths", label: "Strengths" },
@@ -2762,7 +2775,7 @@ function WorkspaceView({ allRuns, setView, authRole, authUser, authDepts = [], c
     const sbKey = SB_KEY[deptKey] || String(deptKey || "").toLowerCase();
     const ovKey = `${country}:${year}:${deptKey}:${normQ(q.en)}`;
     const masterKey = `${sbKey}:${normQ(q.en)}:${level}`;
-    return (sbOverrides && sbOverrides[ovKey]) || (sbMaster && sbMaster[masterKey]) || m[level] || "";
+    return (sbMaster && sbMaster[masterKey]) || (sbOverrides && sbOverrides[ovKey]) || m[level] || "";
   };
 
   // Measure summary + progress.
@@ -2994,7 +3007,7 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
   );
 }
 
-function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, refinements, country, year, canEdit = true, sbOverrides, saveSbOverride, sbMaster, promoteSbToMaster, isAdmin, me, saveMe, isPCLead }) {
+function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, refinements, country, year, canEdit = true, sbOverrides, saveSbOverride, sbMaster, saveSbMaster, isAdmin, me, saveMe, isPCLead }) {
   const isMobile = useIsMobile();
   // Which question's heatmap popup is open on mobile (index), or null. One at a time.
   const [openHeatmap, setOpenHeatmap] = useState(null);
@@ -3139,14 +3152,16 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                       // Level for this question based on its status
                       const level = q.status === 'Healthy' ? 'high' : q.status === 'Watch' ? 'mid' : 'low';
                       const origText = sbMatch[level];
-                      // Precedence: this-report override > promoted master default > original.
+                      // Precedence: the shared master default wins, then any legacy
+                      // per-run override, then the built-in original. Editing writes
+                      // the master, so an edit becomes the default for every report.
                       const sbKey = SB_KEY[dept.key] || String(dept.key||"").toLowerCase();
                       const masterKey = `${sbKey}:${normQ(q.en)}:${level}`;
                       const masterText = sbMaster?.[masterKey];
-                      const sbDefault = masterText || origText;
                       const ovKey = `${country}:${year}:${dept.key}:${normQ(q.en)}`;
                       const override = sbOverrides?.[ovKey];
-                      const sbText = override || sbDefault;
+                      const customized = !!masterText;
+                      const sbText = masterText || override || origText;
                       const editId = `sbedit-${dept.key}-${i}`;
                       return (
                         <div>
@@ -3155,62 +3170,41 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, saveRefinement, re
                             <span style={{ fontSize:9, fontWeight:700, color:"#7A6F63",
                               textTransform:"uppercase", letterSpacing:.5,
                               whiteSpace:"nowrap", paddingTop:1, flexShrink:0 }}>Survey Basics</span>
-                            <span style={{ fontSize:11, color: override ? "#2C2621" : "#7A6F63",
+                            <span style={{ fontSize:11, color: customized ? "#2C2621" : "#7A6F63",
                               fontStyle:"italic", lineHeight:1.4, flex:1 }}>
                               {sbText}
-                              {override && <span style={{ fontStyle:"normal", fontSize:9, fontWeight:700,
-                                color:"#E0863C", marginLeft:6 }}>(edited)</span>}
+                              {customized && <span style={{ fontStyle:"normal", fontSize:9, fontWeight:700,
+                                color:"#3E7A50", marginLeft:6 }}>★ default</span>}
                             </span>
-                            <button
-                              onClick={() => {
-                                const el = document.getElementById(editId);
-                                if (el) el.style.display = el.style.display === "block" ? "none" : "block";
-                              }}
-                              style={{ fontSize:10, color:"#E0863C", background:"#F7E7D5",
-                                border:"0.5px solid #E0A56F", borderRadius:4, padding:"2px 8px",
-                                cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
-                              Edit
-                            </button>
+                            {canEdit && (
+                              <button
+                                onClick={() => {
+                                  const el = document.getElementById(editId);
+                                  if (el) el.style.display = el.style.display === "block" ? "none" : "block";
+                                }}
+                                style={{ fontSize:10, color:"#E0863C", background:"#F7E7D5",
+                                  border:"0.5px solid #E0A56F", borderRadius:4, padding:"2px 8px",
+                                  cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
+                                Edit
+                              </button>
+                            )}
                           </div>
-                          <div id={editId} style={{ display:"none", marginTop:5 }}>
-                            <textarea
-                              defaultValue={override || ""}
-                              placeholder="Type your own interpretation if this doesn't match what you see on your team."
-                              onBlur={(e) => saveSbOverride && saveSbOverride(dept.key, q.en, e.target.value)}
-                              style={{ width:"100%", border:"0.5px solid #F0DFCE", borderRadius:5,
-                                padding:"6px 8px", fontSize:11, color:"#2C2621",
-                                background:"white", resize:"vertical", minHeight:44,
-                                fontFamily:"inherit", lineHeight:1.5 }}
-                            />
-                            <div style={{ fontSize:9, color:"#7A6F63", marginTop:3 }}>
-                              Saves automatically when you click away. Clear the box to restore the default.
+                          {canEdit && (
+                            <div id={editId} style={{ display:"none", marginTop:5 }}>
+                              <textarea
+                                defaultValue={masterText || override || ""}
+                                placeholder="Rewrite this interpretation. It becomes the default for this question in every report."
+                                onBlur={(e) => saveSbMaster && saveSbMaster(sbKey, q.en, level, e.target.value)}
+                                style={{ width:"100%", border:"0.5px solid #F0DFCE", borderRadius:5,
+                                  padding:"6px 8px", fontSize:11, color:"#2C2621",
+                                  background:"white", resize:"vertical", minHeight:44,
+                                  fontFamily:"inherit", lineHeight:1.5 }}
+                              />
+                              <div style={{ fontSize:9, color:"#7A6F63", marginTop:3 }}>
+                                Saves when you click away, and becomes the default {level==="low"?"Concern":level==="mid"?"Watch":"Healthy"} interpretation for this question in <b>every</b> report — current and future. Clear the box to restore the original.
+                              </div>
                             </div>
-                            {/* Admin-only: promote this rewrite to the master Survey Basics for all reports */}
-                            {isAdmin && override && override !== masterText && (
-                              <div style={{ marginTop:6, display:"flex", alignItems:"center", gap:8 }}>
-                                <button
-                                  onClick={() => promoteSbToMaster && promoteSbToMaster(sbKey, q.en, level, override)}
-                                  style={{ fontSize:10, fontWeight:600, color:"white", background:"#E0863C",
-                                    border:"none", borderRadius:4, padding:"3px 10px", cursor:"pointer" }}>
-                                  ★ Promote to master ({level})
-                                </button>
-                                <span style={{ fontSize:9, color:"#7A6F63" }}>
-                                  Makes this the default {level==="low"?"Concern":level==="mid"?"Watch":"Healthy"} interpretation for this question in every future report.
-                                </span>
-                              </div>
-                            )}
-                            {isAdmin && masterText && (
-                              <div style={{ marginTop:4, fontSize:9, color:"#3E7A50" }}>
-                                ★ A promoted master interpretation is active for this question ({level}).
-                                {" "}
-                                <button onClick={() => promoteSbToMaster && promoteSbToMaster(sbKey, q.en, level, "")}
-                                  style={{ fontSize:9, color:"#BE6650", background:"none", border:"none",
-                                    cursor:"pointer", textDecoration:"underline", padding:0 }}>
-                                  Remove from master
-                                </button>
-                              </div>
-                            )}
-                          </div>
+                          )}
                         </div>
                       );
                     })()}
@@ -3687,7 +3681,7 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
                     const sbKey = SB_KEY[dept.key] || String(dept.key||"").toLowerCase();
                     const ovKey = `${country}:${year}:${dept.key}:${normQ(q.en)}`;
                     const masterKey = `${sbKey}:${normQ(q.en)}:${level}`;
-                    const text = (sbOverrides && sbOverrides[ovKey]) || (sbMaster && sbMaster[masterKey]) || sbMatch[level];
+                    const text = (sbMaster && sbMaster[masterKey]) || (sbOverrides && sbOverrides[ovKey]) || sbMatch[level];
                     if (!text) return null;
                     return (
                       <div style={{ fontSize:11, color:"#7A6F63", fontStyle:"italic",
