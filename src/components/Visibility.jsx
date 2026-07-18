@@ -18,15 +18,15 @@ export function VisibilityPicker({ value, onChange, isMobile }) {
   const shared = value === VIS_SHARED;
   const btn = (active, bg) => ({ fontSize:12, fontWeight:600, display:"inline-flex", alignItems:"center", gap:5,
     padding: isMobile ? "9px 14px" : "5px 12px", border:"none", cursor:"pointer",
-    background: active ? bg : "transparent", color: active ? "#fff" : "#8A7A6B" });
+    background: active ? bg : "transparent", color: active ? "#fff" : "#7A6F63" });
   return (
     <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-      <span style={{ fontSize:12, color:"#7A6E62" }}>This note:</span>
+      <span style={{ fontSize:12, color:"#7A6F63" }}>This note:</span>
       <div style={{ display:"inline-flex", border:"1px solid #E2D3C2", borderRadius:8, overflow:"hidden" }}>
         <button type="button" onClick={() => onChange("Private")} style={btn(!shared, "#5A4A3B")}><IconLock size={13}/> Private</button>
-        <button type="button" onClick={() => onChange(VIS_SHARED)} style={{ ...btn(shared, "#2E7D32"), borderLeft:"1px solid #E2D3C2" }}><IconEye size={13}/> Shared</button>
+        <button type="button" onClick={() => onChange(VIS_SHARED)} style={{ ...btn(shared, "#5C9A6D"), borderLeft:"1px solid #E2D3C2" }}><IconEye size={13}/> Shared</button>
       </div>
-      <span style={{ fontSize:11, color:"#9C8F82" }}>{visAudience(value)}</span>
+      <span style={{ fontSize:11, color:"#7A6F63" }}>{visAudience(value)}</span>
     </div>
   );
 }
@@ -38,9 +38,9 @@ export function VisibilityChip({ visibility, onClick }) {
     <button onClick={onClick} title={`${visAudience(visibility)} — click to change`}
       style={{ marginLeft:"auto", fontSize:10, fontWeight:700, cursor:"pointer",
         display:"inline-flex", alignItems:"center", gap:4, whiteSpace:"nowrap",
-        color: shared ? "#2E7D32" : "#8A7A6B",
-        background: shared ? "#E8F5E9" : "#F3ECE3",
-        border:"1px solid " + (shared ? "#A5D6A7" : "#E2D3C2"), borderRadius:5, padding:"2px 8px" }}>
+        color: shared ? "#5C9A6D" : "#7A6F63",
+        background: shared ? "#E9F1E9" : "#F3ECE3",
+        border:"1px solid " + (shared ? "#AFD8BB" : "#E2D3C2"), borderRadius:5, padding:"2px 8px" }}>
       {shared ? <IconEye size={11}/> : <IconLock size={11}/>}{shared ? "Shared" : "Private"}<span style={{ fontSize:8, fontWeight:600, opacity:.65, marginLeft:2 }}>▾ change</span>
     </button>
   );
