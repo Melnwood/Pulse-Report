@@ -64,13 +64,18 @@ exports.handler = async (event) => {
       return { statusCode: 401, headers, body: JSON.stringify({ error: "Wrong email or password." }) };
     }
 
+    // Departments is a multi-select (array of dept codes); the old Department
+    // text field is a fallback. Normalize either to a comma-joined string, which
+    // is what the client and the airtable proxy both parse.
+    const deptRaw = (f.Departments !== undefined && f.Departments !== null) ? f.Departments : f.Department;
+    const department = Array.isArray(deptRaw) ? deptRaw.join(",") : (deptRaw || null);
     const user = {
       id: rec.id,
       email,
       name: f.Name || email,
       role: String(f.Role || "director").toLowerCase().trim(),   // leader | country | director
       country: f.Country || null,
-      department: f.Department || null,
+      department,
     };
     const jwt = signToken(user, secret);
     return { statusCode: 200, headers, body: JSON.stringify({ enabled: true, token: jwt, user }) };
@@ -91,9 +96,13 @@ exports.handler = async (event) => {
     const AT = "https://api.airtable.com/v0";
     const authHeaders = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
     const T = `${AT}/${baseId}/${encodeURIComponent(USERS_TABLE)}`;
+    const deptToStr = (f) => {
+      const d = (f.Departments !== undefined && f.Departments !== null) ? f.Departments : f.Department;
+      return Array.isArray(d) ? d.join(",") : (d || "");
+    };
     const sanitize = (r) => ({ id: r.id, email: r.fields.Email || "", name: r.fields.Name || "",
       role: String(r.fields.Role || "director").toLowerCase(), country: r.fields.Country || "",
-      department: r.fields.Department || "", active: r.fields.Active !== false });
+      department: deptToStr(r.fields), active: r.fields.Active !== false });
 
     try {
       if (body.action === "listUsers") {
@@ -110,9 +119,14 @@ exports.handler = async (event) => {
         const role = String(u.role || "director").toLowerCase().trim();
         if (!email || !u.name) return { statusCode: 400, headers, body: JSON.stringify({ error: "Name and email are required." }) };
         if (!["leader", "country", "director"].includes(role)) return { statusCode: 400, headers, body: JSON.stringify({ error: "Invalid role." }) };
+        // Departments is a multi-select: accept an array or a comma string from
+        // the client and write an array of dept codes (empty for non-directors).
+        const deptArr = role === "director"
+          ? (Array.isArray(u.department) ? u.department : String(u.department || "").split(",").map(s => s.trim()).filter(Boolean))
+          : [];
         const fields = {
           Email: email, Name: String(u.name).trim(), Role: role,
-          Country: u.country || "", Department: role === "director" ? (u.department || "") : "",
+          Country: u.country || "", Departments: deptArr,
           Active: u.active !== false,
         };
         if (u.password) { const { salt, hash } = hashPassword(String(u.password)); fields.Salt = salt; fields.Hash = hash; }
