@@ -1,0 +1,47 @@
+// Client side of auth: talk to the /.netlify/functions/auth endpoint, keep the
+// session token + current user in localStorage, and expose helpers the app uses
+// to gate itself. The server is the source of truth — these are conveniences.
+const TOKEN_KEY = "pulse:token";
+const USER_KEY = "pulse:user";
+
+async function post(payload) {
+  const res = await fetch("/.netlify/functions/auth", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  return { ok: res.ok, data };
+}
+
+// Is login switched on yet? Fails OPEN (returns disabled) so a network hiccup or
+// unconfigured deploy never locks anyone out.
+export async function authStatus() {
+  try {
+    const { ok, data } = await post({ action: "status" });
+    return { enabled: !!(ok && data.enabled) };
+  } catch { return { enabled: false }; }
+}
+
+export async function login(email, password) {
+  const { ok, data } = await post({ action: "login", email, password });
+  if (!ok || !data.token) throw new Error(data.error || "Login failed. Please try again.");
+  try {
+    localStorage.setItem(TOKEN_KEY, data.token);
+    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+  } catch {}
+  return data.user;
+}
+
+export function getToken() { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } }
+export function getUser() { try { const u = localStorage.getItem(USER_KEY); return u ? JSON.parse(u) : null; } catch { return null; } }
+export function logout() { try { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); } catch {} }
+
+// True if we hold a token that hasn't expired. (Signature is still verified
+// server-side on every request — this just avoids showing a stale session.)
+export function tokenValid() {
+  const t = getToken();
+  if (!t) return false;
+  try {
+    const payload = JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    return !payload.exp || payload.exp > Math.floor(Date.now() / 1000);
+  } catch { return false; }
+}

@@ -3,6 +3,8 @@ import { useIsMobile, sc, sb, sbd, card, navBtn, lbl, inp, C } from "./theme";
 import Disclosure from "./components/Disclosure";
 import { VisibilityPicker, VisibilityChip } from "./components/Visibility";
 import { IconHelp, IconUpload } from "./components/Icons";
+import Login from "./components/Login";
+import { authStatus, tokenValid, getUser, logout } from "./authClient";
 import SURVEY_BASICS from "./surveyBasics.json";
 import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility } from "./airtable";
 
@@ -778,6 +780,24 @@ function looksNonEnglish(text) {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
+  // ── AUTH GATE ──
+  // "checking" while we ask the server if login is on; "open" if it's off (app
+  // works as before); "needLogin" / "authed" once it's on. Fails OPEN so an
+  // unconfigured deploy or a hiccup never locks anyone out.
+  const [authGate, setAuthGate] = useState("checking");
+  const [authUser, setAuthUser] = useState(() => getUser());
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { enabled } = await authStatus();
+      if (!alive) return;
+      if (!enabled) setAuthGate("open");
+      else setAuthGate(tokenValid() ? "authed" : "needLogin");
+    })();
+    return () => { alive = false; };
+  }, []);
+  const signOut = () => { logout(); setAuthUser(null); setAuthGate("needLogin"); };
+
   const [view, setView]           = useState("sections");   // sections | home | review | report | dashboard | country | leadership
   const [openToDept, setOpenToDept] = useState(null);   // deptKey to jump to when the review opens (from the P&C home)
   // Admin mode (Mel & Chris only) — shared across screens, remembered per device.
@@ -1211,10 +1231,20 @@ export default function App() {
     } catch (e) { console.warn("Open run failed:", e.message); }
   };
 
+  // ── AUTH GATE ── (only intercepts when login is switched on)
+  if (authGate === "checking") return (
+    <div style={{ minHeight:"100vh", background:"#FAF6F0", fontFamily:"'Inter',system-ui,sans-serif",
+      display:"flex", alignItems:"center", justifyContent:"center", color:"#8C7D70", fontSize:14 }}>Loading…</div>
+  );
+  if (authGate === "needLogin") return (
+    <Login onLogin={(u) => { setAuthUser(u); setAuthGate("authed"); }} />
+  );
+
   // ── VIEWS ──────────────────────────────────────────────────────────────────
 
   if (view === "sections") return (
-    <SectionsView setView={setView} isPCLead={isPCLead} isAdmin={isAdmin} toggleAdmin={toggleAdmin} />
+    <SectionsView setView={setView} isPCLead={isPCLead} isAdmin={isAdmin} toggleAdmin={toggleAdmin}
+      authUser={authUser} onSignOut={signOut} />
   );
 
   if (view === "country") return (
@@ -1289,7 +1319,7 @@ export default function App() {
 // Top level of the app, organized by audience: Country dashboards (for each
 // country), People & Culture (for directors — review + department pages + notes),
 // and Leadership (for Mel & Chris — sees everything, overall dashboard).
-function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin }) {
+function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin, authUser, onSignOut }) {
   const isMobile = useIsMobile();
   const cards = [
     { key: "country", title: "Country dashboards", to: "country",
@@ -1302,14 +1332,22 @@ function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin }) {
   return (
     <div style={{ minHeight:"100vh", background:"#FBF7F2", padding: isMobile ? "28px 16px" : "40px 24px" }}>
       <div style={{ maxWidth:900, margin:"0 auto" }}>
-        <div style={{ display:"flex", alignItems:"baseline", gap:12, marginBottom:4 }}>
+        <div style={{ display:"flex", alignItems:"baseline", gap:12, marginBottom:4, flexWrap:"wrap" }}>
           <span style={{ fontSize:24, fontWeight:800, color:"#1E1B3A" }}>JV Pulse</span>
           <span style={{ fontSize:14, color:"#9C8F82" }}>People & Culture</span>
-          <button onClick={toggleAdmin} title="Admin tools for Mel & Chris"
-            style={{ marginLeft:"auto", fontSize:12, color: isAdmin ? "#2E7D32" : "#B4A897",
-              background:"transparent", border:"none", cursor:"pointer" }}>
-            {isAdmin ? "🔓 admin" : "🔒"}
-          </button>
+          <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:12 }}>
+            {authUser && (
+              <span style={{ fontSize:12, color:"#8C7D70" }}>
+                {authUser.name} · <button onClick={onSignOut}
+                  style={{ background:"none", border:"none", padding:0, cursor:"pointer", color:"#B84A0E", fontWeight:600, fontSize:12 }}>Sign out</button>
+              </span>
+            )}
+            <button onClick={toggleAdmin} title="Admin tools for Mel & Chris"
+              style={{ fontSize:12, color: isAdmin ? "#2E7D32" : "#B4A897",
+                background:"transparent", border:"none", cursor:"pointer" }}>
+              {isAdmin ? "🔓 admin" : "🔒"}
+            </button>
+          </div>
         </div>
         <div style={{ fontSize:14, color:"#7A6E62", marginBottom:28 }}>Where would you like to go?</div>
 
