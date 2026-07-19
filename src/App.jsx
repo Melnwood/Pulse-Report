@@ -1488,9 +1488,7 @@ function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin, authUser, onSig
     { key: "country", title: "Country dashboards", to: "dashboard", roles: ["leader", "country"],
       blurb: "Each country's latest pulse report and how it's trending over time." },
     { key: "pc", title: "People & Culture", to: "home", roles: ["leader", "director"],
-      blurb: "Director's review, department pages, and notes across every pulse." },
-    { key: "workspace", title: "Question workspace", to: "workspace", roles: ["leader", "director"],
-      blurb: "Work question by question — notes and behaviour-change tracking for your department." },
+      blurb: "Your departments by country — the review, question-by-question notes, and behaviour tracking, all in one place." },
     { key: "leadership", title: "Leadership", to: "leadership", roles: ["leader"],
       blurb: "Everything across the org, with an overall dashboard. Mel & Chris." },
   ];
@@ -2308,6 +2306,11 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 
   const isMobile = useIsMobile();
   const countries = [...new Set(allRuns.map(r=>r.country))].sort();
+  // A director owns one or more department codes across every country; the P&C
+  // home leads with those. null = a leader (sees every department).
+  const myDepts = authUser?.role === "director"
+    ? String(authUser.department || "").split(",").map(s => s.trim()).filter(Boolean)
+    : null;
 
   // Open a run into the director's review (loads local first, then merges shared
   // Airtable data). Shared by the featured card and the run list.
@@ -2367,7 +2370,6 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
   // isn't marked complete/published. Falls back to the most recent run.
   const isFinished = (r) => /complete|publish|done|final/i.test(String(r.status || ""));
   const sortedByRecent = allRuns.slice().sort((a,b) => new Date(b.savedAt||0) - new Date(a.savedAt||0));
-  const featured = sortedByRecent.find(r => !isFinished(r)) || sortedByRecent[0] || null;
 
   return (
     <div style={{ minHeight:"100vh", background:"#F6F1E8", fontFamily:"'Inter',system-ui,sans-serif" }}>
@@ -2401,25 +2403,17 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 
       <div style={{ maxWidth:900, margin:"0 auto", padding: isMobile ? "28px 16px" : "48px 24px" }}>
 
-        {/* Survey upload now lives in the Leadership section. */}
-
-        {/* Featured — continue the latest unfinished review, click a department to open its page */}
-        {featured && (
-          <div style={{ ...card, padding:"22px 24px", marginBottom:28, border:"1px solid #F5DCC4" }}>
-            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
-              <span style={{ fontSize:11, fontWeight:700, color:"#E0863C", textTransform:"uppercase", letterSpacing:2 }}>Continue the review</span>
-              {!isFinished(featured) && (
-                <span style={{ fontSize:11, fontWeight:700, color:"#9A6B26", background:"#F7EEDC", borderRadius:4, padding:"2px 8px" }}>In progress</span>
-              )}
-            </div>
-            <div style={{ fontFamily:FONT_DISPLAY, fontSize:22, fontWeight:600, color:"#2C2621", marginBottom:2 }}>{featured.country} — {featured.year}</div>
-            <div style={{ fontSize:13, color:"#7A6F63", marginBottom:16 }}>{featured.depts?.length || 0} departments</div>
-
-            <button onClick={() => openRun(featured)} style={{ ...navBtn, background:"#E0863C", color:"#fff" }}>
-              Open review →
-            </button>
+        {/* Intro */}
+        <div style={{ marginBottom:22 }}>
+          <div style={{ fontFamily:FONT_DISPLAY, fontSize:22, fontWeight:600, color:"#2C2621", marginBottom:4 }}>
+            {myDepts ? "Your departments" : "People & Culture"}
           </div>
-        )}
+          <div style={{ fontSize:13.5, color:"#7A6F63", lineHeight:1.5 }}>
+            {myDepts
+              ? "Pick a country, then open a department — its review, the question-by-question notes, and behaviour tracking are all on one page."
+              : "Every pulse by country. Open a department to see its review, notes, and tracking together."}
+          </div>
+        </div>
 
         {/* Empty state — never leave the body blank */}
         {allRuns.length === 0 && !generating && (
@@ -2427,48 +2421,62 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
             {runsLoading
               ? "Loading reports…"
               : isAdmin
-                ? "No reports yet. Upload a QuestionPro export above to create one."
+                ? "No reports yet. Add one from the Leadership section (Import → New survey run)."
                 : "No reports available yet. If you expect to see reports here, check your connection or ask an admin."}
           </div>
         )}
 
-        {/* Previous runs */}
+        {/* Country-first — one card per run; open a department to work on it */}
         {allRuns.length > 0 && (
-          <div style={{ marginTop:32 }}>
-            <div style={{ fontSize:13, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Previous Runs</div>
-            <div style={{ display:"grid", gap:12 }}>
-              {allRuns.slice().reverse().map(run => (
-                <div key={run.id} style={{ ...card, display:"flex", flexDirection: isMobile ? "column" : "row", justifyContent:"space-between", alignItems: isMobile ? "stretch" : "center", gap: isMobile ? 12 : 0, padding:"16px 20px" }}>
-                  <div>
-                    <div style={{ color:"#2C2621", fontWeight:600 }}>{run.country} — {run.year}</div>
-                    <div style={{ color:"#7A6F63", fontSize:12, marginTop:2 }}>{run.depts?.length} departments · {new Date(run.savedAt).toLocaleDateString()}</div>
+          <div style={{ display:"grid", gap:14 }}>
+            {sortedByRecent.map((run, idx) => {
+              const mine = (run.depts || []).filter(d => !myDepts || myDepts.includes(d.key));
+              const list = mine.length ? mine : (run.depts || []);
+              return (
+                <div key={run.id} style={{ ...card, padding:"16px 20px" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom: list.length ? 14 : 0 }}>
+                    <span style={{ fontFamily:FONT_DISPLAY, fontSize:19, fontWeight:600, color:"#2C2621" }}>{run.country}</span>
+                    <span style={{ fontSize:13, color:"#A89C8D" }}>{run.year}</span>
+                    {idx === 0 && !isFinished(run) && (
+                      <span style={{ fontSize:10.5, fontWeight:700, color:"#9A6B26", background:"#F7EEDC", borderRadius:4, padding:"2px 8px" }}>Most recent</span>
+                    )}
+                    <div style={{ marginLeft:"auto", display:"flex", gap:8 }}>
+                      <button style={{ ...navBtn, fontSize:12, padding:"6px 12px" }} onClick={() => openRun(run)}>Open full review →</button>
+                      {isAdmin && <button style={{ ...navBtn, fontSize:12, padding:"6px 12px", background:"#BE6650", color:"white", border:"1px solid transparent" }} onClick={() => {
+                        const rc = run.country, ry = run.year;
+                        if (!window.confirm(`Delete ${rc} ${ry}? This cannot be undone.`)) return;
+                        setAllRuns(prev => {
+                          const updated = prev.filter(r => !(r.country === rc && r.year === ry));
+                          try { localStorage.setItem("pulse:runs", JSON.stringify(updated)); } catch(e) { console.error(e); }
+                          return [...updated];
+                        });
+                        try { localStorage.removeItem(`pulse:data:${rc}:${ry}`); } catch(e) {}
+                        try { localStorage.removeItem(`pulse:sel:${rc}:${ry}`); } catch(e) {}
+                      }}>Delete</button>}
+                    </div>
                   </div>
-                  <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                    {run.depts?.slice(0,5).map(d => (
-                      <span key={d.key} style={{ fontSize:11, fontWeight:700, color:sc(d.status), background:sb(d.status), border:`1px solid ${sbd(d.status)}`, borderRadius:4, padding:"2px 6px" }}>
-                        {d.label?.split(" ")[0]}
-                      </span>
-                    ))}
-                  </div>
-                  <div style={{ display:"flex", gap:8 }}>
-                    <button style={navBtn} onClick={() => openRun(run)}>Open</button>
-                    {isAdmin && <button style={{ ...navBtn, background:"#BE6650", color:"white" }} onClick={() => {
-                      const rc = run.country;
-                      const ry = run.year;
-                      const ri = run.id;
-                      if (!window.confirm(`Delete ${rc} ${ry}? This cannot be undone.`)) return;
-                      setAllRuns(prev => {
-                        const updated = prev.filter(r => !(r.country === rc && r.year === ry));
-                        try { localStorage.setItem("pulse:runs", JSON.stringify(updated)); } catch(e) { console.error(e); }
-                        return [...updated];
-                      });
-                      try { localStorage.removeItem(`pulse:data:${rc}:${ry}`); } catch(e) {}
-                      try { localStorage.removeItem(`pulse:sel:${rc}:${ry}`); } catch(e) {}
-                    }}>Delete</button>}
-                  </div>
+                  {list.length > 0 && (
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(170px,1fr))", gap:8 }}>
+                      {list.map(d => (
+                        <button key={d.key} onClick={() => openRun(run, d.key)}
+                          onMouseEnter={e => { e.currentTarget.style.background = "#F7EEDF"; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = "#FDFAF4"; }}
+                          title={`Open ${d.label || d.key} — review, notes & tracking`}
+                          style={{ display:"flex", flexDirection:"column", gap:3, textAlign:"left", cursor:"pointer",
+                            background:"#FDFAF4", border:"1px solid #ECE2D2", borderLeft:`3px solid ${sc(d.status)}`,
+                            borderRadius:8, padding:"9px 12px" }}>
+                          <span style={{ fontSize:13, fontWeight:650, color:"#2C2621" }}>{d.label || d.key}</span>
+                          <span style={{ fontSize:12, color:"#7A6F63" }}>
+                            <b style={{ color:sc(d.status), fontVariantNumeric:"tabular-nums" }}>{d.avg ?? "—"}</b> · {d.status || "—"}
+                            {d.reviewDone && <span style={{ color:"#5C9A6D" }}> · done ✓</span>}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
         )}
       </div>
