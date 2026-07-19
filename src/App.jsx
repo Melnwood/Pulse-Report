@@ -32,6 +32,13 @@ const normQ = (s) => String(s || "")
   .replace(/\s+/g, " ")
   .trim();
 
+// Friendly "Jul 19, 2026" label for today — shown in note composers so the
+// author knows the date is stamped automatically.
+const todayLabel = () => {
+  try { return new Date().toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }); }
+  catch { return ""; }
+};
+
 // Find the Survey Basics entry for a question, tolerant of small text differences.
 const findSurveyBasics = (deptKey, qText) => {
   const list = getSurveyBasics(deptKey);
@@ -856,21 +863,39 @@ export default function App() {
   // country/director = not. Identity for notes comes from the account.
   const authed = !!authUser && authGate === "authed";
   const authRole = authUser && authUser.role;
-  const effIsAdmin  = authed ? authRole === "leader" : isAdmin;
-  const effIsPCLead = authed ? authRole === "leader" : isPCLead;
+
+  // ── Preview-as ── A leader (Mel & Chris) can look at the app exactly as a
+  // country leader or a P&C director sees it, without logging out. previewAs is
+  // null normally, or { role, country?, department?, label }. Only a real leader
+  // may preview; everyone else ignores it. The whole UI below renders against
+  // the *view* identity (viewRole / viewUser), so gating, cards, locks and
+  // headers all follow. NOTE: this reshapes what a leader SEES; the server still
+  // holds the leader's real token, so this is a visual walkthrough, not a
+  // sandbox — edit controls are hidden in the previewed roles anyway.
+  const [previewAs, setPreviewAs] = useState(null);
+  const canPreview = authed && authRole === "leader";
+  const preview = canPreview ? previewAs : null;
+  const viewRole = preview ? preview.role : authRole;
+  const viewUser = preview
+    ? { ...authUser, role: preview.role, country: preview.country || "", department: preview.department || "" }
+    : authUser;
+  const exitPreview = () => setPreviewAs(null);
+
+  const effIsAdmin  = authed ? viewRole === "leader" : isAdmin;
+  const effIsPCLead = authed ? viewRole === "leader" : isPCLead;
   const effMe       = authed ? (authUser.name || me) : me;
   // P&C directors are international: they own one or more departments (comma-
   // separated codes) and work ACROSS every country. authDepts is that set.
-  const authDepts   = authed && authRole === "director"
-    ? String(authUser.department || "").split(",").map(s => s.trim()).filter(Boolean)
+  const authDepts   = authed && viewRole === "director"
+    ? String(viewUser.department || "").split(",").map(s => s.trim()).filter(Boolean)
     : [];
   // A director may edit only their own department(s), in any country; leaders
   // (and the auth-off state) edit any; a country leader edits none. The server
   // enforces this regardless — this is the in-app guardrail.
   const canEditDept = (deptKey) => {
     if (!authed) return true;
-    if (authRole === "leader") return true;
-    if (authRole === "director") return authDepts.includes(deptKey);
+    if (viewRole === "leader") return true;
+    if (viewRole === "director") return authDepts.includes(deptKey);
     return false; // country (view-only)
   };
 
@@ -1343,21 +1368,29 @@ export default function App() {
   );
 
   // ── VIEWS ──────────────────────────────────────────────────────────────────
-
-  if (view === "sections") return (
-    <SectionsView setView={setView} isPCLead={effIsPCLead} isAdmin={effIsAdmin} toggleAdmin={toggleAdmin}
-      authUser={authUser} onSignOut={signOut} authRole={authRole} />
+  // Every view is wrapped so a previewing leader always has an "Exit preview"
+  // banner, no matter how deep they've navigated into a role's screens.
+  const wrap = (el) => (
+    <>
+      {el}
+      {preview && <PreviewBanner preview={preview} onExit={exitPreview} />}
+    </>
   );
 
-  if (view === "users" && effIsAdmin) return (
+  if (view === "sections") return wrap(
+    <SectionsView setView={setView} isPCLead={effIsPCLead} isAdmin={effIsAdmin} toggleAdmin={toggleAdmin}
+      authUser={viewUser} onSignOut={signOut} authRole={viewRole} />
+  );
+
+  if (view === "users" && effIsAdmin) return wrap(
     <UsersView setView={setView} me={effMe} />
   );
 
-  if (view === "videos" && effIsAdmin) return (
+  if (view === "videos" && effIsAdmin) return wrap(
     <VideosView setView={setView} />
   );
 
-  if (view === "leadership") return (
+  if (view === "leadership") return wrap(
     <LeadershipView
       country={country} setCountry={setCountry} year={year} setYear={setYear}
       fileRef={fileRef} handleFile={handleFile}
@@ -1365,10 +1398,11 @@ export default function App() {
       isAdmin={effIsAdmin} toggleAdmin={toggleAdmin} setView={setView}
       allRuns={allRuns} reloadRuns={reloadRuns} runsLoading={runsLoading} openRun={openRunShared}
       onImportDirectorReview={startDirectorReviewImport}
+      canPreview={canPreview} setPreviewAs={setPreviewAs}
       authUser={authUser} onSignOut={signOut} />
   );
 
-  if (view === "home") return (
+  if (view === "home") return wrap(
     <HomeView
       country={country} setCountry={setCountry}
       year={year} setYear={setYear}
@@ -1381,11 +1415,11 @@ export default function App() {
       setCountry2={setCountry} setYear2={setYear}
       isAdmin={effIsAdmin} toggleAdmin={toggleAdmin}
       runsLoading={runsLoading}
-      authUser={authUser} onSignOut={signOut}
+      authUser={viewUser} onSignOut={signOut}
     />
   );
 
-  if (view === "review") return (
+  if (view === "review") return wrap(
     <ReviewView
       country={country} year={year}
       surveyData={surveyData} selections={selections}
@@ -1401,11 +1435,11 @@ export default function App() {
       me={effMe} saveMe={saveMe} isPCLead={effIsPCLead}
       openToDept={openToDept} setOpenToDept={setOpenToDept}
       toggleDeptFinished={toggleDeptFinished}
-      canEditDept={canEditDept} authRole={authRole} authUser={authUser} onSignOut={signOut} authDepts={authDepts}
+      canEditDept={canEditDept} authRole={viewRole} authUser={viewUser} onSignOut={signOut} authDepts={authDepts}
     />
   );
 
-  if (view === "report") return (
+  if (view === "report") return wrap(
     <ReportView
       country={country} year={year}
       surveyData={surveyData} getApproved={getApproved}
@@ -1416,25 +1450,25 @@ export default function App() {
     />
   );
 
-  if (view === "workspace") return (
+  if (view === "workspace") return wrap(
     <WorkspaceView
       allRuns={allRuns} setView={setView}
-      authRole={authRole} authUser={authUser} authDepts={authDepts}
+      authRole={viewRole} authUser={viewUser} authDepts={authDepts}
       canEditDept={canEditDept} me={effMe} isPCLead={effIsPCLead}
       sbOverrides={sbOverrides} sbMaster={sbMaster}
     />
   );
 
-  if (view === "dashboard") return (
+  if (view === "dashboard") return wrap(
     <DashboardView
       allRuns={allRuns} dashCountry={dashCountry}
       setDashCountry={setDashCountry} setView={setView}
       country={country} year={year} surveyData={surveyData}
       refinements={refinements} setRefinements={setRefinements}
       openReport={openReport}
-      lockCountry={authRole === "country" ? (authUser && authUser.country) : null}
+      lockCountry={viewRole === "country" ? (viewUser && viewUser.country) : null}
       isLeader={effIsAdmin}
-      authUser={authUser} onSignOut={signOut}
+      authUser={viewUser} onSignOut={signOut}
     />
   );
 }
@@ -1509,8 +1543,93 @@ function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin, authUser, onSig
 // ─── LEADERSHIP VIEW ──────────────────────────────────────────────────────────
 // For Mel & Chris. Home of survey upload/processing (a leadership action), with the
 // overall dashboard to be added here later.
+// Leaders-only tool: step into the app as a country leader or a P&C director to
+// see exactly what they see — no logging out, no second account. Starts closed;
+// a mode is picked, then a country/department, then "Start preview". The exit is
+// the fixed banner (PreviewBanner) that follows you across every screen.
+function PreviewAsPanel({ allRuns, setPreviewAs, setView }) {
+  const [mode, setMode] = useState(null);   // null | "country" | "director" — closed by default
+  const [country, setCountry] = useState("");
+  const [depts, setDepts] = useState([]);   // one or more department keys (directors can own several)
+  const countries = [...new Set(allRuns.map(r => r.country).filter(Boolean))].sort();
+
+  const pick = (m) => { setMode(prev => prev === m ? null : m); };
+  const toggleDept = (key) => setDepts(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+  const startCountry = () => {
+    if (!country) return;
+    setPreviewAs({ role: "country", country, label: `${country} country leader` });
+    setView("sections");
+  };
+  const startDirector = () => {
+    if (!depts.length) return;
+    const names = depts.map(k => (DEPARTMENTS.find(x => x.key === k)?.label) || k);
+    const label = names.length === 1 ? `${names[0]} director`
+      : `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]} director`;
+    setPreviewAs({ role: "director", department: depts.join(","), label });
+    setView("sections");
+  };
+  const modeBtn = (m, txt) => (
+    <button onClick={() => pick(m)}
+      style={{ ...navBtn, fontSize:13, padding:"9px 14px",
+        background: mode === m ? "#FBEFE4" : undefined,
+        borderColor: mode === m ? "#E0A56F" : undefined,
+        color: mode === m ? "#B96524" : undefined, fontWeight:650 }}>
+      👁 {txt}
+    </button>
+  );
+
+  return (
+    <div style={{ ...card, marginBottom:24, padding:"16px 18px" }}>
+      <div style={{ fontSize:12, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5, marginBottom:4 }}>See what others see</div>
+      <div style={{ fontSize:12.5, color:"#7A6F63", marginBottom:12, lineHeight:1.5 }}>
+        Step into the app as one of your people to check their view. You stay signed in — a banner brings you back.
+      </div>
+      <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+        {modeBtn("country", "View as a country leader")}
+        {modeBtn("director", "View as a P&C director")}
+      </div>
+
+      {mode === "country" && (
+        <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap", marginTop:14 }}>
+          <select value={country} onChange={e => setCountry(e.target.value)} style={{ ...inp, maxWidth:240 }}>
+            <option value="">Choose a country…</option>
+            {countries.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <button onClick={startCountry} disabled={!country}
+            style={{ ...navBtn, background: country ? "#E0863C" : "#ECE2D2", color: country ? "#fff" : "#A89C8D",
+              border:"1px solid transparent", fontWeight:700 }}>Start preview →</button>
+        </div>
+      )}
+
+      {mode === "director" && (
+        <div style={{ marginTop:14 }}>
+          <div style={{ fontSize:12, color:"#7A6F63", marginBottom:8 }}>
+            Pick one or more departments (directors can cover several — e.g. Counseling &amp; Marriages):
+          </div>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:12 }}>
+            {DEPARTMENTS.map(d => {
+              const on = depts.includes(d.key);
+              return (
+                <button key={d.key} onClick={() => toggleDept(d.key)} style={{
+                  fontSize:12.5, fontWeight:600, padding:"6px 12px", borderRadius:20, cursor:"pointer",
+                  background: on ? "#2C2621" : "#FFFFFF", color: on ? "#fff" : "#5A4A3B",
+                  border:`1px solid ${on ? "#2C2621" : "#E2D3C2"}` }}>
+                  {on ? "✓ " : ""}{d.label}
+                </button>
+              );
+            })}
+          </div>
+          <button onClick={startDirector} disabled={!depts.length}
+            style={{ ...navBtn, background: depts.length ? "#E0863C" : "#ECE2D2", color: depts.length ? "#fff" : "#A89C8D",
+              border:"1px solid transparent", fontWeight:700 }}>Start preview →</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFile,
-  generating, genProgress, isAdmin, toggleAdmin, setView, allRuns = [], reloadRuns, runsLoading, openRun, onImportDirectorReview, authUser, onSignOut }) {
+  generating, genProgress, isAdmin, toggleAdmin, setView, allRuns = [], reloadRuns, runsLoading, openRun, onImportDirectorReview, canPreview, setPreviewAs, authUser, onSignOut }) {
   const isMobile = useIsMobile();
   const dirReviewRef = useRef(null);   // file input for importing a director review
   const [showUpload, setShowUpload] = useState(allRuns.length === 0);   // the "New survey run" tab panel
@@ -1643,6 +1762,8 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
             </button>
           )}
         </div>
+
+        {canPreview && <PreviewAsPanel allRuns={allRuns} setPreviewAs={setPreviewAs} setView={setView} />}
 
         {/* ── Director review progress — compact, at the very top ──
             One row per active country: how much of its director review is done.
@@ -2404,11 +2525,62 @@ function HelpVideoEmbed({ v, showTitle }) {
   );
 }
 
+// A popup that plays one video on top of whatever panel opened it.
+function VideoPlayerModal({ video, onClose }) {
+  const isMobile = useIsMobile();
+  if (!video) return null;
+  return (
+    <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.6)", zIndex:1100,
+      display:"flex", alignItems:"center", justifyContent:"center", padding: isMobile?12:40 }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ background:"white", borderRadius:14, padding: isMobile?14:20,
+        maxWidth:840, width:"calc(100% - 20px)", maxHeight:"92vh", overflow:"auto", fontFamily:"'Inter',system-ui,sans-serif" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, marginBottom:12 }}>
+          <div style={{ fontSize:15, fontWeight:700, color:"#2C2621" }}>{video.title || "Video"}</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", fontSize:20, color:"#7A6F63", lineHeight:1, padding:"0 4px" }}>✕</button>
+        </div>
+        <HelpVideoEmbed v={video} />
+      </div>
+    </div>
+  );
+}
+
+// A small "▶ Watch" button; opens the given video in a popup via onPlay.
+function WatchButton({ video, onPlay }) {
+  if (!video) return null;
+  return (
+    <button onClick={() => onPlay(video)}
+      style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:11, fontWeight:700, color:"#B96524",
+        background:"#FBEFE4", border:"0.5px solid #E0A56F", borderRadius:20, padding:"3px 10px", cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
+      ▶ Watch
+    </button>
+  );
+}
+
+// Fixed bottom banner shown to a leader while they preview the app as another
+// role. It's the always-available way back out, no matter how deep they've gone.
+function PreviewBanner({ preview, onExit }) {
+  return (
+    <div style={{ position:"fixed", left:0, right:0, bottom:0, zIndex:1200,
+      background:"#2C2621", color:"#F6F1E8", padding:"11px 16px",
+      display:"flex", alignItems:"center", justifyContent:"center", gap:14, flexWrap:"wrap",
+      boxShadow:"0 -6px 24px rgba(0,0,0,0.22)", fontFamily:"'Inter',system-ui,sans-serif" }}>
+      <span style={{ fontSize:13.5 }}>
+        👁 You’re previewing as <b style={{ color:"#F0B074" }}>{preview.label}</b> — this is exactly what they see.
+      </span>
+      <button onClick={onExit} style={{ background:"#E0863C", color:"#fff", border:"none",
+        borderRadius:8, padding:"7px 16px", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+        Exit preview
+      </button>
+    </div>
+  );
+}
+
 // Director-facing "How to use the app" video library (a modal). Same Help Videos
 // table, filtered to the "How to use the app" section.
 function HowToVideosPanel({ onClose }) {
   const isMobile = useIsMobile();
   const [videos, setVideos] = useState(null);
+  const [playing, setPlaying] = useState(null);
   useEffect(() => {
     loadHelpVideos()
       .then(vs => setVideos(vs.filter(v => (v.section || "").trim().toLowerCase() === "how to use the app")))
@@ -2428,9 +2600,20 @@ function HowToVideosPanel({ onClose }) {
         ) : videos.length === 0 ? (
           <div style={{ color:"#7A6F63", fontSize:13 }}>No how-to videos yet — they'll appear here once they're added.</div>
         ) : (
-          <div>{videos.map(v => <HelpVideoEmbed key={v.id} v={v} showTitle />)}</div>
+          <div style={{ display:"grid", gap:8 }}>
+            {videos.map(v => (
+              <div key={v.id} style={{ display:"flex", alignItems:"center", gap:12, border:"1px solid #ECE2D2", borderRadius:10, padding:"12px 14px" }}>
+                <div style={{ minWidth:0, flex:1 }}>
+                  <div style={{ fontSize:14, fontWeight:650, color:"#2C2621" }}>{v.title || "Video"}</div>
+                  {v.description && <div style={{ fontSize:12, color:"#7A6F63", lineHeight:1.5, marginTop:2 }}>{v.description}</div>}
+                </div>
+                <WatchButton video={v} onPlay={setPlaying} />
+              </div>
+            ))}
+          </div>
         )}
       </div>
+      <VideoPlayerModal video={playing} onClose={() => setPlaying(null)} />
     </div>
   );
 }
@@ -2438,10 +2621,12 @@ function HowToVideosPanel({ onClose }) {
 function ScoringHelpPanel({ onClose }) {
   const isMobile = useIsMobile();
   const [videos, setVideos] = useState([]);
+  const [playing, setPlaying] = useState(null);
   useEffect(() => { loadHelpVideos().then(setVideos).catch(() => setVideos([])); }, []);
-  // Videos tagged for a given section of this panel, rendered right under its title.
-  const forSec = (s) => videos.filter(v => (v.section || "").trim().toLowerCase() === s.toLowerCase());
-  const SectionVideos = ({ sec }) => (<>{forSec(sec).map(v => <HelpVideoEmbed key={v.id} v={v} />)}</>);
+  // A small "▶ Watch" button next to a section's title, if a video is tagged for
+  // it. Clicking pops the video in its own window — the text stays put.
+  const videoFor = (s) => videos.find(v => (v.section || "").trim().toLowerCase() === s.toLowerCase());
+  const watch = (sec) => <WatchButton video={videoFor(sec)} onPlay={setPlaying} />;
   return (
     <div style={{
       position:"fixed", top:0, left:0, right:0, bottom:0,
@@ -2460,13 +2645,14 @@ function ScoringHelpPanel({ onClose }) {
             fontSize:20, color:"#7A6F63", lineHeight:1, padding:"0 4px" }}>✕</button>
         </div>
 
-        {/* Overview video (optional) */}
-        <SectionVideos sec="Overview" />
+        {/* Overview video (optional) — a standalone Watch button at the top */}
+        {videoFor("Overview") && <div style={{ marginBottom:16 }}>{watch("Overview")}</div>}
 
         {/* MEAN vs DIST */}
-        <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase",
-          letterSpacing:1.5, marginBottom:12 }}>Two ways to measure a question</div>
-        <SectionVideos sec="Two ways to measure" />
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12, flexWrap:"wrap" }}>
+          <span style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5 }}>Two ways to measure a question</span>
+          {watch("Two ways to measure")}
+        </div>
         <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap:12, marginBottom:20 }}>
           {[
             { label:"Mean", title:"The average score", color:"#3E7A50", bg:"#E9F1E9", bd:"#AFD8BB",
@@ -2492,9 +2678,10 @@ function ScoringHelpPanel({ onClose }) {
         {/* Real example */}
         <div style={{ background:"#F6F1E8", borderRadius:10, padding:14, marginBottom:20,
           border:"1px solid #ECE2D2" }}>
-          <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase",
-            letterSpacing:1.5, marginBottom:10 }}>Why it matters — the same responses, two different answers</div>
-          <SectionVideos sec="Why it matters" />
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10, flexWrap:"wrap" }}>
+            <span style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5 }}>Why it matters — the same responses, two different answers</span>
+            {watch("Why it matters")}
+          </div>
           <div style={{ fontSize:12, color:"#2C2621", fontWeight:600, marginBottom:10 }}>
             9 single staff respond to: "My practical needs are adequately supported."
           </div>
@@ -2530,9 +2717,10 @@ function ScoringHelpPanel({ onClose }) {
         </div>
 
         {/* Three factors */}
-        <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase",
-          letterSpacing:1.5, marginBottom:12 }}>Three things that determine a department's status</div>
-        <SectionVideos sec="Department status" />
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12, flexWrap:"wrap" }}>
+          <span style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5 }}>Three things that determine a department's status</span>
+          {watch("Department status")}
+        </div>
         {[
           { num:"1", color:"#3E7A50", bg:"#E9F1E9", bd:"#AFD8BB",
             title:"Individual question scoring",
@@ -2559,9 +2747,10 @@ function ScoringHelpPanel({ onClose }) {
         {/* Status thresholds */}
         <div style={{ background:"#F6F1E8", border:"1px solid #ECE2D2", borderRadius:10,
           padding:14, marginTop:4 }}>
-          <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase",
-            letterSpacing:1.5, marginBottom:10 }}>Status thresholds</div>
-          <SectionVideos sec="Status thresholds" />
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10, flexWrap:"wrap" }}>
+            <span style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5 }}>Status thresholds</span>
+            {watch("Status thresholds")}
+          </div>
           <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
           <table style={{ width:"100%", minWidth: isMobile ? 380 : "auto", borderCollapse:"collapse", fontSize:12 }}>
             <thead>
@@ -2595,6 +2784,7 @@ function ScoringHelpPanel({ onClose }) {
           Got it — back to the review
         </button>
       </div>
+      <VideoPlayerModal video={playing} onClose={() => setPlaying(null)} />
     </div>
   );
 }
@@ -2648,12 +2838,17 @@ function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes
           {visible.map(n => (
             <div key={n.id} style={{ padding:"6px 0", borderTop:"1px dashed #FDFAF4" }}>
               <div style={{ fontSize:11, color:"#7A6F63", display:"flex", gap:8, alignItems:"center" }}>
-                <b style={{ color:"#5A4A3B" }}>{n.author}</b>{fmt(n.created)}
+                <b style={{ color:"#5A4A3B" }}>{n.author || "Unknown"}</b>{fmt(n.created) && <span>{fmt(n.created)}</span>}
                 <VisibilityChip visibility={n.visibility} onClick={() => onFlip(n)} />
               </div>
               <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{n.body}</div>
             </div>
           ))}
+          {me && (
+            <div style={{ fontSize:11, color:"#7A6F63", marginTop:6 }}>
+              Posting as <b style={{ color:"#5A4A3B" }}>{me}</b> · {todayLabel()}
+            </div>
+          )}
           <textarea value={draft} onChange={e=>setDraft(e.target.value)} rows={2}
             placeholder="Write a note…"
             style={{ width:"100%", boxSizing:"border-box", fontSize:13, padding:8, marginTop:6,
@@ -2910,14 +3105,37 @@ function WorkspaceView({ allRuns, setView, authRole, authUser, authDepts = [], c
               {countries.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           )}
-          {(myDeptCodes ? depts.filter(d => myDeptCodes.includes(d.key)) : depts).length > 1 && (
-            <select value={deptKey || ""} onChange={e => setDeptKey(e.target.value)}
-              style={{ fontSize: 13, padding: "8px 12px", border: "1px solid #E2D3C2", borderRadius: 8, background: "#fff", color: "#2C2621" }}>
-              {(myDeptCodes ? depts.filter(d => myDeptCodes.includes(d.key)) : depts).map(d => <option key={d.key} value={d.key}>{d.label || d.key}</option>)}
-            </select>
-          )}
           {country && <span style={{ alignSelf: "center", fontSize: 12, color: "#A89C8D" }}>{country}{year ? ` · ${year}` : ""}</span>}
         </div>
+
+        {/* Department picker — shown as clear tabs so a director over more than one
+            department sees all of theirs at once (not hidden in a dropdown). */}
+        {(() => {
+          const myDepts = myDeptCodes ? depts.filter(d => myDeptCodes.includes(d.key)) : depts;
+          if (myDepts.length <= 1) return null;
+          return (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
+              {myDeptCodes && (
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#7A6F63", textTransform: "uppercase", letterSpacing: 1, marginRight: 2 }}>
+                  Your {myDepts.length} departments
+                </span>
+              )}
+              {myDepts.map(d => {
+                const active = d.key === deptKey;
+                return (
+                  <button key={d.key} onClick={() => setDeptKey(d.key)} style={{
+                    fontSize: 12.5, fontWeight: 600, padding: "7px 13px", borderRadius: 20, cursor: "pointer",
+                    background: active ? "#2C2621" : "#FFFFFF", color: active ? "#fff" : "#5A4A3B",
+                    border: `1px solid ${active ? "#2C2621" : "#E2D3C2"}`,
+                    display: "inline-flex", alignItems: "center", gap: 7 }}>
+                    {d.status && <span style={{ width: 8, height: 8, borderRadius: "50%", background: sc(d.status), flexShrink: 0 }} />}
+                    {d.label || d.key}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })()}
 
         {sd === null ? (
           <div style={{ ...card, color: "#7A6F63", fontSize: 13, fontStyle: "italic" }}>Loading the latest pulse…</div>
@@ -3061,6 +3279,11 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
         )}
 
         {/* Composer */}
+        {me && (
+          <div style={{ fontSize: 11.5, color: "#7A6F63", marginBottom: 6 }}>
+            Posting as <b style={{ color: "#5A4A3B" }}>{me}</b> · {todayLabel()} — your name &amp; the date are added automatically.
+          </div>
+        )}
         <textarea value={draft} onChange={e => setDraft(e.target.value)}
           placeholder="Write a note for this department — thoughts on the scores, what to raise in the next meeting…"
           rows={3}
@@ -3117,7 +3340,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, addItem, saveRefin
       <div style={{ background:"#FFFFFF", border:"1px solid #ECE2D2", borderRadius:12, overflow:"hidden",
         boxShadow:"0 1px 2px rgba(58,38,22,.06), 0 6px 22px -8px rgba(58,38,22,.10)" }}>
 
-        <Disclosure title="Question scores" count={`${(dept.questions||[]).length} questions`} dot="#E0863C" defaultOpen flush>
+        <Disclosure title="Question scores" count={`${(dept.questions||[]).length} questions`} dot="#E0863C" flush>
         {/* Heatmap — Question Scores */}
         <div style={{ overflowX:"auto", marginBottom:0 }}>
           {/* Column headers */}
@@ -3352,8 +3575,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, addItem, saveRefin
           const inc = secItems.filter(i => i.include).length;
           const countLabel = secItems.length ? `${inc} of ${secItems.length} included` : "none";
           return (
-        <Disclosure key={sec.key} title={sec.label} count={countLabel} dot={sec.color}
-          defaultOpen={sec.key === "growth"} flush>
+        <Disclosure key={sec.key} title={sec.label} count={countLabel} dot={sec.color} flush>
           {sec.key === "quotes" && dept.openQLabel && (
             <div style={{ margin:"0 14px 8px", padding:"6px 10px",
               background:"#FDFAF4", borderLeft:"3px solid #E0863C", borderRadius:4 }}>
