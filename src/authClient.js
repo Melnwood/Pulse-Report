@@ -5,9 +5,22 @@ const TOKEN_KEY = "pulse:token";
 const USER_KEY = "pulse:user";
 
 async function post(payload) {
-  const res = await fetch("/.netlify/functions/auth", {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
-  });
+  // Time out rather than spin forever if the backend never answers (e.g. a
+  // static-only deploy where the functions aren't running).
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 25000);
+  let res;
+  try {
+    res = await fetch("/.netlify/functions/auth", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: ctrl.signal,
+    });
+  } catch (e) {
+    clearTimeout(timer);
+    throw new Error("Couldn't reach the sign-in service. Check your connection, and make sure you're on the right site (jv-pulse.netlify.app).");
+  }
+  clearTimeout(timer);
+  // A missing backend returns an HTML 404, not JSON — surface that clearly.
+  if (res.status === 404) throw new Error("The sign-in service isn't available on this site. Use jv-pulse.netlify.app.");
   const data = await res.json().catch(() => ({}));
   return { ok: res.ok, data };
 }
