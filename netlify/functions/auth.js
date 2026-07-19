@@ -59,8 +59,15 @@ exports.handler = async (event) => {
       return { statusCode: 502, headers, body: JSON.stringify({ error: "User lookup failed: " + e.message }) };
     }
 
-    // Same generic message whether the email exists or the password is wrong.
-    if (!rec || f.Active === false || !verifyPassword(password, f.Salt, f.Hash)) {
+    if (!rec || f.Active === false) {
+      return { statusCode: 401, headers, body: JSON.stringify({ error: "Wrong email or password." }) };
+    }
+    // The account exists but no password has been set yet (a leader added them
+    // without one, or reset it) → send them into first-time password setup.
+    if (!f.Salt || !f.Hash) {
+      return { statusCode: 200, headers, body: JSON.stringify({ enabled: true, needsPassword: true, email }) };
+    }
+    if (!verifyPassword(password, f.Salt, f.Hash)) {
       return { statusCode: 401, headers, body: JSON.stringify({ error: "Wrong email or password." }) };
     }
 
@@ -81,8 +88,44 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers, body: JSON.stringify({ enabled: true, token: jwt, user }) };
   }
 
-  // ── Leader-only user management: listUsers / saveUser / deleteUser ──
-  if (["listUsers", "saveUser", "deleteUser"].includes(body.action)) {
+  // ── First-time password setup (the account exists but has no password yet) ──
+  // No session token needed — this is how someone finishes setting up. It only
+  // works when NO password is on file, so it can never overwrite an existing one.
+  if (body.action === "setPassword") {
+    if (!secret) return { statusCode: 400, headers, body: JSON.stringify({ error: "Login isn't configured yet." }) };
+    const email = String(body.email || "").trim().toLowerCase();
+    const password = String(body.password || "");
+    if (!email || password.length < 6) return { statusCode: 400, headers, body: JSON.stringify({ error: "Enter your email and a password of at least 6 characters." }) };
+    const token = process.env.AIRTABLE_TOKEN;
+    if (!token) return { statusCode: 500, headers, body: JSON.stringify({ error: "AIRTABLE_TOKEN is not set." }) };
+    const baseId = process.env.AIRTABLE_BASE_ID || BASE_ID_FALLBACK;
+    const doFetch = (typeof fetch !== "undefined") ? fetch : (await import("node-fetch")).default;
+    const AT = "https://api.airtable.com/v0";
+    const authHeaders = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+    const T = `${AT}/${baseId}/${encodeURIComponent(USERS_TABLE)}`;
+    const safeEmail = email.replace(/'/g, "\\'");
+    try {
+      const res = await doFetch(`${T}?filterByFormula=${encodeURIComponent(`LOWER({Email})='${safeEmail}'`)}&pageSize=1`, { headers: authHeaders });
+      if (!res.ok) return { statusCode: 500, headers, body: JSON.stringify({ error: "Could not reach the user directory." }) };
+      const rec = (JSON.parse(await res.text()).records || [])[0];
+      const f = (rec && rec.fields) || {};
+      if (!rec || f.Active === false) return { statusCode: 401, headers, body: JSON.stringify({ error: "No active account for that email. Ask Mel or Chris to add you first." }) };
+      if (f.Salt && f.Hash) return { statusCode: 409, headers, body: JSON.stringify({ error: "A password is already set for this account. Sign in, or ask Mel or Chris to reset it." }) };
+      const { salt, hash } = hashPassword(password);
+      const patch = await doFetch(T, { method: "PATCH", headers: authHeaders, body: JSON.stringify({ records: [{ id: rec.id, fields: { Salt: salt, Hash: hash } }] }) });
+      if (!patch.ok) return { statusCode: patch.status, headers, body: JSON.stringify({ error: "Could not set your password. Please try again." }) };
+      const deptRaw = (f.Departments !== undefined && f.Departments !== null) ? f.Departments : f.Department;
+      const department = Array.isArray(deptRaw) ? deptRaw.join(",") : (deptRaw || null);
+      const user = { id: rec.id, email, name: f.Name || email, role: String(f.Role || "director").toLowerCase().trim(), country: f.Country || null, department };
+      const jwt = signToken(user, secret);
+      return { statusCode: 200, headers, body: JSON.stringify({ enabled: true, token: jwt, user }) };
+    } catch (e) {
+      return { statusCode: 502, headers, body: JSON.stringify({ error: "Password setup failed: " + e.message }) };
+    }
+  }
+
+  // ── Leader-only user management: listUsers / saveUser / deleteUser / resetPassword ──
+  if (["listUsers", "saveUser", "deleteUser", "resetPassword"].includes(body.action)) {
     if (!secret) return { statusCode: 400, headers, body: JSON.stringify({ error: "Login isn't configured yet." }) };
     const authz = event.headers.authorization || event.headers.Authorization || "";
     const requester = verifyToken(authz.replace(/^Bearer\s+/i, "").trim(), secret);
@@ -139,8 +182,8 @@ exports.handler = async (event) => {
           if (!res.ok) return { statusCode: res.status, headers, body: text };
           return { statusCode: 200, headers, body: JSON.stringify({ user: sanitize(JSON.parse(text).records[0]) }) };
         }
-        // create — reject duplicate email, and require a password on new accounts
-        if (!u.password) return { statusCode: 400, headers, body: JSON.stringify({ error: "Set a password for the new account." }) };
+        // create — reject duplicate email. Password is OPTIONAL: if none is set,
+        // the person creates their own on first sign-in (see setPassword).
         const dupRes = await doFetch(`${T}?filterByFormula=${encodeURIComponent(`LOWER({Email})='${email.replace(/'/g, "\\'")}'`)}&pageSize=1`, { headers: authHeaders });
         const dup = JSON.parse(await dupRes.text());
         if (dup.records && dup.records.length) return { statusCode: 409, headers, body: JSON.stringify({ error: "That email already has an account." }) };
@@ -148,6 +191,15 @@ exports.handler = async (event) => {
         const text = await res.text();
         if (!res.ok) return { statusCode: res.status, headers, body: text };
         return { statusCode: 200, headers, body: JSON.stringify({ user: sanitize(JSON.parse(text).records[0]) }) };
+      }
+
+      // resetPassword — clear a person's password so they set a new one on next
+      // sign-in (for accounts that already have a password nobody remembers).
+      if (body.action === "resetPassword") {
+        if (!body.id) return { statusCode: 400, headers, body: JSON.stringify({ error: "Missing id." }) };
+        const res = await doFetch(T, { method: "PATCH", headers: authHeaders, body: JSON.stringify({ records: [{ id: body.id, fields: { Salt: "", Hash: "" } }] }) });
+        if (!res.ok) return { statusCode: res.status, headers, body: await res.text() };
+        return { statusCode: 200, headers, body: JSON.stringify({ ok: true }) };
       }
 
       // deleteUser
