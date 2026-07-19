@@ -579,11 +579,38 @@ export async function loadHelpVideos() {
       title: r.fields["Title"] || "",
       url: r.fields["URL"] || "",
       description: r.fields["Description"] || "",
+      section: r.fields["Section"] || "",
       order: r.fields["Order"] ?? 999,
       active: r.fields["Active"] !== false,
     }))
     .filter(v => v.active && v.url)
     .sort((a, b) => (a.order - b.order) || a.title.localeCompare(b.title));
+}
+
+// Management (leaders): every video incl. inactive, plus create / update / delete.
+const helpVideoFromRec = (r) => ({
+  id: r.id, title: r.fields["Title"] || "", url: r.fields["URL"] || "",
+  description: r.fields["Description"] || "", section: r.fields["Section"] || "",
+  order: r.fields["Order"] ?? 0, active: r.fields["Active"] !== false,
+});
+export async function loadAllHelpVideos() {
+  const res = await call({ action: "list", table: "helpVideos" });
+  return (res.records || []).map(helpVideoFromRec)
+    .sort((a, b) => (a.order - b.order) || a.title.localeCompare(b.title));
+}
+export async function saveHelpVideo(v) {
+  const fields = {
+    "Title": v.title || "", "URL": v.url || "", "Description": v.description || "",
+    "Section": v.section || "", "Order": v.order != null && v.order !== "" ? Number(v.order) : undefined,
+    "Active": v.active !== false,
+  };
+  const res = v.id
+    ? await call({ action: "update", table: "helpVideos", records: [{ id: v.id, fields }] })
+    : await call({ action: "create", table: "helpVideos", records: [{ fields }] });
+  return helpVideoFromRec(res.records[0]);
+}
+export async function deleteHelpVideo(id) {
+  await call({ action: "delete", table: "helpVideos", recordIds: [id] });
 }
 
 export { F as AIRTABLE_FIELDS };
