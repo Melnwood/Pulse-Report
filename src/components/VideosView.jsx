@@ -93,7 +93,7 @@ export default function VideosView({ setView }) {
           <div style={{ ...card, color: C.muted, fontSize: 14 }}>No videos yet. Click “+ Add video” to add your first one.</div>
         ) : (
           <div style={{ display: "grid", gap: 8 }}>
-            {videos.map(v => (
+            {videos.filter(v => !(form && form.id && v.id === form.id)).map(v => (
               <div key={v.id} style={{ ...card, display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", flexWrap: "wrap" }}>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ fontWeight: 650, color: C.ink }}>{v.title || "(untitled)"} {!v.active && <span style={{ fontSize: 11, color: "#BE6650" }}>· hidden</span>}</div>
