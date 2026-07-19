@@ -811,6 +811,26 @@ export default function App() {
   }, []);
   const signOut = () => { logout(); setAuthUser(null); setAuthGate("needLogin"); };
 
+  // When to loud than silent: a data call whose token was rejected (401) fires a
+  // "pulse:unauthorized" event. Return to login (soft, no reload). If it happens
+  // right after a successful sign-in, the session is being rejected on arrival —
+  // a server-side sign-in-key mismatch, not an expiry — so say so instead of
+  // silently bouncing (which would look like a flashing loop).
+  const [authNotice, setAuthNotice] = useState("");
+  const loginAtRef = useRef(0);
+  useEffect(() => {
+    const onUnauthorized = () => {
+      logout();
+      setAuthUser(null);
+      if (Date.now() - loginAtRef.current < 8000) {
+        setAuthNotice("You signed in, but the app couldn't load your data — the session was rejected. This is a site setup issue (the sign-in key), not your password. Please tell Mel or Chris.");
+      }
+      setAuthGate("needLogin");
+    };
+    window.addEventListener("pulse:unauthorized", onUnauthorized);
+    return () => window.removeEventListener("pulse:unauthorized", onUnauthorized);
+  }, []);
+
   const [view, setViewRaw]        = useState("sections");   // sections | home | review | report | dashboard | country | leadership | users
   // Navigation history so every "← Back" retraces the layers you came through,
   // no matter which path you took to get here. setView() records the jump; goBack
@@ -1365,7 +1385,8 @@ export default function App() {
       display:"flex", alignItems:"center", justifyContent:"center", color:"#7A6F63", fontSize:14 }}>Loading…</div>
   );
   if (authGate === "needLogin") return (
-    <Login onLogin={(u) => { setAuthUser(u); setAuthGate("authed"); }} />
+    <Login sessionError={authNotice}
+      onLogin={(u) => { loginAtRef.current = Date.now(); setAuthNotice(""); setAuthUser(u); setAuthGate("authed"); }} />
   );
 
   // ── VIEWS ──────────────────────────────────────────────────────────────────
@@ -3671,7 +3692,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, addItem, saveRefin
             <span>Status</span>
             <span>Full Question Text</span>
             <span style={{textAlign:"center"}}>Scale</span>
-            <span style={{textAlign:"center"}}>Heatmap — SD · D · U · A · SA</span></>}
+            <span style={{textAlign:"center"}}>Heatmap — Strongly Disagree · Disagree · Unsure · Agree · Strongly Agree</span></>}
           </div>
 
           {[...dept.questions].sort((a,b) => {
@@ -3689,7 +3710,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, addItem, saveRefin
             const CELL_TEXT   = q.burden
               ? ["white","white","#A34D3B","white","white"]
               : ["white","white","white","white","white"];
-            const LABELS = ["SD","D","U","A","SA"];
+            const LABELS = ["Strongly Disagree","Disagree","Unsure","Agree","Strongly Agree"];
             // Status row background
             const statusRowBg = {Concern:"#F6E5DE", Watch:"#F7EEDC", Healthy:"#E9F1E9"}[q.status] || "#F6F1E8";
 
@@ -3760,7 +3781,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, addItem, saveRefin
                               <div style={{ background: c>0?CELL_COLORS[ci]:"#FBEFE4", color: c>0?CELL_TEXT[ci]:"#F0DFCE",
                                 borderRadius:5, padding:"8px 0", fontSize:13, fontWeight:700,
                                 border: c>0?"none":"1px solid #ECE2D2" }}>{c}</div>
-                              <div style={{ fontSize:8, fontWeight:600, color:"#7A6F63", marginTop:4, lineHeight:1.2 }}>
+                              <div style={{ fontSize:8.5, fontWeight:600, color:"#7A6F63", marginTop:4, lineHeight:1.2 }}>
                                 {LABELS[ci]}
                               </div>
                               <div style={{ fontSize:8, color:"#A89C8D", marginTop:2 }}>
