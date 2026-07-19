@@ -1631,9 +1631,50 @@ function PreviewAsPanel({ allRuns, setPreviewAs, setView }) {
   );
 }
 
+// Click-to-open department detail — a modal a leader can pop from any dashboard
+// row to read the department's scores and its notes, and add notes/tracking,
+// without leaving the page. Loads the run's survey data for the one department.
+function DeptDetailModal({ country, year, deptKey, deptLabel, me, isPCLead, onClose }) {
+  const [dept, setDept] = useState(undefined);   // undefined = loading, null = not found
+  useEffect(() => {
+    let alive = true;
+    setDept(undefined);
+    loadRunSurveyData(country, year)
+      .then(sd => { if (alive) setDept((sd && sd.depts && sd.depts[deptKey]) || null); })
+      .catch(() => { if (alive) setDept(null); });
+    return () => { alive = false; };
+  }, [country, year, deptKey]);
+
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:1300, background:"rgba(44,38,33,0.45)",
+      display:"flex", alignItems:"flex-start", justifyContent:"center", padding:"20px 12px", overflowY:"auto" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:"#F6F1E8", borderRadius:16, maxWidth:760, width:"100%",
+        margin:"12px auto", boxShadow:"0 20px 60px rgba(0,0,0,0.3)", overflow:"hidden" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, padding:"14px 18px", background:"#FBEFE4", borderBottom:"1px solid #ECE2D2", position:"sticky", top:0 }}>
+          <span style={{ fontFamily:FONT_DISPLAY, fontSize:18, fontWeight:600, color:"#2C2621" }}>{deptLabel || deptKey}</span>
+          <span style={{ fontSize:12, color:"#7A6F63" }}>{country} · {year}</span>
+          <button onClick={onClose} title="Close"
+            style={{ marginLeft:"auto", background:"none", border:"none", cursor:"pointer", fontSize:20, color:"#7A6F63", lineHeight:1 }}>✕</button>
+        </div>
+        <div style={{ padding:18, maxHeight:"80vh", overflowY:"auto" }}>
+          {dept === undefined ? (
+            <div style={{ color:"#7A6F63", fontSize:13, fontStyle:"italic" }}>Loading the department…</div>
+          ) : dept === null ? (
+            <div style={{ color:"#7A6F63", fontSize:13 }}>Couldn't load this department's detail.</div>
+          ) : (
+            <DeptNotesTab dept={dept} country={country} year={year} me={me} saveMe={() => {}}
+              isPCLead={isPCLead} canEdit={true} sbOverrides={{}} sbMaster={{}} />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFile,
   generating, genProgress, isAdmin, toggleAdmin, setView, allRuns = [], reloadRuns, runsLoading, openRun, onImportDirectorReview, canPreview, setPreviewAs, authUser, onSignOut }) {
   const isMobile = useIsMobile();
+  const [detail, setDetail] = useState(null);   // { country, year, deptKey, deptLabel } for the drill-in modal
   const dirReviewRef = useRef(null);   // file input for importing a director review
   const [showUpload, setShowUpload] = useState(allRuns.length === 0);   // the Import panel
   const [showPreview, setShowPreview] = useState(false);                // the "See what others see" panel
@@ -1712,9 +1753,9 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
       await Promise.all(latestRuns.map(async (r) => {
         try {
           const sd = await loadRunSurveyData(r.country, r.year);
-          Object.values(sd?.depts || {}).forEach(dep => {
+          Object.entries(sd?.depts || {}).forEach(([dkey, dep]) => {
             (dep.questions || []).forEach(q => {
-              if (q && q.score != null && q.en) rows.push({ en: q.en, score: q.score, status: q.status, burden: q.burden, country: r.country, deptLabel: dep.label || dep.key });
+              if (q && q.score != null && q.en) rows.push({ en: q.en, score: q.score, status: q.status, burden: q.burden, country: r.country, deptKey: dkey, deptLabel: dep.label || dep.key, year: r.year });
             });
           });
         } catch {}
@@ -1969,12 +2010,18 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
                         </div>
                         {/* Flagged departments in this country */}
                         {c.depts.map((d,i) => (
-                          <div key={`${d.key}-${i}`} style={{ display:"flex", alignItems:"center", gap:10, padding: isMobile?"8px 12px":"9px 14px", borderTop:"1px solid #F4ECDD" }}>
+                          <div key={`${d.key}-${i}`}
+                            onClick={() => setDetail({ country: c.country, year: c.run?.year, deptKey: d.key, deptLabel: d.label || d.key })}
+                            onMouseEnter={e => { e.currentTarget.style.background = "#FDFAF4"; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                            title={`Open ${d.label || d.key} — read scores & notes here`}
+                            style={{ display:"flex", alignItems:"center", gap:10, padding: isMobile?"8px 12px":"9px 14px", borderTop:"1px solid #F4ECDD", cursor:"pointer" }}>
                             <span style={{ width:8, height:8, borderRadius:"50%", background:sc(d.status), flexShrink:0 }} />
                             <span style={{ fontFamily:"ui-monospace,Menlo,monospace", fontSize:13, fontWeight:700, color:sc(d.status), width:42, flexShrink:0 }}>{d.avg}</span>
                             <span style={{ flex:1, fontSize:13, color:"#2C2621", minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{d.label || d.key}</span>
                             {!d.reviewDone && <span style={{ fontSize:10, color:"#A89C8D", flexShrink:0 }}>review pending</span>}
                             <span style={{ fontSize:10, fontWeight:700, color:sc(d.status), background:sb(d.status), border:`1px solid ${sbd(d.status)}`, borderRadius:5, padding:"2px 8px", flexShrink:0 }}>{d.status}</span>
+                            <span style={{ color:"#C9BBA8", fontSize:13, flexShrink:0 }} aria-hidden="true">→</span>
                           </div>
                         ))}
                       </div>
@@ -2033,7 +2080,12 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
               <>
                 <div style={{ ...card, padding:0, overflow:"hidden", marginBottom: recurring.length ? 20 : 0 }}>
                   {topConcerns.map((q,i) => (
-                    <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:11, padding: isMobile?"10px 12px":"10px 14px", borderTop: i?"1px solid #F4ECDD":"none" }}>
+                    <div key={i}
+                      onClick={() => q.deptKey && setDetail({ country: q.country, year: q.year, deptKey: q.deptKey, deptLabel: q.deptLabel })}
+                      onMouseEnter={e => { if (q.deptKey) e.currentTarget.style.background = "#FDFAF4"; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                      title={q.deptKey ? `Open ${q.deptLabel} (${q.country}) — scores & notes` : undefined}
+                      style={{ display:"flex", alignItems:"flex-start", gap:11, padding: isMobile?"10px 12px":"10px 14px", borderTop: i?"1px solid #F4ECDD":"none", cursor: q.deptKey ? "pointer" : "default" }}>
                       <span style={{ fontFamily:"ui-monospace,Menlo,monospace", fontSize:13, fontWeight:700, color:sc(q.status), width:42, flexShrink:0, textAlign:"right" }}>{Number(q.score).toFixed(2)}</span>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.4 }}>{q.en}{q.burden && <span style={{ color:"#C08636", fontSize:10 }}> · burden</span>}</div>
@@ -2068,6 +2120,12 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
         )}
 
       </div>
+
+      {detail && (
+        <DeptDetailModal country={detail.country} year={detail.year} deptKey={detail.deptKey}
+          deptLabel={detail.deptLabel} me={authUser?.name || ""} isPCLead={isAdmin}
+          onClose={() => setDetail(null)} />
+      )}
     </div>
   );
 }
