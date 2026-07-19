@@ -5,6 +5,7 @@ import { VisibilityPicker, VisibilityChip } from "./components/Visibility";
 import { IconHelp, IconUpload } from "./components/Icons";
 import Login from "./components/Login";
 import UsersView from "./components/UsersView";
+import VideosView from "./components/VideosView";
 import { authStatus, tokenValid, getUser, logout } from "./authClient";
 import SURVEY_BASICS from "./surveyBasics.json";
 import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, loadMeasures, loadSurveyBasicsMaster, saveSurveyBasicsMaster, loadHelpVideos } from "./airtable";
@@ -1352,6 +1353,10 @@ export default function App() {
     <UsersView setView={setView} me={effMe} />
   );
 
+  if (view === "videos" && effIsAdmin) return (
+    <VideosView setView={setView} />
+  );
+
   if (view === "leadership") return (
     <LeadershipView
       country={country} setCountry={setCountry} year={year} setYear={setYear}
@@ -1440,6 +1445,7 @@ export default function App() {
 // and Leadership (for Mel & Chris — sees everything, overall dashboard).
 function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin, authUser, onSignOut, authRole }) {
   const isMobile = useIsMobile();
+  const [showHowTo, setShowHowTo] = useState(false);
   const allCards = [
     { key: "country", title: "Country dashboards", to: "dashboard", roles: ["leader", "country"],
       blurb: "Each country's latest pulse report and how it's trending over time." },
@@ -1459,6 +1465,9 @@ function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin, authUser, onSig
           <span style={{ fontFamily:FONT_DISPLAY, fontSize:26, fontWeight:600, color:"#2C2621", letterSpacing:-.2 }}>JV Pulse</span>
           <span style={{ fontSize:14, color:"#7A6F63" }}>People & Culture</span>
           <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:12 }}>
+            <button onClick={() => setShowHowTo(true)} style={{ ...navBtn, fontSize:12, padding:"6px 12px", display:"inline-flex", alignItems:"center", gap:6 }}>
+              <IconHelp/> How-to videos
+            </button>
             {authUser && (
               <span style={{ fontSize:12, color:"#7A6F63" }}>
                 {authUser.name} · <button onClick={onSignOut}
@@ -1491,6 +1500,7 @@ function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin, authUser, onSig
           ))}
         </div>
       </div>
+      {showHowTo && <HowToVideosPanel onClose={() => setShowHowTo(false)} />}
     </div>
   );
 }
@@ -1609,6 +1619,9 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
           <span style={{ fontFamily:FONT_DISPLAY, fontSize:22, fontWeight:600, color:"#2C2621" }}>Leadership</span>
           {authUser && authUser.role === "leader" && (
             <button onClick={() => setView("users")} style={{ ...navBtn, fontSize:12, padding:"6px 12px" }}>Manage people</button>
+          )}
+          {isAdmin && (
+            <button onClick={() => setView("videos")} style={{ ...navBtn, fontSize:12, padding:"6px 12px" }}>Manage videos</button>
           )}
           {authUser ? (
             <span style={{ marginLeft:"auto", fontSize:12, color:"#7A6F63" }}>
@@ -2353,10 +2366,66 @@ function videoEmbedUrl(url) {
   return null;
 }
 
+// One instructional video: optional title/description + a responsive 16:9 player
+// (or a link if the host isn't recognised).
+function HelpVideoEmbed({ v, showTitle }) {
+  const embed = videoEmbedUrl(v.url);
+  return (
+    <div style={{ marginBottom:14 }}>
+      {showTitle && v.title && <div style={{ fontSize:13, fontWeight:700, color:"#2C2621", marginBottom:v.description?2:6 }}>{v.title}</div>}
+      {v.description && <div style={{ fontSize:12, color:"#7A6F63", lineHeight:1.5, marginBottom:6 }}>{v.description}</div>}
+      {embed ? (
+        <div style={{ position:"relative", width:"100%", paddingBottom:"56.25%", borderRadius:10, overflow:"hidden", border:"1px solid #ECE2D2", background:"#000" }}>
+          <iframe src={embed} title={v.title || "Instructional video"} loading="lazy"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowFullScreen
+            style={{ position:"absolute", top:0, left:0, width:"100%", height:"100%", border:"none" }} />
+        </div>
+      ) : (
+        <a href={v.url} target="_blank" rel="noopener noreferrer"
+          style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:13, fontWeight:600, color:"#B96524", textDecoration:"none" }}>▶ Watch the video →</a>
+      )}
+    </div>
+  );
+}
+
+// Director-facing "How to use the app" video library (a modal). Same Help Videos
+// table, filtered to the "How to use the app" section.
+function HowToVideosPanel({ onClose }) {
+  const isMobile = useIsMobile();
+  const [videos, setVideos] = useState(null);
+  useEffect(() => {
+    loadHelpVideos()
+      .then(vs => setVideos(vs.filter(v => (v.section || "").trim().toLowerCase() === "how to use the app")))
+      .catch(() => setVideos([]));
+  }, []);
+  return (
+    <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.4)", zIndex:1000,
+      display:"flex", alignItems:"flex-start", justifyContent:"center", paddingTop: isMobile?20:60, overflow:"auto" }} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:"white", borderRadius:14, padding: isMobile?18:32,
+        maxWidth:680, width:"calc(100% - 24px)", marginBottom:40, fontFamily:"'Inter',system-ui,sans-serif" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+          <div style={{ fontFamily:FONT_DISPLAY, fontSize:20, fontWeight:600, color:"#2C2621" }}>How to use the app</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", fontSize:20, color:"#7A6F63", lineHeight:1, padding:"0 4px" }}>✕</button>
+        </div>
+        {videos === null ? (
+          <div style={{ color:"#7A6F63", fontSize:13, fontStyle:"italic" }}>Loading…</div>
+        ) : videos.length === 0 ? (
+          <div style={{ color:"#7A6F63", fontSize:13 }}>No how-to videos yet — they'll appear here once they're added.</div>
+        ) : (
+          <div>{videos.map(v => <HelpVideoEmbed key={v.id} v={v} showTitle />)}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ScoringHelpPanel({ onClose }) {
   const isMobile = useIsMobile();
   const [videos, setVideos] = useState([]);
   useEffect(() => { loadHelpVideos().then(setVideos).catch(() => setVideos([])); }, []);
+  // Videos tagged for a given section of this panel, rendered right under its title.
+  const forSec = (s) => videos.filter(v => (v.section || "").trim().toLowerCase() === s.toLowerCase());
+  const SectionVideos = ({ sec }) => (<>{forSec(sec).map(v => <HelpVideoEmbed key={v.id} v={v} />)}</>);
   return (
     <div style={{
       position:"fixed", top:0, left:0, right:0, bottom:0,
@@ -2375,41 +2444,13 @@ function ScoringHelpPanel({ onClose }) {
             fontSize:20, color:"#7A6F63", lineHeight:1, padding:"0 4px" }}>✕</button>
         </div>
 
-        {/* Instructional videos — added by leaders in the Help Videos table */}
-        {videos.length > 0 && (
-          <div style={{ marginBottom:24 }}>
-            <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase",
-              letterSpacing:1.5, marginBottom:12 }}>Watch</div>
-            <div style={{ display:"grid", gap:16 }}>
-              {videos.map(v => {
-                const embed = videoEmbedUrl(v.url);
-                return (
-                  <div key={v.id}>
-                    {v.title && <div style={{ fontSize:13, fontWeight:700, color:"#2C2621", marginBottom:v.description?2:6 }}>{v.title}</div>}
-                    {v.description && <div style={{ fontSize:12, color:"#7A6F63", lineHeight:1.5, marginBottom:6 }}>{v.description}</div>}
-                    {embed ? (
-                      <div style={{ position:"relative", width:"100%", paddingBottom:"56.25%",
-                        borderRadius:10, overflow:"hidden", border:"1px solid #ECE2D2", background:"#000" }}>
-                        <iframe src={embed} title={v.title || "Instructional video"} loading="lazy"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-                          allowFullScreen
-                          style={{ position:"absolute", top:0, left:0, width:"100%", height:"100%", border:"none" }} />
-                      </div>
-                    ) : (
-                      <a href={v.url} target="_blank" rel="noopener noreferrer"
-                        style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:13, fontWeight:600,
-                          color:"#B96524", textDecoration:"none" }}>▶ Watch the video →</a>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        {/* Overview video (optional) */}
+        <SectionVideos sec="Overview" />
 
         {/* MEAN vs DIST */}
         <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase",
           letterSpacing:1.5, marginBottom:12 }}>Two ways to measure a question</div>
+        <SectionVideos sec="Two ways to measure" />
         <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap:12, marginBottom:20 }}>
           {[
             { label:"Mean", title:"The average score", color:"#3E7A50", bg:"#E9F1E9", bd:"#AFD8BB",
@@ -2437,6 +2478,7 @@ function ScoringHelpPanel({ onClose }) {
           border:"1px solid #ECE2D2" }}>
           <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase",
             letterSpacing:1.5, marginBottom:10 }}>Why it matters — the same responses, two different answers</div>
+          <SectionVideos sec="Why it matters" />
           <div style={{ fontSize:12, color:"#2C2621", fontWeight:600, marginBottom:10 }}>
             9 single staff respond to: "My practical needs are adequately supported."
           </div>
@@ -2474,6 +2516,7 @@ function ScoringHelpPanel({ onClose }) {
         {/* Three factors */}
         <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase",
           letterSpacing:1.5, marginBottom:12 }}>Three things that determine a department's status</div>
+        <SectionVideos sec="Department status" />
         {[
           { num:"1", color:"#3E7A50", bg:"#E9F1E9", bd:"#AFD8BB",
             title:"Individual question scoring",
@@ -2502,6 +2545,7 @@ function ScoringHelpPanel({ onClose }) {
           padding:14, marginTop:4 }}>
           <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase",
             letterSpacing:1.5, marginBottom:10 }}>Status thresholds</div>
+          <SectionVideos sec="Status thresholds" />
           <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
           <table style={{ width:"100%", minWidth: isMobile ? 380 : "auto", borderCollapse:"collapse", fontSize:12 }}>
             <thead>
