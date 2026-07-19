@@ -16,7 +16,17 @@ export default function UsersView({ setView, me }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
-  const load = async () => { try { setUsers(await listUsers()); } catch (e) { setErr(e.message); setUsers([]); } };
+  const load = async () => {
+    setErr("");
+    try { setUsers(await listUsers()); }
+    catch (e) {
+      // Don't fall through to the "No accounts yet" empty state on an auth error —
+      // the accounts exist; the request was rejected (usually a stale session or a
+      // token from a different copy of the site). Say so, clearly.
+      setErr(`Couldn't load accounts: ${e.message}. This usually means your sign-in needs refreshing — sign out and sign back in on jv-pulse-report.netlify.app. If it persists, the site's login key (AUTH_SECRET) may differ from where you signed in.`);
+      setUsers("error");
+    }
+  };
   useEffect(() => { load(); }, []);
 
   const startAdd = () => { setErr(""); setForm({ ...blank }); };
@@ -81,6 +91,8 @@ export default function UsersView({ setView, me }) {
 
         {users === null ? (
           <div style={{ color: "#7A6F63", fontSize: 14 }}>Loading…</div>
+        ) : users === "error" ? (
+          <button onClick={load} style={{ ...navBtn }}>↻ Try again</button>
         ) : users.length === 0 ? (
           <div style={{ ...card, color: "#7A6F63", fontSize: 14 }}>No accounts yet. Add yourself and Chris as leaders first.</div>
         ) : (
