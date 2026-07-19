@@ -1949,11 +1949,6 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
           </div>
         )}
 
-        {/* Leadership brief — synthesis first, before the raw numbers */}
-        {allDepts.length > 0 && (
-          <LeadershipBriefPanel rollup={briefRollup} onOpenDept={openDeptDetail} />
-        )}
-
         {!isAdmin && (
           <div style={{ background:"#FBEFE4", border:"1px solid #ECE2D2", borderRadius:12, padding:"14px 16px", marginBottom:20, fontSize:13, color:"#9A6B26" }}>
             Turn on admin (lock icon, top right) to upload and process a new survey.
@@ -2042,13 +2037,13 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
         </div>
         )}
 
-        {/* ── Org overview ── */}
+        {/* ── Org overview: summary tiles (always visible) ── */}
         {allDepts.length > 0 && (
-          <div style={{ marginBottom:32 }}>
+          <div style={{ marginBottom:20 }}>
             <div style={{ fontSize:13, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:2, marginBottom:14 }}>
               Across the org <span style={{ fontWeight:500, color:"#A89C8D", letterSpacing:0, textTransform:"none" }}>· latest pulse per country</span>
             </div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(90px,1fr))", gap:10, marginBottom:24 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(90px,1fr))", gap:10 }}>
               <Tile n={latestRuns.length} label={latestRuns.length===1?"Country":"Countries"} />
               {totalResp > 0 && <Tile n={totalResp} label={totalResp===1?"Respondent":"Respondents"} />}
               <Tile n={counts.Concern} label="Concern" color="#BE6650" />
@@ -2056,74 +2051,77 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
               <Tile n={counts.Healthy} label="Healthy" color="#5C9A6D" />
               <Tile n={`${finishedCt}/${allDepts.length}`} label="Reviews done" color={finishedCt===allDepts.length?"#5C9A6D":"#2C2621"} />
             </div>
+          </div>
+        )}
 
-            {/* Needs attention — grouped by country so leaders triage one place
-                at a time (worst-first). Click a country to open its review. */}
+        {/* Leadership brief — synthesis, right after the dashboard numbers */}
+        {allDepts.length > 0 && (
+          <LeadershipBriefPanel rollup={briefRollup} onOpenDept={openDeptDetail} />
+        )}
+
+        {/* ── Detail — collapsible, closed by default; open the one you want ── */}
+        {allDepts.length > 0 && (
+          <div style={{ ...card, padding:0, overflow:"hidden", marginBottom:32 }}>
+
             {attentionByCountry.length > 0 && (
-              <div style={{ marginBottom:24 }}>
-                <div style={{ fontSize:12, fontWeight:700, color:"#9A6B26", textTransform:"uppercase", letterSpacing:1.5, marginBottom:4 }}>
-                  Needs attention
-                </div>
-                <div style={{ fontSize:12.5, color:"#7A6F63", marginBottom:12, lineHeight:1.5 }}>
-                  Where to step in, country by country — the departments scoring Concern or Watch, worst first. Click a country to open its review.
-                </div>
-                <div style={{ display:"grid", gap:12 }}>
-                  {attentionByCountry.map((c) => {
-                    const total = (c.run?.depts || []).length;
-                    const done = (c.run?.depts || []).filter(d => d.reviewDone).length;
-                    const clickable = !!(c.run && openRun);
-                    return (
-                      <div key={c.country} style={{ ...card, padding:0, overflow:"hidden" }}>
-                        {/* Country header */}
-                        <div onClick={() => clickable && openRun(c.run)}
-                          onMouseEnter={e => { if (clickable) e.currentTarget.style.background = "#FDFAF4"; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = "#FBEFE4"; }}
-                          title={clickable ? `Open ${c.country} ${c.run.year} review` : undefined}
-                          style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 14px", background:"#FBEFE4",
-                            cursor: clickable ? "pointer" : "default", flexWrap:"wrap" }}>
-                          <span style={{ fontFamily:FONT_DISPLAY, fontSize:17, fontWeight:600, color:"#2C2621" }}>{c.country}</span>
-                          {c.concern > 0 && <span style={{ fontSize:10.5, fontWeight:700, color:"#BE6650", background:"#F6E5DE", border:"1px solid #E4C4BA", borderRadius:20, padding:"2px 9px" }}>{c.concern} concern</span>}
-                          {c.watch   > 0 && <span style={{ fontSize:10.5, fontWeight:700, color:"#C08636", background:"#F7EEDC", border:"1px solid #E7D2A9", borderRadius:20, padding:"2px 9px" }}>{c.watch} watch</span>}
-                          <span style={{ marginLeft:"auto", fontSize:11, fontWeight:700,
-                            color: total>0 && done===total ? "#5C9A6D" : "#9A6B26" }}>
-                            {total===0 ? "" : done===total ? "review ready ✓" : `review ${done}/${total}`}
-                          </span>
-                          {clickable && <span style={{ color:"#A89C8D", fontSize:14, flexShrink:0 }} aria-hidden="true">→</span>}
-                        </div>
-                        {/* Flagged departments in this country */}
-                        {c.depts.map((d,i) => (
-                          <div key={`${d.key}-${i}`}
-                            onClick={() => setDetail({ country: c.country, year: c.run?.year, deptKey: d.key, deptLabel: d.label || d.key })}
-                            onMouseEnter={e => { e.currentTarget.style.background = "#FDFAF4"; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-                            title={`Open ${d.label || d.key} — read scores & notes here`}
-                            style={{ display:"flex", alignItems:"center", gap:10, padding: isMobile?"8px 12px":"9px 14px", borderTop:"1px solid #F4ECDD", cursor:"pointer" }}>
-                            <span style={{ width:8, height:8, borderRadius:"50%", background:sc(d.status), flexShrink:0 }} />
-                            <span style={{ fontFamily:"ui-monospace,Menlo,monospace", fontSize:13, fontWeight:700, color:sc(d.status), width:42, flexShrink:0 }}>{d.avg}</span>
-                            <span style={{ flex:1, fontSize:13, color:"#2C2621", minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{d.label || d.key}</span>
-                            {!d.reviewDone && <span style={{ fontSize:10, color:"#A89C8D", flexShrink:0 }}>review pending</span>}
-                            <span style={{ fontSize:10, fontWeight:700, color:sc(d.status), background:sb(d.status), border:`1px solid ${sbd(d.status)}`, borderRadius:5, padding:"2px 8px", flexShrink:0 }}>{d.status}</span>
-                            <span style={{ color:"#C9BBA8", fontSize:13, flexShrink:0 }} aria-hidden="true">→</span>
+              <Disclosure title="Needs attention" dot="#BE6650" flush
+                count={`${attentionByCountry.length} ${attentionByCountry.length===1?"country":"countries"}`}>
+                <div style={{ padding:"4px 14px 14px" }}>
+                  <div style={{ fontSize:12.5, color:"#7A6F63", marginBottom:12, lineHeight:1.5 }}>
+                    Where to step in, country by country — Concern/Watch departments, worst first. Click a country to open its review, or a department to read its detail.
+                  </div>
+                  <div style={{ display:"grid", gap:12 }}>
+                    {attentionByCountry.map((c) => {
+                      const total = (c.run?.depts || []).length;
+                      const done = (c.run?.depts || []).filter(d => d.reviewDone).length;
+                      const clickable = !!(c.run && openRun);
+                      return (
+                        <div key={c.country} style={{ background:"#fff", border:"1px solid #ECE2D2", borderRadius:10, overflow:"hidden" }}>
+                          <div onClick={() => clickable && openRun(c.run)}
+                            onMouseEnter={e => { if (clickable) e.currentTarget.style.background = "#FDFAF4"; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = "#FBEFE4"; }}
+                            title={clickable ? `Open ${c.country} ${c.run.year} review` : undefined}
+                            style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 14px", background:"#FBEFE4",
+                              cursor: clickable ? "pointer" : "default", flexWrap:"wrap" }}>
+                            <span style={{ fontFamily:FONT_DISPLAY, fontSize:17, fontWeight:600, color:"#2C2621" }}>{c.country}</span>
+                            {c.concern > 0 && <span style={{ fontSize:10.5, fontWeight:700, color:"#BE6650", background:"#F6E5DE", border:"1px solid #E4C4BA", borderRadius:20, padding:"2px 9px" }}>{c.concern} concern</span>}
+                            {c.watch   > 0 && <span style={{ fontSize:10.5, fontWeight:700, color:"#C08636", background:"#F7EEDC", border:"1px solid #E7D2A9", borderRadius:20, padding:"2px 9px" }}>{c.watch} watch</span>}
+                            <span style={{ marginLeft:"auto", fontSize:11, fontWeight:700,
+                              color: total>0 && done===total ? "#5C9A6D" : "#9A6B26" }}>
+                              {total===0 ? "" : done===total ? "review ready ✓" : `review ${done}/${total}`}
+                            </span>
+                            {clickable && <span style={{ color:"#A89C8D", fontSize:14, flexShrink:0 }} aria-hidden="true">→</span>}
                           </div>
-                        ))}
-                      </div>
-                    );
-                  })}
+                          {c.depts.map((d,i) => (
+                            <div key={`${d.key}-${i}`}
+                              onClick={() => setDetail({ country: c.country, year: c.run?.year, deptKey: d.key, deptLabel: d.label || d.key })}
+                              onMouseEnter={e => { e.currentTarget.style.background = "#FDFAF4"; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                              title={`Open ${d.label || d.key} — read scores & notes here`}
+                              style={{ display:"flex", alignItems:"center", gap:10, padding: isMobile?"8px 12px":"9px 14px", borderTop:"1px solid #F4ECDD", cursor:"pointer" }}>
+                              <span style={{ width:8, height:8, borderRadius:"50%", background:sc(d.status), flexShrink:0 }} />
+                              <span style={{ fontFamily:"ui-monospace,Menlo,monospace", fontSize:13, fontWeight:700, color:sc(d.status), width:42, flexShrink:0 }}>{d.avg}</span>
+                              <span style={{ flex:1, fontSize:13, color:"#2C2621", minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{d.label || d.key}</span>
+                              {!d.reviewDone && <span style={{ fontSize:10, color:"#A89C8D", flexShrink:0 }}>review pending</span>}
+                              <span style={{ fontSize:10, fontWeight:700, color:sc(d.status), background:sb(d.status), border:`1px solid ${sbd(d.status)}`, borderRadius:5, padding:"2px 8px", flexShrink:0 }}>{d.status}</span>
+                              <span style={{ color:"#C9BBA8", fontSize:13, flexShrink:0 }} aria-hidden="true">→</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              </Disclosure>
             )}
 
-            {/* By department across the org — spot systemic patterns */}
             {deptPattern.length > 0 && (
-              <div>
-                <div style={{ fontSize:12, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>
-                  By department, across countries
-                </div>
-                <div style={{ ...card, padding:0, overflow:"hidden" }}>
+              <Disclosure title="By department, across countries" dot="#C08636" flush count={`${deptPattern.length}`}>
+                <div>
                   {deptPattern.map((e,i) => {
                     const total = e.Concern + e.Watch + e.Healthy || 1;
                     return (
-                      <div key={e.label+i} style={{ display:"flex", alignItems:"center", gap:12, padding: isMobile?"9px 12px":"10px 14px", borderTop: i?"1px solid #F4ECDD":"none", flexWrap:"wrap" }}>
+                      <div key={e.label+i} style={{ display:"flex", alignItems:"center", gap:12, padding: isMobile?"9px 12px":"10px 14px", borderTop:"1px solid #F4ECDD", flexWrap:"wrap" }}>
                         <span style={{ fontSize:13, fontWeight:650, color:"#2C2621", width: isMobile?"100%":150, flexShrink:0 }}>{e.label}</span>
                         <div style={{ flex:1, minWidth:120, display:"flex", height:8, borderRadius:5, overflow:"hidden", background:"#FDFAF4" }}>
                           {e.Concern>0 && <div style={{ width:`${e.Concern/total*100}%`, background:"#BE6650" }} />}
@@ -2142,32 +2140,24 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
                     );
                   })}
                 </div>
-              </div>
+              </Disclosure>
             )}
-          </div>
-        )}
 
-        {/* ── Top issues across the org (question level) ── */}
-        {allDepts.length > 0 && (
-          <div style={{ marginBottom:32 }}>
-            <div style={{ fontSize:13, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:2, marginBottom:14 }}>
-              Top issues <span style={{ fontWeight:500, color:"#A89C8D", letterSpacing:0, textTransform:"none" }}>· the specific questions staff scored lowest</span>
-            </div>
-
-            {orgIssues === null ? (
-              <div style={{ ...card, color:"#7A6F63", fontSize:13, fontStyle:"italic" }}>Reading the survey responses…</div>
-            ) : topConcerns.length === 0 ? (
-              <div style={{ ...card, color:"#7A6F63", fontSize:13 }}>No concern- or watch-level questions across the org right now.</div>
-            ) : (
-              <>
-                <div style={{ ...card, padding:0, overflow:"hidden", marginBottom: recurring.length ? 20 : 0 }}>
-                  {topConcerns.map((q,i) => (
+            <Disclosure title="Top issues" dot="#BE6650" flush
+              count={orgIssues===null ? "…" : `${topConcerns.length}`}>
+              <div>
+                {orgIssues === null ? (
+                  <div style={{ padding:"10px 14px", color:"#7A6F63", fontSize:13, fontStyle:"italic" }}>Reading the survey responses…</div>
+                ) : topConcerns.length === 0 ? (
+                  <div style={{ padding:"10px 14px", color:"#7A6F63", fontSize:13 }}>No concern- or watch-level questions across the org right now.</div>
+                ) : (
+                  topConcerns.map((q,i) => (
                     <div key={i}
                       onClick={() => q.deptKey && setDetail({ country: q.country, year: q.year, deptKey: q.deptKey, deptLabel: q.deptLabel })}
                       onMouseEnter={e => { if (q.deptKey) e.currentTarget.style.background = "#FDFAF4"; }}
                       onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
                       title={q.deptKey ? `Open ${q.deptLabel} (${q.country}) — scores & notes` : undefined}
-                      style={{ display:"flex", alignItems:"flex-start", gap:11, padding: isMobile?"10px 12px":"10px 14px", borderTop: i?"1px solid #F4ECDD":"none", cursor: q.deptKey ? "pointer" : "default" }}>
+                      style={{ display:"flex", alignItems:"flex-start", gap:11, padding: isMobile?"10px 12px":"10px 14px", borderTop:"1px solid #F4ECDD", cursor: q.deptKey ? "pointer" : "default" }}>
                       <span style={{ fontFamily:"ui-monospace,Menlo,monospace", fontSize:13, fontWeight:700, color:sc(q.status), width:42, flexShrink:0, textAlign:"right" }}>{Number(q.score).toFixed(2)}</span>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.4 }}>{q.en}{q.burden && <span style={{ color:"#C08636", fontSize:10 }}> · burden</span>}</div>
@@ -2175,29 +2165,27 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
                       </div>
                       <span style={{ fontSize:10, fontWeight:700, color:sc(q.status), background:sb(q.status), border:`1px solid ${sbd(q.status)}`, borderRadius:5, padding:"2px 8px", flexShrink:0 }}>{q.status}</span>
                     </div>
+                  ))
+                )}
+              </div>
+            </Disclosure>
+
+            {recurring.length > 0 && (
+              <Disclosure title="Recurring across teams" dot="#9A6B26" flush count={`${recurring.length}`}>
+                <div>
+                  {recurring.map((e,i) => (
+                    <div key={i} style={{ padding: isMobile?"10px 12px":"10px 14px", borderTop:"1px solid #F4ECDD" }}>
+                      <div style={{ display:"flex", alignItems:"baseline", gap:10 }}>
+                        <span style={{ fontSize:11, fontWeight:800, color:"#9A6B26", flexShrink:0 }}>{e.where.length} teams</span>
+                        <span style={{ fontSize:13, color:"#2C2621", lineHeight:1.4 }}>{e.en}</span>
+                      </div>
+                      <div style={{ fontSize:11, color:"#7A6F63", marginTop:3 }}>{e.where.join("  ·  ")}</div>
+                    </div>
                   ))}
                 </div>
-
-                {recurring.length > 0 && (
-                  <>
-                    <div style={{ fontSize:12, fontWeight:700, color:"#9A6B26", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>
-                      Recurring across teams <span style={{ color:"#A89C8D", fontWeight:500 }}>· same question low in multiple places</span>
-                    </div>
-                    <div style={{ ...card, padding:0, overflow:"hidden" }}>
-                      {recurring.map((e,i) => (
-                        <div key={i} style={{ padding: isMobile?"10px 12px":"10px 14px", borderTop: i?"1px solid #F4ECDD":"none" }}>
-                          <div style={{ display:"flex", alignItems:"baseline", gap:10 }}>
-                            <span style={{ fontSize:11, fontWeight:800, color:"#9A6B26", flexShrink:0 }}>{e.where.length} teams</span>
-                            <span style={{ fontSize:13, color:"#2C2621", lineHeight:1.4 }}>{e.en}</span>
-                          </div>
-                          <div style={{ fontSize:11, color:"#7A6F63", marginTop:3 }}>{e.where.join("  ·  ")}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </>
+              </Disclosure>
             )}
+
           </div>
         )}
 
