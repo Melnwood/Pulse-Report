@@ -1681,6 +1681,21 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
   });
   const deptPattern = Object.values(byDept).sort((a, b) => (b.Concern - a.Concern) || (b.Watch - a.Watch) || a.label.localeCompare(b.label));
 
+  // ── Needs attention, grouped BY COUNTRY ── One card per country that has any
+  // Concern/Watch department, so leaders triage one country at a time (worst
+  // first) rather than scanning a flat mixed list. This is the "where do we
+  // step in" view: which countries are struggling, in which departments, and is
+  // their review done yet.
+  const attentionByCountry = (() => {
+    const byC = {};
+    attention.forEach(d => {
+      const e = byC[d.country] || (byC[d.country] = { country: d.country, run: latestByCountry[d.country], depts: [], concern: 0, watch: 0 });
+      e.depts.push(d);
+      if (d.status === "Concern") e.concern++; else if (d.status === "Watch") e.watch++;
+    });
+    return Object.values(byC).sort((a, b) => (b.concern - a.concern) || (b.watch - a.watch) || String(a.country).localeCompare(String(b.country)));
+  })();
+
   // ── Top issues (question level) ── Pull each country's latest run detail in
   // the background and collect every question, so leaders can see the specific
   // weak spots and recurring themes — not just department health.
@@ -1903,24 +1918,52 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
               <Tile n={`${finishedCt}/${allDepts.length}`} label="Reviews done" color={finishedCt===allDepts.length?"#5C9A6D":"#2C2621"} />
             </div>
 
-            {/* Needs attention — every Concern/Watch dept across all countries */}
-            {attention.length > 0 && (
+            {/* Needs attention — grouped by country so leaders triage one place
+                at a time (worst-first). Click a country to open its review. */}
+            {attentionByCountry.length > 0 && (
               <div style={{ marginBottom:24 }}>
-                <div style={{ fontSize:12, fontWeight:700, color:"#9A6B26", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10 }}>
-                  Needs attention <span style={{ color:"#A89C8D", fontWeight:500 }}>· {attention.length} department{attention.length===1?"":"s"}</span>
+                <div style={{ fontSize:12, fontWeight:700, color:"#9A6B26", textTransform:"uppercase", letterSpacing:1.5, marginBottom:4 }}>
+                  Needs attention
                 </div>
-                <div style={{ ...card, padding:0, overflow:"hidden" }}>
-                  {attention.map((d,i) => (
-                    <div key={`${d.country}-${d.key}-${i}`} style={{ display:"flex", alignItems:"center", gap:10, padding: isMobile?"9px 12px":"9px 14px", borderTop: i?"1px solid #F4ECDD":"none" }}>
-                      <span style={{ width:8, height:8, borderRadius:"50%", background:sc(d.status), flexShrink:0 }} />
-                      <span style={{ fontFamily:"ui-monospace,Menlo,monospace", fontSize:13, fontWeight:700, color:sc(d.status), width:42, flexShrink:0 }}>{d.avg}</span>
-                      <span style={{ flex:1, fontSize:13, color:"#2C2621", minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                        <b style={{ fontWeight:650 }}>{d.country}</b> · {d.label || d.key}
-                      </span>
-                      {!d.reviewDone && <span style={{ fontSize:10, color:"#A89C8D", flexShrink:0 }}>review pending</span>}
-                      <span style={{ fontSize:10, fontWeight:700, color:sc(d.status), background:sb(d.status), border:`1px solid ${sbd(d.status)}`, borderRadius:5, padding:"2px 8px", flexShrink:0 }}>{d.status}</span>
-                    </div>
-                  ))}
+                <div style={{ fontSize:12.5, color:"#7A6F63", marginBottom:12, lineHeight:1.5 }}>
+                  Where to step in, country by country — the departments scoring Concern or Watch, worst first. Click a country to open its review.
+                </div>
+                <div style={{ display:"grid", gap:12 }}>
+                  {attentionByCountry.map((c) => {
+                    const total = (c.run?.depts || []).length;
+                    const done = (c.run?.depts || []).filter(d => d.reviewDone).length;
+                    const clickable = !!(c.run && openRun);
+                    return (
+                      <div key={c.country} style={{ ...card, padding:0, overflow:"hidden" }}>
+                        {/* Country header */}
+                        <div onClick={() => clickable && openRun(c.run)}
+                          onMouseEnter={e => { if (clickable) e.currentTarget.style.background = "#FDFAF4"; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = "#FBEFE4"; }}
+                          title={clickable ? `Open ${c.country} ${c.run.year} review` : undefined}
+                          style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 14px", background:"#FBEFE4",
+                            cursor: clickable ? "pointer" : "default", flexWrap:"wrap" }}>
+                          <span style={{ fontFamily:FONT_DISPLAY, fontSize:17, fontWeight:600, color:"#2C2621" }}>{c.country}</span>
+                          {c.concern > 0 && <span style={{ fontSize:10.5, fontWeight:700, color:"#BE6650", background:"#F6E5DE", border:"1px solid #E4C4BA", borderRadius:20, padding:"2px 9px" }}>{c.concern} concern</span>}
+                          {c.watch   > 0 && <span style={{ fontSize:10.5, fontWeight:700, color:"#C08636", background:"#F7EEDC", border:"1px solid #E7D2A9", borderRadius:20, padding:"2px 9px" }}>{c.watch} watch</span>}
+                          <span style={{ marginLeft:"auto", fontSize:11, fontWeight:700,
+                            color: total>0 && done===total ? "#5C9A6D" : "#9A6B26" }}>
+                            {total===0 ? "" : done===total ? "review ready ✓" : `review ${done}/${total}`}
+                          </span>
+                          {clickable && <span style={{ color:"#A89C8D", fontSize:14, flexShrink:0 }} aria-hidden="true">→</span>}
+                        </div>
+                        {/* Flagged departments in this country */}
+                        {c.depts.map((d,i) => (
+                          <div key={`${d.key}-${i}`} style={{ display:"flex", alignItems:"center", gap:10, padding: isMobile?"8px 12px":"9px 14px", borderTop:"1px solid #F4ECDD" }}>
+                            <span style={{ width:8, height:8, borderRadius:"50%", background:sc(d.status), flexShrink:0 }} />
+                            <span style={{ fontFamily:"ui-monospace,Menlo,monospace", fontSize:13, fontWeight:700, color:sc(d.status), width:42, flexShrink:0 }}>{d.avg}</span>
+                            <span style={{ flex:1, fontSize:13, color:"#2C2621", minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{d.label || d.key}</span>
+                            {!d.reviewDone && <span style={{ fontSize:10, color:"#A89C8D", flexShrink:0 }}>review pending</span>}
+                            <span style={{ fontSize:10, fontWeight:700, color:sc(d.status), background:sb(d.status), border:`1px solid ${sbd(d.status)}`, borderRadius:5, padding:"2px 8px", flexShrink:0 }}>{d.status}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
