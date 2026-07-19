@@ -2569,10 +2569,12 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
       {/* Top bar — on desktop it stays fixed at the top while only the content pane scrolls, keeping the action buttons (Translate, Import, Save, Generate) visible; on mobile it scrolls with the page since the whole shell scrolls normally */}
       <div style={{ background:"#FFFFFF", borderBottom:"1px solid #ECE2D2", padding: isMobile ? "12px 14px" : "14px 24px", display:"flex", alignItems:"center", gap: isMobile ? 8 : 16, flexShrink:0, zIndex:100, flexWrap:"wrap" }}>
         <button onClick={()=>setView("__back__")} style={{ ...navBtn, background:"transparent", border:"1px solid #ECE2D2" }}>← Back</button>
-        <div style={{ flex:1 }}>
-          <span style={{ color:"#E0863C", fontWeight:700, fontSize:13 }}>{country} {year}</span>
-          <span style={{ color:"#7A6F63", marginLeft:8, fontSize:13 }}>Director Review</span>
-          {cloudLoading && <span style={{ color:"#E0863C", marginLeft:10, fontSize:11, fontStyle:"italic" }}>☁ syncing…</span>}
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontFamily:FONT_DISPLAY, fontSize:16, fontWeight:600, color:"#2C2621", lineHeight:1.15 }}>Director Review</div>
+          <div style={{ fontSize:12, fontWeight:700, color:"#E0863C" }}>
+            {country} {year}
+            {cloudLoading && <span style={{ color:"#7A6F63", marginLeft:8, fontWeight:500, fontStyle:"italic" }}>☁ syncing…</span>}
+          </div>
         </div>
         <button onClick={()=>setShowHelp(true)} style={{ ...navBtn, display:"inline-flex", alignItems:"center", gap:6, background:"white",
           border:"1px solid #ECE2D2", color:"#E0863C", fontWeight:700 }}>
