@@ -9,6 +9,7 @@ import VideosView from "./components/VideosView";
 import { authStatus, tokenValid, getUser, logout } from "./authClient";
 import SURVEY_BASICS from "./surveyBasics.json";
 import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, deleteDepartmentNote, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, deleteQuestionNote, loadMeasures, loadSurveyBasicsMaster, saveSurveyBasicsMaster, loadHelpVideos } from "./airtable";
+import { synthesizeLeadership } from "./ai";
 import MeasurePanel from "./components/MeasurePanel";
 import NotesDigest from "./components/NotesDigest";
 import CountryTrends from "./components/CountryTrends";
@@ -1671,10 +1672,77 @@ function DeptDetailModal({ country, year, deptKey, deptLabel, me, isPCLead, onCl
   );
 }
 
+// The leadership brief — an on-demand AI synthesis of the whole-org rollup:
+// a headline plus a few prioritised "what's happening + next step" cards, each
+// clickable into that department's detail. Button-triggered (no auto AI cost).
+function LeadershipBriefPanel({ rollup, onOpenDept }) {
+  const [busy, setBusy] = useState(false);
+  const [brief, setBrief] = useState(null);
+  const [err, setErr] = useState("");
+  const run = async () => {
+    setBusy(true); setErr("");
+    try { setBrief(await synthesizeLeadership(rollup)); }
+    catch (e) { setErr(e.message || "Couldn't synthesize right now."); }
+    setBusy(false);
+  };
+  const priorities = (brief && brief.priorities) || [];
+  return (
+    <div style={{ ...card, marginBottom:24, padding:"16px 18px" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+        <span style={{ fontFamily:FONT_DISPLAY, fontSize:18, fontWeight:600, color:"#2C2621" }}>Leadership brief</span>
+        <span style={{ fontSize:12, color:"#7A6F63" }}>AI synthesis — what matters now, and what to do about it</span>
+        <button onClick={run} disabled={busy}
+          style={{ ...navBtn, marginLeft:"auto", background: busy?"#ECE2D2":"#E0863C", color: busy?"#7A6F63":"#fff",
+            border:"1px solid transparent", fontWeight:700, display:"inline-flex", alignItems:"center", gap:6 }}>
+          {busy ? "Synthesizing…" : brief ? "↻ Refresh" : "✦ Synthesize"}
+        </button>
+      </div>
+      {!brief && !busy && (
+        <div style={{ fontSize:12.5, color:"#A89C8D", marginTop:8, lineHeight:1.5 }}>
+          Reads every country's latest pulse and tells you the story — the patterns worth acting on, and a next step for each. Click a card to open that department.
+        </div>
+      )}
+      {err && <div style={{ color:"#BE6650", fontSize:12, marginTop:10 }}>{err}</div>}
+      {brief && brief.empty && <div style={{ fontSize:13, color:"#7A6F63", marginTop:12 }}>{brief.text}</div>}
+      {brief && !brief.empty && (
+        <div style={{ marginTop:14 }}>
+          {brief.headline && <div style={{ fontSize:14.5, color:"#2C2621", lineHeight:1.55, marginBottom:14 }}>{brief.headline}</div>}
+          {brief.text && priorities.length === 0 && <div style={{ fontSize:13, color:"#2C2621", whiteSpace:"pre-wrap", lineHeight:1.5 }}>{brief.text}</div>}
+          <div style={{ display:"grid", gap:10 }}>
+            {priorities.map((p,i) => {
+              const clickable = !!(p.deptKey && p.country && p.country !== "Org-wide" && onOpenDept);
+              return (
+                <div key={i}
+                  onClick={() => clickable && onOpenDept({ country:p.country, deptKey:p.deptKey, deptLabel:p.deptLabel })}
+                  onMouseEnter={e => { if (clickable) e.currentTarget.style.background = "#F7EEDF"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "#FDFAF4"; }}
+                  title={clickable ? `Open ${p.deptLabel} (${p.country})` : undefined}
+                  style={{ background:"#FDFAF4", border:"1px solid #ECE2D2", borderRadius:12, padding:"12px 14px", cursor: clickable?"pointer":"default" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6, flexWrap:"wrap" }}>
+                    <span style={{ fontSize:11, fontWeight:800, color:"#9A6B26", fontVariantNumeric:"tabular-nums" }}>{i+1}</span>
+                    <span style={{ fontSize:14, fontWeight:700, color:"#2C2621" }}>{p.title}</span>
+                    {p.status && <span style={{ fontSize:10, fontWeight:700, color:sc(p.status), background:sb(p.status), border:`1px solid ${sbd(p.status)}`, borderRadius:5, padding:"2px 7px" }}>{p.status}</span>}
+                    <span style={{ fontSize:11, color:"#7A6F63" }}>{p.country}{p.deptLabel ? ` · ${p.deptLabel}` : ""}</span>
+                    {clickable && <span style={{ marginLeft:"auto", color:"#C9BBA8", fontSize:14, flexShrink:0 }} aria-hidden="true">→</span>}
+                  </div>
+                  {p.insight && <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.5, marginBottom:6 }}>{p.insight}</div>}
+                  {p.nextStep && <div style={{ fontSize:13, color:"#5A4A3B", lineHeight:1.5 }}><b style={{ color:"#B96524" }}>Next step:</b> {p.nextStep}</div>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFile,
   generating, genProgress, isAdmin, toggleAdmin, setView, allRuns = [], reloadRuns, runsLoading, openRun, onImportDirectorReview, canPreview, setPreviewAs, authUser, onSignOut }) {
   const isMobile = useIsMobile();
   const [detail, setDetail] = useState(null);   // { country, year, deptKey, deptLabel } for the drill-in modal
+  const openDeptDetail = ({ country: c, deptKey, deptLabel }) =>
+    setDetail({ country: c, year: latestByCountry[c]?.year, deptKey, deptLabel });
   const dirReviewRef = useRef(null);   // file input for importing a director review
   const [showUpload, setShowUpload] = useState(allRuns.length === 0);   // the Import panel
   const [showPreview, setShowPreview] = useState(false);                // the "See what others see" panel
@@ -1783,6 +1851,16 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
       .sort((a, b) => b.where.length - a.where.length || a.avg - b.avg).slice(0, 6);
   })();
 
+  // Compact rollup handed to the AI for the leadership brief.
+  const briefRollup = {
+    countries: attentionByCountry.map(c => ({
+      country: c.country, concern: c.concern, watch: c.watch,
+      depts: c.depts.map(d => ({ deptKey: d.key, deptLabel: d.label || d.key, avg: d.avg, status: d.status })),
+    })),
+    lowestQuestions: topConcerns.map(q => ({ country: q.country, deptLabel: q.deptLabel, en: q.en, score: q.score, status: q.status, deptKey: q.deptKey })),
+    recurring: recurring.map(e => ({ en: e.en, count: e.where.length, where: e.where })),
+  };
+
   const Tile = ({ n, label, color }) => (
     <div style={{ ...card, padding:"14px 16px", textAlign:"center", minWidth:0 }}>
       <div style={{ fontFamily:FONT_DISPLAY, fontSize:28, fontWeight:600, color: color || "#2C2621", fontVariantNumeric:"tabular-nums" }}>{n}</div>
@@ -1869,6 +1947,11 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
                 );
               })}
           </div>
+        )}
+
+        {/* Leadership brief — synthesis first, before the raw numbers */}
+        {allDepts.length > 0 && (
+          <LeadershipBriefPanel rollup={briefRollup} onOpenDept={openDeptDetail} />
         )}
 
         {!isAdmin && (

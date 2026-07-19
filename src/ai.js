@@ -50,3 +50,64 @@ ${dn.length ? `DEPARTMENT NOTES:\n${dn.join("\n")}\n` : ""}${qn.length ? `\nQUES
   const text = await callClaude(prompt, 1200);
   return { empty: false, text };
 }
+
+// Synthesize an org-wide leadership brief from the quantitative rollup: what's
+// the story, and — for each priority — the next step / conversation to have.
+// Returns { empty } or { headline, priorities:[{title, insight, nextStep,
+// country, deptKey, deptLabel, status}] }. deptKey lets the UI make each
+// priority click straight into that department's detail (null = systemic).
+export async function synthesizeLeadership({ countries = [], lowestQuestions = [], recurring = [] }) {
+  const clip = (s, n = 140) => String(s || "").replace(/\s+/g, " ").trim().slice(0, n);
+  const flagged = countries.flatMap(c =>
+    (c.depts || []).map(d => `${c.country} | ${d.deptKey} | ${d.deptLabel} | ${d.avg} | ${d.status}`));
+  if (flagged.length === 0) {
+    return { empty: true, text: "Nothing is at Concern or Watch across the org right now — no brief to synthesize." };
+  }
+  const countryLines = countries.map(c => `- ${c.country}: ${c.concern} Concern, ${c.watch} Watch`);
+  const lowLines = lowestQuestions.slice(0, 12).map(q => `- ${q.country} · ${q.deptLabel} · ${q.score} (${q.status}): ${clip(q.en)}`);
+  const recLines = recurring.slice(0, 8).map(e => `- (${e.count} places) ${clip(e.en)} — ${(e.where || []).join("; ")}`);
+
+  const prompt =
+`You are the strategic advisor to the People & Culture leaders (Mel & Chris) at Josiah Venture, a Christian youth-missions organisation working across several countries. They oversee staff care org-wide. Below is the current pulse rollup across every country's latest survey. Your job is NOT to restate the numbers — it's to help them decide where to put their attention and WHAT to do.
+
+Produce a short leadership brief as JSON only (no prose outside the JSON, no code fences), in exactly this shape:
+{
+  "headline": "1–2 sentences: the honest state of things across the org right now",
+  "priorities": [
+    {
+      "title": "a short, specific label (max ~8 words)",
+      "insight": "1–2 sentences: what's actually going on and why it matters — connect the dots (a pattern across teams/countries, a cluster, a root cause), don't just repeat a score",
+      "nextStep": "1 concrete next move for Mel & Chris — a conversation to have, a director to support, a question to ask. Pastoral and practical.",
+      "country": "the country this points to, or \\"Org-wide\\" if systemic",
+      "deptKey": "the EXACT dept key from the DEPARTMENTS list if this is about one department, else null",
+      "deptLabel": "the department name, or null",
+      "status": "Concern | Watch | null"
+    }
+  ]
+}
+
+Give 3–5 priorities, most important first. Prefer synthesis over enumeration: if the same issue recurs across countries, make that ONE priority and name the pattern. Only use deptKey values that appear in the DEPARTMENTS list below. Be specific to THIS data; do not invent anything.
+
+COUNTRIES (flagged counts):
+${countryLines.join("\n")}
+
+DEPARTMENTS at Concern/Watch (country | deptKey | deptLabel | avg | status):
+${flagged.join("\n")}
+
+LOWEST-SCORING QUESTIONS (the specific pain points):
+${lowLines.join("\n") || "- (none)"}
+
+RECURRING ACROSS TEAMS (same question low in multiple places):
+${recLines.join("\n") || "- (none)"}`;
+
+  const raw = await callClaude(prompt, 1600);
+  let parsed;
+  try {
+    const jsonText = raw.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+    parsed = JSON.parse(jsonText.slice(jsonText.indexOf("{"), jsonText.lastIndexOf("}") + 1));
+  } catch {
+    // Fall back to showing the raw text rather than failing outright.
+    return { empty: false, headline: "", priorities: [], text: raw };
+  }
+  return { empty: false, headline: parsed.headline || "", priorities: Array.isArray(parsed.priorities) ? parsed.priorities : [] };
+}
