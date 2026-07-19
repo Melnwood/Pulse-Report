@@ -43,12 +43,12 @@ export default function MeasurePanel({ country, deptKey, question, currentScore,
   const start = () => persist({});                                   // create with baseline+default target
   const addIntervention = async () => {
     if (!iv.action.trim()) return;
-    await persist({ interventions: [...(m?.interventions || []), { date: iv.date, action: iv.action.trim() }] });
+    await persist({ interventions: [...(m?.interventions || []), { date: iv.date, action: iv.action.trim(), by: author }] });
     setIv({ date: today(), action: "" });
   };
   const addCheck = async () => {
     if (num(ck.value) == null) return;
-    await persist({ checks: [...(m?.checks || []), { date: ck.date, value: num(ck.value), source: ck.source }] });
+    await persist({ checks: [...(m?.checks || []), { date: ck.date, value: num(ck.value), source: ck.source, by: author }] });
     setCk({ date: today(), value: "", source: "Observation" });
   };
 
@@ -127,7 +127,7 @@ export default function MeasurePanel({ country, deptKey, question, currentScore,
 
               {/* Interventions log */}
               <Log title="What we’re doing" items={m.interventions} empty="No actions logged yet."
-                render={(x) => <><b style={{ fontWeight: 650 }}>{fmtDate(x.date)}</b> — {x.action}</>} />
+                render={(x) => <><b style={{ fontWeight: 650 }}>{fmtDate(x.date)}</b> — {x.action}{x.by && <span style={{ color: C.muted }}> · {x.by}</span>}</>} />
               {canEdit && (
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   <input type="date" value={iv.date} onChange={e => setIv({ ...iv, date: e.target.value })}
@@ -142,7 +142,7 @@ export default function MeasurePanel({ country, deptKey, question, currentScore,
 
               {/* Checks log */}
               <Log title="Progress checks" items={m.checks} empty="No follow-up readings yet."
-                render={(x) => <><b style={{ fontWeight: 650 }}>{fmtDate(x.date)}</b> — {x.value} <span style={{ color: C.muted }}>· {x.source}</span></>} />
+                render={(x) => <><b style={{ fontWeight: 650 }}>{fmtDate(x.date)}</b> — {x.value} <span style={{ color: C.muted }}>· {x.source}{x.by ? ` · ${x.by}` : ""}</span></>} />
               {canEdit && (
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   <input type="date" value={ck.date} onChange={e => setCk({ ...ck, date: e.target.value })}
