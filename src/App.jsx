@@ -1635,7 +1635,8 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
   generating, genProgress, isAdmin, toggleAdmin, setView, allRuns = [], reloadRuns, runsLoading, openRun, onImportDirectorReview, canPreview, setPreviewAs, authUser, onSignOut }) {
   const isMobile = useIsMobile();
   const dirReviewRef = useRef(null);   // file input for importing a director review
-  const [showUpload, setShowUpload] = useState(allRuns.length === 0);   // the "New survey run" tab panel
+  const [showUpload, setShowUpload] = useState(allRuns.length === 0);   // the Import panel
+  const [showPreview, setShowPreview] = useState(false);                // the "See what others see" panel
   const [orgIssues, setOrgIssues] = useState(null);   // null = loading; array of question rows across the org
   const issuesLoadedRef = useRef("");
 
@@ -1762,9 +1763,15 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
             <button onClick={() => setView("videos")} style={{ ...navBtn, fontSize:12, padding:"6px 12px" }}>Manage videos</button>
           )}
           {isAdmin && (
-            <button onClick={() => setShowUpload(v => !v)}
+            <button onClick={() => { setShowUpload(v => !v); setShowPreview(false); }}
               style={{ ...navBtn, fontSize:12, padding:"6px 12px", background: showUpload ? "#FBEFE4" : undefined, borderColor: showUpload ? "#E0A56F" : undefined, color: showUpload ? "#B96524" : undefined }}>
-              + New survey run
+              Import
+            </button>
+          )}
+          {canPreview && (
+            <button onClick={() => { setShowPreview(v => !v); setShowUpload(false); }}
+              style={{ ...navBtn, fontSize:12, padding:"6px 12px", background: showPreview ? "#FBEFE4" : undefined, borderColor: showPreview ? "#E0A56F" : undefined, color: showPreview ? "#B96524" : undefined }}>
+              See what others see
             </button>
           )}
           {authUser ? (
@@ -1781,7 +1788,7 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
           )}
         </div>
 
-        {canPreview && <PreviewAsPanel allRuns={allRuns} setPreviewAs={setPreviewAs} setView={setView} />}
+        {canPreview && showPreview && <PreviewAsPanel allRuns={allRuns} setPreviewAs={setPreviewAs} setView={setView} />}
 
         {/* ── Director review progress — compact, at the very top ──
             One row per active country: how much of its director review is done.
@@ -1831,11 +1838,18 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
 
         {isAdmin && showUpload && (
         <div style={{ ...card, marginBottom:24 }}>
-          <div style={{ display:"flex", alignItems:"center", marginBottom:16 }}>
-            <span style={{ fontSize:14, fontWeight:700, color:"#2C2621" }}>Upload a new survey run</span>
-            <span style={{ fontSize:12, color:"#A89C8D", marginLeft:8 }}>.xlsx or .csv</span>
+          <div style={{ display:"flex", alignItems:"center", marginBottom:4 }}>
+            <span style={{ fontSize:15, fontWeight:750, color:"#2C2621" }}>Import</span>
             <button onClick={() => setShowUpload(false)} title="Close"
               style={{ marginLeft:"auto", background:"none", border:"none", cursor:"pointer", fontSize:18, color:"#7A6F63", lineHeight:1 }}>✕</button>
+          </div>
+          <div style={{ fontSize:12.5, color:"#7A6F63", marginBottom:18, lineHeight:1.5 }}>
+            Bring data into the platform. Two kinds today — a new survey run from QuestionPro, or a completed director review.
+          </div>
+
+          {/* 1 — New survey run from QuestionPro */}
+          <div style={{ fontSize:12, fontWeight:700, color:"#9A6B26", textTransform:"uppercase", letterSpacing:1.2, marginBottom:12 }}>
+            New survey run <span style={{ color:"#A89C8D", fontWeight:500, textTransform:"none", letterSpacing:0 }}>· QuestionPro export (.xlsx / .csv)</span>
           </div>
           <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap:16, marginBottom:24 }}>
             <div>
@@ -1888,7 +1902,9 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
           {/* Import a completed director review — a leader action; it detects the
               country from the file and loads the review into that run's report. */}
           <div style={{ marginTop:18, paddingTop:16, borderTop:"1px solid #ECE2D2" }}>
-            <div style={{ fontSize:13, fontWeight:600, color:"#2C2621", marginBottom:3 }}>Import a completed director review</div>
+            <div style={{ fontSize:12, fontWeight:700, color:"#9A6B26", textTransform:"uppercase", letterSpacing:1.2, marginBottom:8 }}>
+              Completed director review <span style={{ color:"#A89C8D", fontWeight:500, textTransform:"none", letterSpacing:0 }}>· Excel</span>
+            </div>
             <div style={{ fontSize:12, color:"#7A6F63", lineHeight:1.5, marginBottom:10 }}>
               Loads the strengths, growth areas, leadership questions, and quotes from a director's review Excel into the matching country's report. We read the country from the file.
             </div>
