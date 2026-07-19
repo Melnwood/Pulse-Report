@@ -1697,9 +1697,50 @@ function LeadershipBriefPanel({ countriesData = [], issues = [], allCountries = 
     return { countries, lowestQuestions, recurring, scope: sc === "all" ? null : sc };
   };
 
+  // Gather the qualitative material — directors' notes and staff open responses —
+  // for the in-scope flagged departments, so the brief reflects what people
+  // actually said, not just the scores. Leaders see everything, so no visibility
+  // filtering is needed here. Bounded to keep the fetch + prompt reasonable.
+  const gatherQualitative = async (sc) => {
+    const inScope = (c) => sc === "all" || c === sc;
+    const depts = countriesData.filter(c => inScope(c.country))
+      .flatMap(c => (c.depts || []).map(d => ({ country: c.country, year: c.year, deptKey: d.deptKey, deptLabel: d.deptLabel })))
+      .filter(d => d.year)
+      .slice(0, 16);
+    const notes = [];
+    await Promise.all(depts.map(async (d) => {
+      try {
+        const [dn, qn] = await Promise.all([
+          loadDepartmentNotes(d.country, d.year, d.deptKey).catch(() => []),
+          loadQuestionNotes(d.country, d.year, d.deptKey).catch(() => []),
+        ]);
+        dn.forEach(n => notes.push({ country: d.country, deptLabel: d.deptLabel, author: n.author, body: n.body || n.title }));
+        qn.forEach(n => notes.push({ country: d.country, deptLabel: d.deptLabel, author: n.author, body: n.body || n.title, question: n.question }));
+      } catch {}
+    }));
+    // Open responses from each in-scope run's survey data (one load per country).
+    const openResponses = [];
+    const byCountry = [...new Set(depts.map(d => `${d.country}|${d.year}`))];
+    await Promise.all(byCountry.map(async (cy) => {
+      const [country, year] = cy.split("|");
+      const want = new Set(depts.filter(d => d.country === country).map(d => d.deptKey));
+      try {
+        const sd = await loadRunSurveyData(country, year);
+        Object.entries(sd?.depts || {}).forEach(([k, dep]) => {
+          if (!want.has(k)) return;
+          (dep.openResponses || []).slice(0, 12).forEach(r => openResponses.push({ country, deptLabel: dep.label || k, text: r.translation || r.text }));
+        });
+      } catch {}
+    }));
+    return { notes, openResponses };
+  };
+
   const run = async () => {
     setBusy(true); setErr("");
-    try { setBrief(await synthesizeLeadership(rollupFor(scope))); }
+    try {
+      const qual = await gatherQualitative(scope);
+      setBrief(await synthesizeLeadership({ ...rollupFor(scope), notes: qual.notes, openResponses: qual.openResponses }));
+    }
     catch (e) { setErr(e.message || "Couldn't synthesize right now."); }
     setBusy(false);
   };
@@ -1892,7 +1933,7 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
   // Data handed to the leadership brief. countriesData + the full concern/watch
   // question set let the panel build either an org-wide or a per-country brief.
   const briefCountries = attentionByCountry.map(c => ({
-    country: c.country, concern: c.concern, watch: c.watch,
+    country: c.country, year: c.run?.year, concern: c.concern, watch: c.watch,
     depts: c.depts.map(d => ({ deptKey: d.key, deptLabel: d.label || d.key, avg: d.avg, status: d.status })),
   }));
   const briefIssues = (orgIssues || [])
@@ -2076,20 +2117,19 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
         </div>
         )}
 
-        {/* ── Org overview: summary tiles (always visible) ── */}
+        {/* ── Org overview: summary tiles — collapsible, open by default ── */}
         {allDepts.length > 0 && (
-          <div style={{ marginBottom:20 }}>
-            <div style={{ fontSize:13, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:2, marginBottom:14 }}>
-              Across the org <span style={{ fontWeight:500, color:"#A89C8D", letterSpacing:0, textTransform:"none" }}>· latest pulse per country</span>
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(90px,1fr))", gap:10 }}>
-              <Tile n={latestRuns.length} label={latestRuns.length===1?"Country":"Countries"} />
-              {totalResp > 0 && <Tile n={totalResp} label={totalResp===1?"Respondent":"Respondents"} />}
-              <Tile n={counts.Concern} label="Concern" color="#BE6650" />
-              <Tile n={counts.Watch} label="Watch" color="#C08636" />
-              <Tile n={counts.Healthy} label="Healthy" color="#5C9A6D" />
-              <Tile n={`${finishedCt}/${allDepts.length}`} label="Reviews done" color={finishedCt===allDepts.length?"#5C9A6D":"#2C2621"} />
-            </div>
+          <div style={{ ...card, padding:0, overflow:"hidden", marginBottom:20 }}>
+            <Disclosure title="Across the org" count="latest pulse per country" defaultOpen>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(90px,1fr))", gap:10, padding:"4px 0 4px" }}>
+                <Tile n={latestRuns.length} label={latestRuns.length===1?"Country":"Countries"} />
+                {totalResp > 0 && <Tile n={totalResp} label={totalResp===1?"Respondent":"Respondents"} />}
+                <Tile n={counts.Concern} label="Concern" color="#BE6650" />
+                <Tile n={counts.Watch} label="Watch" color="#C08636" />
+                <Tile n={counts.Healthy} label="Healthy" color="#5C9A6D" />
+                <Tile n={`${finishedCt}/${allDepts.length}`} label="Reviews done" color={finishedCt===allDepts.length?"#5C9A6D":"#2C2621"} />
+              </div>
+            </Disclosure>
           </div>
         )}
 
