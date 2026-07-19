@@ -2381,9 +2381,6 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
           <button onClick={() => setView("__back__")} style={{ ...navBtn, background:"transparent", border:"1px solid #ECE2D2" }}>← Back</button>
-          <button onClick={() => setView("dashboard")} style={navBtn}>
-            P&C Dashboard
-          </button>
           {authUser ? (
             <span style={{ fontSize:12, color:"#7A6F63", whiteSpace:"nowrap" }}>
               {authUser.name} · <button onClick={onSignOut}
@@ -2430,8 +2427,12 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
         {allRuns.length > 0 && (
           <div style={{ display:"grid", gap:14 }}>
             {sortedByRecent.map((run, idx) => {
-              const mine = (run.depts || []).filter(d => !myDepts || myDepts.includes(d.key));
-              const list = mine.length ? mine : (run.depts || []);
+              const all = run.depts || [];
+              const mine = all.filter(d => !myDepts || myDepts.includes(d.key));
+              const list = mine.length ? mine : all;
+              const cCon = all.filter(d => d.status === "Concern").length;
+              const cWat = all.filter(d => d.status === "Watch").length;
+              const cHea = all.filter(d => d.status === "Healthy").length;
               return (
                 <div key={run.id} style={{ ...card, padding:"16px 20px" }}>
                   <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom: list.length ? 14 : 0 }}>
@@ -2440,6 +2441,12 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
                     {idx === 0 && !isFinished(run) && (
                       <span style={{ fontSize:10.5, fontWeight:700, color:"#9A6B26", background:"#F7EEDC", borderRadius:4, padding:"2px 8px" }}>Most recent</span>
                     )}
+                    {/* Country-at-a-glance — the old dashboard "window", folded in */}
+                    <span style={{ display:"inline-flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
+                      {cCon > 0 && <span style={{ fontSize:10.5, fontWeight:700, color:"#BE6650", background:"#F6E5DE", border:"1px solid #E4C4BA", borderRadius:20, padding:"2px 9px" }}>{cCon} concern</span>}
+                      {cWat > 0 && <span style={{ fontSize:10.5, fontWeight:700, color:"#C08636", background:"#F7EEDC", border:"1px solid #E7D2A9", borderRadius:20, padding:"2px 9px" }}>{cWat} watch</span>}
+                      {cHea > 0 && <span style={{ fontSize:10.5, fontWeight:700, color:"#5C9A6D", background:"#E9F1E9", border:"1px solid #CDE3CD", borderRadius:20, padding:"2px 9px" }}>{cHea} healthy</span>}
+                    </span>
                     <div style={{ marginLeft:"auto", display:"flex", gap:8 }}>
                       <button style={{ ...navBtn, fontSize:12, padding:"6px 12px" }} onClick={() => openRun(run)}>Open full review →</button>
                       {isAdmin && <button style={{ ...navBtn, fontSize:12, padding:"6px 12px", background:"#BE6650", color:"white", border:"1px solid transparent" }} onClick={() => {
