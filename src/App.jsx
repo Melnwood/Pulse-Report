@@ -2308,7 +2308,9 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
             <div style={{ marginBottom:18, borderBottom:"1px solid #ECE2D2" }}>
               <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12, flexWrap:"wrap" }}>
                 <span style={{ fontFamily:FONT_DISPLAY, fontSize:22, fontWeight:600, color:"#2C2621" }}>{dept.label}</span>
-                <span style={{ fontSize:12, color:"#7A6F63" }}>{country} {year}</span>
+                <span style={{ fontSize:12, fontWeight:700, color:sc(dept.status), background:sb(dept.status), border:`1px solid ${sbd(dept.status)}`, borderRadius:20, padding:"3px 10px" }}>{dept.status}</span>
+                <span style={{ fontSize:12.5, color:"#7A6F63", fontVariantNumeric:"tabular-nums" }}>{dept.avg} avg · n={dept.n}</span>
+                <span style={{ fontSize:12, color:"#A89C8D" }}>· {country} {year}</span>
                 {/* The director marks THEIR department done here; only editable by
                     whoever owns it (or a leader). */}
                 {canEdit(dept.key) && (
@@ -3031,12 +3033,8 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, addItem, saveRefin
 
   return (
     <div>
-      {/* Dept header */}
-      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14, flexWrap:"wrap" }}>
-        <div style={{ fontFamily:FONT_DISPLAY, fontSize:21, fontWeight:600, color:"#2C2621" }}>{dept.label}</div>
-        <span style={{ fontSize:12, fontWeight:700, color:sc(dept.status), background:sb(dept.status), border:`1px solid ${sbd(dept.status)}`, borderRadius:20, padding:"3px 10px" }}>{dept.status}</span>
-        <span style={{ color:"#7A6F63", fontSize:12.5, fontVariantNumeric:"tabular-nums" }}>{dept.avg} avg · n={dept.n}</span>
-      </div>
+      {/* The department name + status + score now live once, in the page header
+          above the Review/Notes tabs — no need to repeat them here. */}
 
       {/* Nested, collapsible review — one panel, drill in per part */}
       <div style={{ background:"#FFFFFF", border:"1px solid #ECE2D2", borderRadius:12, overflow:"hidden",
