@@ -13,7 +13,7 @@ const SECTIONS = [
   { value: "Status thresholds",  label: "How scoring works — under “Status thresholds”" },
 ];
 const sectionLabel = (v) => (SECTIONS.find(s => s.value === v)?.label) || v || "—";
-const blank = { id: null, title: "", url: "", section: "How to use the app", description: "", order: "", active: true };
+const blank = { id: null, title: "", url: "", fileUrl: "", section: "How to use the app", description: "", order: "", active: true };
 
 // Leaders-only screen to add / edit / remove instructional videos.
 export default function VideosView({ setView }) {
@@ -28,7 +28,8 @@ export default function VideosView({ setView }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const submit = async (e) => {
     e.preventDefault();
-    if (!form.title.trim() || !form.url.trim()) { setErr("Give the video a title and a link."); return; }
+    if (!form.title.trim()) { setErr("Give the video a title."); return; }
+    if (!form.url.trim() && !form.fileUrl) { setErr("Paste a video link, or upload a file to this video's “Video File” column in Airtable."); return; }
     setBusy(true); setErr("");
     try { await saveHelpVideo(form); setForm(null); await load(); }
     catch (e2) { setErr(e2.message); }
@@ -48,8 +49,8 @@ export default function VideosView({ setView }) {
           <button onClick={() => { setErr(""); setForm({ ...blank }); }}
             style={{ ...navBtn, marginLeft: "auto", background: C.accent, color: "#fff", border: "1px solid transparent" }}>+ Add video</button>
         </div>
-        <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 18, lineHeight: 1.5 }}>
-          Upload a video to YouTube (unlisted is fine), Vimeo, or Loom, paste its link here, and choose where it shows. It appears in the app right away.
+        <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 18, lineHeight: 1.55 }}>
+          Two ways to add a video: <b>paste a link</b> (YouTube unlisted / Vimeo / Loom) below, or <b>upload the file</b> — great for a phone recording — into the <b>“Video File”</b> column of the Help Videos table in Airtable. Either way, pick where it shows. <span style={{ color: C.faint }}>For phone videos, record in “Most Compatible” (H.264) so they play in every browser.</span>
         </div>
 
         {err && <div style={{ marginBottom: 14, fontSize: 13, color: "#BE6650", background: "#F6E5DE", border: "1px solid #E4C4BA", borderRadius: 8, padding: "8px 12px" }}>{err}</div>}
@@ -61,7 +62,11 @@ export default function VideosView({ setView }) {
             </div>
             <div style={{ display: "grid", gap: 12 }}>
               <div><label style={lbl}>Title</label><input style={inp} value={form.title} onChange={e => set("title", e.target.value)} placeholder="e.g. How to read your report" /></div>
-              <div><label style={lbl}>Video link (YouTube / Vimeo / Loom)</label><input style={inp} value={form.url} onChange={e => set("url", e.target.value)} placeholder="https://youtu.be/…" /></div>
+              <div>
+                <label style={lbl}>Video link (YouTube / Vimeo / Loom){form.fileUrl ? " — optional, a file is uploaded" : ""}</label>
+                <input style={inp} value={form.url} onChange={e => set("url", e.target.value)} placeholder="https://youtu.be/…  (or leave blank and upload a file in Airtable)" />
+                {form.fileUrl && !form.url && <div style={{ fontSize: 12, color: "#5C9A6D", marginTop: 4 }}>▶ An uploaded video file is attached in Airtable — it'll play in the app.</div>}
+              </div>
               <div><label style={lbl}>Where it shows</label>
                 <select style={inp} value={form.section} onChange={e => set("section", e.target.value)}>
                   {SECTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}

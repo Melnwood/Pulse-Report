@@ -1513,6 +1513,7 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
   generating, genProgress, isAdmin, toggleAdmin, setView, allRuns = [], reloadRuns, runsLoading, openRun, onImportDirectorReview, authUser, onSignOut }) {
   const isMobile = useIsMobile();
   const dirReviewRef = useRef(null);   // file input for importing a director review
+  const [showUpload, setShowUpload] = useState(allRuns.length === 0);   // the "New survey run" tab panel
   const [orgIssues, setOrgIssues] = useState(null);   // null = loading; array of question rows across the org
   const issuesLoadedRef = useRef("");
 
@@ -1623,6 +1624,12 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
           {isAdmin && (
             <button onClick={() => setView("videos")} style={{ ...navBtn, fontSize:12, padding:"6px 12px" }}>Manage videos</button>
           )}
+          {isAdmin && (
+            <button onClick={() => setShowUpload(v => !v)}
+              style={{ ...navBtn, fontSize:12, padding:"6px 12px", background: showUpload ? "#FBEFE4" : undefined, borderColor: showUpload ? "#E0A56F" : undefined, color: showUpload ? "#B96524" : undefined }}>
+              + New survey run
+            </button>
+          )}
           {authUser ? (
             <span style={{ marginLeft:"auto", fontSize:12, color:"#7A6F63" }}>
               {authUser.name} · <button onClick={onSignOut}
@@ -1683,10 +1690,14 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
           </div>
         )}
 
-        {isAdmin && (
-        <div style={{ ...card, padding:0, overflow:"hidden" }}>
-          <Disclosure title="Upload a new survey run" dot="#E0863C"
-            count=".xlsx or .csv" defaultOpen={allRuns.length === 0}>
+        {isAdmin && showUpload && (
+        <div style={{ ...card, marginBottom:24 }}>
+          <div style={{ display:"flex", alignItems:"center", marginBottom:16 }}>
+            <span style={{ fontSize:14, fontWeight:700, color:"#2C2621" }}>Upload a new survey run</span>
+            <span style={{ fontSize:12, color:"#A89C8D", marginLeft:8 }}>.xlsx or .csv</span>
+            <button onClick={() => setShowUpload(false)} title="Close"
+              style={{ marginLeft:"auto", background:"none", border:"none", cursor:"pointer", fontSize:18, color:"#7A6F63", lineHeight:1 }}>✕</button>
+          </div>
           <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap:16, marginBottom:24 }}>
             <div>
               <label style={lbl}>Country</label>
@@ -1749,7 +1760,6 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
               <IconUpload/> Import director review (Excel)
             </button>
           </div>
-          </Disclosure>
         </div>
         )}
 
@@ -2370,6 +2380,9 @@ function videoEmbedUrl(url) {
 // (or a link if the host isn't recognised).
 function HelpVideoEmbed({ v, showTitle }) {
   const embed = videoEmbedUrl(v.url);
+  // A direct video file: a link ending in a video extension, or a file uploaded
+  // to Airtable. Played with the browser's own <video> player.
+  const fileSrc = (!embed && v.url && /\.(mp4|webm|mov|m4v|ogg)(\?|$)/i.test(v.url)) ? v.url : (v.fileUrl || "");
   return (
     <div style={{ marginBottom:14 }}>
       {showTitle && v.title && <div style={{ fontSize:13, fontWeight:700, color:"#2C2621", marginBottom:v.description?2:6 }}>{v.title}</div>}
@@ -2380,6 +2393,9 @@ function HelpVideoEmbed({ v, showTitle }) {
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowFullScreen
             style={{ position:"absolute", top:0, left:0, width:"100%", height:"100%", border:"none" }} />
         </div>
+      ) : fileSrc ? (
+        <video controls playsInline preload="metadata" src={fileSrc}
+          style={{ width:"100%", maxHeight:420, borderRadius:10, border:"1px solid #ECE2D2", background:"#000", display:"block" }} />
       ) : (
         <a href={v.url} target="_blank" rel="noopener noreferrer"
           style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:13, fontWeight:600, color:"#B96524", textDecoration:"none" }}>▶ Watch the video →</a>

@@ -578,18 +578,22 @@ export async function loadHelpVideos() {
       id: r.id,
       title: r.fields["Title"] || "",
       url: r.fields["URL"] || "",
+      // A video file uploaded to Airtable directly (e.g. from a phone). Airtable
+      // hands back a freshly-signed URL each fetch, so it plays for this session.
+      fileUrl: (Array.isArray(r.fields["Video File"]) && r.fields["Video File"][0] && r.fields["Video File"][0].url) || "",
       description: r.fields["Description"] || "",
       section: r.fields["Section"] || "",
       order: r.fields["Order"] ?? 999,
       active: r.fields["Active"] !== false,
     }))
-    .filter(v => v.active && v.url)
+    .filter(v => v.active && (v.url || v.fileUrl))
     .sort((a, b) => (a.order - b.order) || a.title.localeCompare(b.title));
 }
 
 // Management (leaders): every video incl. inactive, plus create / update / delete.
 const helpVideoFromRec = (r) => ({
   id: r.id, title: r.fields["Title"] || "", url: r.fields["URL"] || "",
+  fileUrl: (Array.isArray(r.fields["Video File"]) && r.fields["Video File"][0] && r.fields["Video File"][0].url) || "",
   description: r.fields["Description"] || "", section: r.fields["Section"] || "",
   order: r.fields["Order"] ?? 0, active: r.fields["Active"] !== false,
 });
