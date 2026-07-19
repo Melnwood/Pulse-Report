@@ -67,10 +67,15 @@ export default function VideosView({ setView }) {
                 <input style={inp} value={form.url} onChange={e => set("url", e.target.value)} placeholder="https://youtu.be/…  (or leave blank and upload a file in Airtable)" />
                 {form.fileUrl && !form.url && <div style={{ fontSize: 12, color: "#5C9A6D", marginTop: 4 }}>▶ An uploaded video file is attached in Airtable — it'll play in the app.</div>}
               </div>
-              <div><label style={lbl}>Where it shows</label>
+              <div><label style={lbl}>Where should this video play?</label>
                 <select style={inp} value={form.section} onChange={e => set("section", e.target.value)}>
                   {SECTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 6, lineHeight: 1.5 }}>
+                  This is how a video connects to a spot in the app. Pick one of the <b>“How scoring works”</b> options
+                  and a <b>▶ Watch</b> button appears next to that section’s heading — clicking it pops the video open.
+                  Pick <b>“How to use the app”</b> to add it to the directors’ How-to panel.
+                </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: 12 }}>
                 <div><label style={lbl}>Description (optional)</label><input style={inp} value={form.description} onChange={e => set("description", e.target.value)} placeholder="One line shown under the title" /></div>
