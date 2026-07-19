@@ -415,6 +415,12 @@ export async function setDepartmentNoteVisibility(noteId, visibility) {
     records: [{ id: noteId, fields: { "Visibility": visibility === "Public" ? "Public" : "Private" } }] });
 }
 
+// Delete a department note. The proxy enforces who may delete (leaders any;
+// directors within their department; country leaders not at all).
+export async function deleteDepartmentNote(noteId) {
+  await call({ action: "delete", table: "deptNotes", recordIds: [noteId] });
+}
+
 // Add a question-level note. Returns the created record id.
 export async function addQuestionNote({ country, year, deptKey, question, author, title, body, visibility }) {
   const run = `${country} ${year}`;
@@ -461,6 +467,11 @@ export async function loadQuestionNotes(country, year, deptKey, question) {
 export async function setQuestionNoteVisibility(noteId, visibility) {
   await call({ action: "update", table: "questionNotes",
     records: [{ id: noteId, fields: { "Visibility": visibility === "Public" ? "Public" : "Private" } }] });
+}
+
+// Delete a question / section note. Proxy enforces the same permissions.
+export async function deleteQuestionNote(noteId) {
+  await call({ action: "delete", table: "questionNotes", recordIds: [noteId] });
 }
 
 // ─── MEASURES (behavioural-change tracking) ──────────────────────────────────

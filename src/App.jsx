@@ -8,7 +8,7 @@ import UsersView from "./components/UsersView";
 import VideosView from "./components/VideosView";
 import { authStatus, tokenValid, getUser, logout } from "./authClient";
 import SURVEY_BASICS from "./surveyBasics.json";
-import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, loadMeasures, loadSurveyBasicsMaster, saveSurveyBasicsMaster, loadHelpVideos } from "./airtable";
+import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, deleteDepartmentNote, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, deleteQuestionNote, loadMeasures, loadSurveyBasicsMaster, saveSurveyBasicsMaster, loadHelpVideos } from "./airtable";
 import MeasurePanel from "./components/MeasurePanel";
 import NotesDigest from "./components/NotesDigest";
 import CountryTrends from "./components/CountryTrends";
@@ -879,7 +879,7 @@ export default function App() {
   const viewUser = preview
     ? { ...authUser, role: preview.role, country: preview.country || "", department: preview.department || "" }
     : authUser;
-  const exitPreview = () => setPreviewAs(null);
+  const exitPreview = () => { setPreviewAs(null); setView("leadership"); };
 
   const effIsAdmin  = authed ? viewRole === "leader" : isAdmin;
   const effIsPCLead = authed ? viewRole === "leader" : isPCLead;
@@ -1369,13 +1369,16 @@ export default function App() {
 
   // ── VIEWS ──────────────────────────────────────────────────────────────────
   // Every view is wrapped so a previewing leader always has an "Exit preview"
-  // banner, no matter how deep they've navigated into a role's screens.
-  const wrap = (el) => (
-    <>
+  // bar, no matter how deep they've navigated into a role's screens. It's a
+  // sticky bar at the very top (in normal flow, so it pushes content down and
+  // can never be clipped or hidden behind the OS dock) that stays put as you
+  // scroll.
+  const wrap = (el) => preview ? (
+    <div>
+      <PreviewBanner preview={preview} onExit={exitPreview} />
       {el}
-      {preview && <PreviewBanner preview={preview} onExit={exitPreview} />}
-    </>
-  );
+    </div>
+  ) : el;
 
   if (view === "sections") return wrap(
     <SectionsView setView={setView} isPCLead={effIsPCLead} isAdmin={effIsAdmin} toggleAdmin={toggleAdmin}
@@ -2556,20 +2559,22 @@ function WatchButton({ video, onPlay }) {
   );
 }
 
-// Fixed bottom banner shown to a leader while they preview the app as another
-// role. It's the always-available way back out, no matter how deep they've gone.
+// Sticky top banner shown to a leader while they preview the app as another
+// role. In normal flow (pushes content down) and sticky, so it's always the
+// first thing on screen and the always-available way back out — no matter how
+// deep they've gone or how far they scroll.
 function PreviewBanner({ preview, onExit }) {
   return (
-    <div style={{ position:"fixed", left:0, right:0, bottom:0, zIndex:1200,
-      background:"#2C2621", color:"#F6F1E8", padding:"11px 16px",
+    <div style={{ position:"sticky", top:0, zIndex:1200,
+      background:"#2C2621", color:"#F6F1E8", padding:"10px 16px",
       display:"flex", alignItems:"center", justifyContent:"center", gap:14, flexWrap:"wrap",
-      boxShadow:"0 -6px 24px rgba(0,0,0,0.22)", fontFamily:"'Inter',system-ui,sans-serif" }}>
+      boxShadow:"0 4px 20px rgba(0,0,0,0.22)", fontFamily:"'Inter',system-ui,sans-serif" }}>
       <span style={{ fontSize:13.5 }}>
         👁 You’re previewing as <b style={{ color:"#F0B074" }}>{preview.label}</b> — this is exactly what they see.
       </span>
       <button onClick={onExit} style={{ background:"#E0863C", color:"#fff", border:"none",
         borderRadius:8, padding:"7px 16px", fontSize:13, fontWeight:700, cursor:"pointer" }}>
-        Exit preview
+        ← Exit preview
       </button>
     </div>
   );
@@ -2819,6 +2824,13 @@ function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes
     setSaving(false);
   };
 
+  // Delete a note you wrote (or any, for P&C leadership); refresh from the server.
+  const del = async (n) => {
+    if (!window.confirm("Delete this note? This can't be undone.")) return;
+    try { await deleteQuestionNote(n.id); await onAdded(); }
+    catch (e) { setErr("Couldn't delete: " + e.message); }
+  };
+
   return (
     <div style={{ borderTop:"1px solid #FDFAF4", padding:"10px 0" }}>
       <div style={{ display:"flex", alignItems:"flex-start", gap:8 }}>
@@ -2840,6 +2852,11 @@ function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes
               <div style={{ fontSize:11, color:"#7A6F63", display:"flex", gap:8, alignItems:"center" }}>
                 <b style={{ color:"#5A4A3B" }}>{n.author || "Unknown"}</b>{fmt(n.created) && <span>{fmt(n.created)}</span>}
                 <VisibilityChip visibility={n.visibility} onClick={() => onFlip(n)} />
+                {(isPCLead || (me && n.author === me)) && (
+                  <button onClick={() => del(n)} title="Delete this note"
+                    style={{ marginLeft:"auto", fontSize:11, fontWeight:600, color:"#BE6650",
+                      background:"none", border:"none", cursor:"pointer", padding:"2px 4px" }}>Delete</button>
+                )}
               </div>
               <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{n.body}</div>
             </div>
@@ -3253,6 +3270,15 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
     catch (e) { setErr("Couldn't change visibility: " + e.message); reload(); }
   };
 
+  // You can delete a note you wrote; P&C leadership can delete any note.
+  const canDelete = (n) => isPCLead || (me && n.author === me);
+  const del = async (n) => {
+    if (!window.confirm("Delete this note? This can't be undone.")) return;
+    setNotes(prev => prev.filter(x => x.id !== n.id));   // optimistic
+    try { await deleteDepartmentNote(n.id); }
+    catch (e) { setErr("Couldn't delete note: " + e.message); reload(); }
+  };
+
   return (
     <div style={{ marginTop: 22, border: "1px solid #ECE2D2", borderRadius: 12, overflow: "hidden" }}>
       <div style={{ background: "#FBEFE4", padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
@@ -3310,6 +3336,11 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
                 <span style={{ fontSize: 12, fontWeight: 700, color: "#5A4A3B" }}>{n.author || "Unknown"}</span>
                 <span style={{ fontSize: 11, color: "#A89C8D" }}>{fmt(n.created)}</span>
                 <VisibilityChip visibility={n.visibility} onClick={() => flip(n)} />
+                {canDelete(n) && (
+                  <button onClick={() => del(n)} title="Delete this note"
+                    style={{ marginLeft: "auto", fontSize: 11, fontWeight: 600, color: "#BE6650",
+                      background: "none", border: "none", cursor: "pointer", padding: "2px 4px" }}>Delete</button>
+                )}
               </div>
               <div style={{ fontSize: 13, color: "#2C2621", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{n.body}</div>
             </div>
