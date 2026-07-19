@@ -1311,6 +1311,27 @@ export default function App() {
   };
   const openReport = (run) => openRunShared(run, "report");
 
+  // Import a completed director-review Excel from the Leadership section. The
+  // country is read from the file's sheet names, we open that country's latest
+  // run, and the review applies the import (via pendingImport) once it's loaded.
+  const [pendingImport, setPendingImport] = useState(null);
+  const startDirectorReviewImport = async (file) => {
+    if (!file) return;
+    let detected = "";
+    try {
+      const { read } = await import("xlsx");
+      const wb = read(await file.arrayBuffer());
+      const summary = wb.SheetNames.find(n => /summary/i.test(n)) || wb.SheetNames[0] || "";
+      detected = summary.replace(/\s*summary\s*/i, "").trim();
+    } catch (e) { window.alert("Couldn't read that file: " + e.message); return; }
+    const run = [...allRuns]
+      .filter(r => String(r.country || "").toLowerCase() === detected.toLowerCase())
+      .sort((a, b) => Number(b.year) - Number(a.year))[0];
+    if (!run) { window.alert(`No pulse run found for "${detected || "that file"}". Upload the survey for that country first, then import the director review.`); return; }
+    setPendingImport(file);
+    openRunShared(run, "review");
+  };
+
   // ── AUTH GATE ── (only intercepts when login is switched on)
   if (authGate === "checking") return (
     <div style={{ minHeight:"100vh", background:"#F6F1E8", fontFamily:"'Inter',system-ui,sans-serif",
@@ -1338,6 +1359,7 @@ export default function App() {
       generating={generating} genProgress={genProgress}
       isAdmin={effIsAdmin} toggleAdmin={toggleAdmin} setView={setView}
       allRuns={allRuns} reloadRuns={reloadRuns} runsLoading={runsLoading} openRun={openRunShared}
+      onImportDirectorReview={startDirectorReviewImport}
       authUser={authUser} onSignOut={signOut} />
   );
 
@@ -1367,6 +1389,7 @@ export default function App() {
       saveRefinement={saveRefinement} refinements={refinements}
       setView={setView} setSelections={setSelections}
       isAdmin={effIsAdmin} toggleAdmin={toggleAdmin}
+      pendingImport={pendingImport} clearPendingImport={() => setPendingImport(null)}
       sbOverrides={sbOverrides} saveSbOverride={saveSbOverride} setSbOverrides={setSbOverrides}
       sbMaster={sbMaster} saveSbMaster={saveSbMaster}
       cloudLoading={cloudLoading} syncStatus={syncStatus}
@@ -1477,8 +1500,9 @@ function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin, authUser, onSig
 // For Mel & Chris. Home of survey upload/processing (a leadership action), with the
 // overall dashboard to be added here later.
 function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFile,
-  generating, genProgress, isAdmin, toggleAdmin, setView, allRuns = [], reloadRuns, runsLoading, openRun, authUser, onSignOut }) {
+  generating, genProgress, isAdmin, toggleAdmin, setView, allRuns = [], reloadRuns, runsLoading, openRun, onImportDirectorReview, authUser, onSignOut }) {
   const isMobile = useIsMobile();
+  const dirReviewRef = useRef(null);   // file input for importing a director review
   const [orgIssues, setOrgIssues] = useState(null);   // null = loading; array of question rows across the org
   const issuesLoadedRef = useRef("");
 
@@ -1600,6 +1624,46 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
           )}
         </div>
 
+        {/* ── Director review progress — compact, at the very top ──
+            One row per active country: how much of its director review is done.
+            Click a row to open that run. View-only. */}
+        {allRuns && allRuns.length > 0 && (
+          <div style={{ ...card, padding:0, overflow:"hidden", marginBottom:24 }}>
+            <div style={{ display:"flex", alignItems:"baseline", gap:8, padding:"11px 14px 7px" }}>
+              <span style={{ fontSize:12, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5 }}>Director review progress</span>
+              <span style={{ fontSize:11, color:"#A89C8D" }}>· click a country to open its review</span>
+            </div>
+            {[...latestRuns]
+              .sort((a,b) => ((pctDone(a) >= 1 ? 1 : 0) - (pctDone(b) >= 1 ? 1 : 0)) || String(a.country).localeCompare(String(b.country)))
+              .map((run) => {
+                const depts = run.depts || [];
+                const done = depts.filter(d => d.reviewDone).length;
+                const total = depts.length;
+                const allDone = total > 0 && done === total;
+                const pct = total ? done / total : 0;
+                return (
+                  <div key={run.country} onClick={() => openRun && openRun(run)}
+                    onMouseEnter={e => { if (openRun) e.currentTarget.style.background = "#FDFAF4"; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                    title={openRun ? `Open ${run.country} ${run.year} review` : undefined}
+                    style={{ display:"flex", alignItems:"center", gap:12, padding:"9px 14px", borderTop:"1px solid #F3EBE1", cursor: openRun ? "pointer" : "default" }}>
+                    <span style={{ minWidth: isMobile ? 92 : 120, fontSize:13, fontWeight:650, color:"#2C2621" }}>
+                      {run.country} <span style={{ fontWeight:500, color:"#A89C8D", fontSize:12 }}>{run.year}</span>
+                    </span>
+                    <div style={{ flex:1, height:6, background:"#EBDECB", borderRadius:4, overflow:"hidden", minWidth:50 }}>
+                      <div style={{ width:`${pct*100}%`, height:"100%", background: allDone ? "#5C9A6D" : "#E0863C", transition:"width .3s" }} />
+                    </div>
+                    <span style={{ minWidth:64, textAlign:"right", fontSize:12, fontWeight:700,
+                      color: allDone ? "#5C9A6D" : total === 0 ? "#A89C8D" : "#9A6B26" }}>
+                      {total === 0 ? "—" : allDone ? "ready ✓" : `${done} / ${total}`}
+                    </span>
+                    {openRun && <span style={{ color:"#A89C8D", fontSize:14, flexShrink:0 }} aria-hidden="true">→</span>}
+                  </div>
+                );
+              })}
+          </div>
+        )}
+
         {!isAdmin && (
           <div style={{ background:"#FBEFE4", border:"1px solid #ECE2D2", borderRadius:12, padding:"14px 16px", marginBottom:20, fontSize:13, color:"#9A6B26" }}>
             Turn on admin (lock icon, top right) to upload and process a new survey.
@@ -1657,6 +1721,21 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
                 onChange={e => e.target.files[0] && handleFile(e.target.files[0])} />
             </div>
           )}
+
+          {/* Import a completed director review — a leader action; it detects the
+              country from the file and loads the review into that run's report. */}
+          <div style={{ marginTop:18, paddingTop:16, borderTop:"1px solid #ECE2D2" }}>
+            <div style={{ fontSize:13, fontWeight:600, color:"#2C2621", marginBottom:3 }}>Import a completed director review</div>
+            <div style={{ fontSize:12, color:"#7A6F63", lineHeight:1.5, marginBottom:10 }}>
+              Loads the strengths, growth areas, leadership questions, and quotes from a director's review Excel into the matching country's report. We read the country from the file.
+            </div>
+            <input ref={dirReviewRef} type="file" accept=".xlsx" style={{ display:"none" }}
+              onChange={e => { const f = e.target.files?.[0]; if (f && onImportDirectorReview) onImportDirectorReview(f); e.target.value = ""; }} />
+            <button onClick={() => dirReviewRef.current?.click()}
+              style={{ ...navBtn, display:"inline-flex", alignItems:"center", gap:6 }}>
+              <IconUpload/> Import director review (Excel)
+            </button>
+          </div>
           </Disclosure>
         </div>
         )}
@@ -1782,105 +1861,6 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
           </div>
         )}
 
-        {/* ── Director Review Progress — the leaders' dashboard ──
-            View-only: one card per run, grouped by country, with a checklist
-            row per department (green check when its director marks the review
-            finished). A run reads "Ready to review" once every department is
-            done, so Mel & Chris can see at a glance which pulses are ready.
-            Updates automatically; leaders can't change state from here. */}
-        <div style={{ marginTop:28 }}>
-          <div style={{ display:"flex", alignItems:"baseline", gap:10, marginBottom:14, flexWrap:"wrap" }}>
-            <span style={{ fontSize:13, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:2 }}>Director Review Progress</span>
-            <span style={{ fontSize:11, color:"#A89C8D" }}>updates automatically · click a run to open it</span>
-          </div>
-
-          {(!allRuns || allRuns.length === 0) ? (
-            <div style={{ ...card, color:"#7A6F63", fontSize:14 }}>
-              {runsLoading ? "Loading runs…" : "No runs yet. Upload a survey above to start a director review."}
-            </div>
-          ) : (() => {
-            // Group runs by country; countries with any unfinished run come
-            // first, then alphabetical. Within a country, unfinished runs first
-            // then newest year.
-            const byCountry = {};
-            allRuns.forEach(r => { (byCountry[r.country] = byCountry[r.country] || []).push(r); });
-            const countries = Object.keys(byCountry).sort((a,b) => {
-              const inA = byCountry[a].some(r => pctDone(r) < 1) ? 0 : 1;
-              const inB = byCountry[b].some(r => pctDone(r) < 1) ? 0 : 1;
-              if (inA !== inB) return inA - inB;
-              return a.localeCompare(b);
-            });
-            return (
-              <div style={{ display:"grid", gap:24 }}>
-                {countries.map(cty => {
-                  const cruns = byCountry[cty].slice().sort((a,b) => {
-                    const pa = pctDone(a), pb = pctDone(b);
-                    if ((pa >= 1) !== (pb >= 1)) return (pa >= 1) ? 1 : -1;
-                    return (Number(b.year)||0) - (Number(a.year)||0);
-                  });
-                  const readyCount = cruns.filter(r => (r.depts||[]).length > 0 && pctDone(r) >= 1).length;
-                  return (
-                    <div key={cty}>
-                      <div style={{ display:"flex", alignItems:"baseline", gap:10, marginBottom:10, flexWrap:"wrap" }}>
-                        <span style={{ fontSize:16, fontWeight:800, color:"#2C2621" }}>{cty}</span>
-                        <span style={{ fontSize:12, color:"#7A6F63" }}>{cruns.length} run{cruns.length>1?"s":""} · {readyCount} ready</span>
-                      </div>
-                      <div style={{ display:"grid", gap:14 }}>
-                        {cruns.map(run => {
-                          const depts = run.depts || [];
-                          const done = depts.filter(d => d.reviewDone).length;
-                          const total = depts.length;
-                          const allDone = total > 0 && done === total;
-                          return (
-                            <div key={`${run.country}-${run.year}`}
-                              onClick={() => openRun && openRun(run)}
-                              title={openRun ? "Open this run's review" : undefined}
-                              onMouseEnter={e => { if (openRun) e.currentTarget.style.borderColor = "#E0863C"; }}
-                              onMouseLeave={e => { e.currentTarget.style.borderColor = allDone ? "#AFD8BB" : "#ECE2D2"; }}
-                              style={{ ...card, cursor: openRun ? "pointer" : "default", transition:"border-color .12s",
-                              border: `1px solid ${allDone ? "#AFD8BB" : "#ECE2D2"}`,
-                              background: allDone ? "#E9F1E9" : "#FFFFFF", padding: isMobile ? 16 : 20 }}>
-                              <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom: total>0?10:0, flexWrap:"wrap" }}>
-                                <span style={{ fontSize:17, fontWeight:700, color:"#2C2621" }}>{run.year}</span>
-                                <span style={{ marginLeft:"auto", fontSize:12, fontWeight:700, borderRadius:20, padding:"3px 12px",
-                                  color: allDone ? "#5C9A6D" : "#9A6B26",
-                                  background: allDone ? "#E9F1E9" : "#F7EEDC",
-                                  border: `1px solid ${allDone ? "#AFD8BB" : "#F7EEDC"}` }}>
-                                  {total === 0 ? "No departments yet" : allDone ? `${done} / ${total} · ready ✓` : `${done} / ${total} finished`}
-                                </span>
-                                {openRun && <span style={{ color:"#A89C8D", fontSize:15, fontWeight:700 }} aria-hidden="true">→</span>}
-                              </div>
-                              {total > 0 && (
-                                // Compact horizontal strip — one initials chip per
-                                // department, green with a check when finished.
-                                <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginTop:2 }}>
-                                  {depts.map(d => (
-                                    <span key={d.key || d.label}
-                                      title={`${d.label || d.key} — ${d.status || ""} — ${d.reviewDone ? "finished" : "not finished yet"}`}
-                                      style={{ display:"inline-flex", alignItems:"center", gap:5,
-                                        padding:"2px 7px", borderRadius:5, lineHeight:1.7,
-                                        fontSize:11, fontWeight:700, letterSpacing:.2,
-                                        color: d.reviewDone ? "#5C9A6D" : "#7A6F63",
-                                        background: d.reviewDone ? "#E9F1E9" : "#F6F1E8",
-                                        border: `1px solid ${d.reviewDone ? "#C3DCC8" : "#ECE2D2"}` }}>
-                                      <span style={{ width:5, height:5, borderRadius:"50%", background:sc(d.status), flexShrink:0 }} />
-                                      {deptAbbr(d)}
-                                      {d.reviewDone && <span style={{ fontSize:9 }}>✓</span>}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })()}
-        </div>
       </div>
     </div>
   );
@@ -2084,7 +2064,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 }
 
 // ─── REVIEW VIEW ──────────────────────────────────────────────────────────────
-function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, addItem, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, sbMaster, saveSbMaster, cloudLoading, syncStatus, me, saveMe, isPCLead, openToDept, setOpenToDept, toggleDeptFinished, canEditDept, authRole, authUser, onSignOut, authDepts }) {
+function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, addItem, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, sbMaster, saveSbMaster, cloudLoading, syncStatus, me, saveMe, isPCLead, openToDept, setOpenToDept, toggleDeptFinished, canEditDept, authRole, authUser, onSignOut, authDepts, pendingImport, clearPendingImport }) {
   const canEdit = (d) => (canEditDept ? canEditDept(d) : true);
   const isMobile = useIsMobile();
   const [activeDept, setActiveDept] = useState(null);
@@ -2092,7 +2072,45 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
   const [showHelp, setShowHelp] = useState(false);
   const [atBusy, setAtBusy] = useState(false);
   const [importMsg, setImportMsg] = useState(null);
-  const importInputRef = useRef(null);
+
+  // Apply a director-review Excel handed over from the Leadership section. The
+  // parent has already opened this run, so country/year are correct here.
+  const runImport = async (file) => {
+    setImportMsg({ status:"working", lines:["Reading director review…"] });
+    try {
+      const { selections: imported, report, interpretations } = await parseDirectorReview(file, DEPARTMENTS);
+      if (!Object.keys(imported).length) {
+        setImportMsg({ status:"error", lines:["No matching department sheets found in that file."] });
+        return;
+      }
+      setImportMsg({ status:"working", lines:["Imported — translating any non-English quotes…"] });
+      for (const dk of Object.keys(imported)) {
+        try { imported[dk] = { ...imported[dk], quotes: await translateMissingQuotes(imported[dk].quotes || []) }; } catch {}
+      }
+      setSelections(prev => ({ ...prev, ...imported }));
+      try { localStorage.setItem(`pulse:sel:${country}:${year}`, JSON.stringify({ ...(selections||{}), ...imported })); } catch {}
+      let sbCount = 0;
+      if (interpretations?.length && setSbOverrides) {
+        setSbOverrides(prev => {
+          const updated = { ...prev };
+          interpretations.forEach(it => it.deptKeys.forEach(dk => {
+            updated[`${country}:${year}:${dk}:${normQ(it.question)}`] = it.text; sbCount++;
+          }));
+          try { localStorage.setItem("pulse:sbOverrides", JSON.stringify(updated)); } catch {}
+          return updated;
+        });
+      }
+      const extra = sbCount ? [`Applied ${sbCount} Survey Basics interpretation edit${sbCount===1?"":"s"} from the director.`] : [];
+      setImportMsg({ status:"done", lines:["Imported director review:", ...report, ...extra] });
+    } catch (err) {
+      setImportMsg({ status:"error", lines:["Import failed: " + err.message] });
+    }
+  };
+  // When Leadership hands over a file to import, run it once (this run is loaded).
+  useEffect(() => {
+    if (pendingImport) { runImport(pendingImport); clearPendingImport && clearPendingImport(); }
+    // eslint-disable-next-line
+  }, [pendingImport]);
   // Order departments by concern: Concern (red) first, then Watch (yellow), then
   // Healthy (green); within each band, lowest score first. Same order every report.
   const STATUS_ORDER = { Concern: 0, Watch: 1, Healthy: 2 };
@@ -2129,55 +2147,8 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
           border:"1px solid #ECE2D2", color:"#E0863C", fontWeight:700 }}>
           <IconHelp/> How scoring works
         </button>
-        <input ref={importInputRef} type="file" accept=".xlsx" style={{ display:"none" }}
-          onChange={async (e) => {
-            const file = e.target.files?.[0];
-            if (!file) return;
-            setImportMsg({ status:"working", lines:["Reading director review…"] });
-            try {
-              const { selections: imported, report, interpretations } = await parseDirectorReview(file, DEPARTMENTS);
-              if (!Object.keys(imported).length) {
-                setImportMsg({ status:"error", lines:["No matching department sheets found in that file."] });
-              } else {
-                // Auto-translate any non-English quotes the import brought in — the
-                // upload flow already does this, so imports match without a button.
-                setImportMsg({ status:"working", lines:["Imported — translating any non-English quotes…"] });
-                for (const dk of Object.keys(imported)) {
-                  try { imported[dk] = { ...imported[dk], quotes: await translateMissingQuotes(imported[dk].quotes || []) }; } catch {}
-                }
-                // Merge into existing selections so untouched depts are preserved
-                setSelections(prev => ({ ...prev, ...imported }));
-                try { localStorage.setItem(`pulse:sel:${country}:${year}`, JSON.stringify({ ...(selections||{}), ...imported })); } catch {}
-                // Apply the director's Section 1 interpretation rewrites as Survey Basics overrides.
-                let sbCount = 0;
-                if (interpretations?.length && setSbOverrides) {
-                  setSbOverrides(prev => {
-                    const updated = { ...prev };
-                    interpretations.forEach(it => {
-                      it.deptKeys.forEach(dk => {
-                        const key = `${country}:${year}:${dk}:${normQ(it.question)}`;
-                        updated[key] = it.text;
-                        sbCount++;
-                      });
-                    });
-                    try { localStorage.setItem("pulse:sbOverrides", JSON.stringify(updated)); } catch {}
-                    return updated;
-                  });
-                }
-                const extra = sbCount ? [`Applied ${sbCount} Survey Basics interpretation edit${sbCount===1?"":"s"} from the director.`] : [];
-                setImportMsg({ status:"done", lines:["Imported director review:", ...report, ...extra] });
-              }
-            } catch (err) {
-              setImportMsg({ status:"error", lines:["Import failed: " + err.message] });
-            }
-            e.target.value = ""; // allow re-import of same file
-          }} />
-        {isAdmin && (<>
-        <button onClick={() => importInputRef.current?.click()}
-          style={{ ...navBtn, display:"inline-flex", alignItems:"center", gap:6, background:"white", border:"1px solid #ECE2D2", color:"#2C2621" }}>
-          <IconUpload/> Import director review (Excel)
-        </button>
-        </>)}
+        {/* Import is triggered from the Leadership section now; the review just
+            applies it when a pending file arrives (pendingImport). */}
         {/* Quiet auto-sync indicator — replaces the manual push and save buttons.
             Edits save themselves; this just reassures the user it's handled. */}
         <span style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12,
