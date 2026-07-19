@@ -56,7 +56,7 @@ ${dn.length ? `DEPARTMENT NOTES:\n${dn.join("\n")}\n` : ""}${qn.length ? `\nQUES
 // Returns { empty } or { headline, priorities:[{title, insight, nextStep,
 // country, deptKey, deptLabel, status}] }. deptKey lets the UI make each
 // priority click straight into that department's detail (null = systemic).
-export async function synthesizeLeadership({ countries = [], lowestQuestions = [], recurring = [], scope = null }) {
+export async function synthesizeLeadership({ countries = [], lowestQuestions = [], recurring = [], scope = null, notes = [], openResponses = [] }) {
   const clip = (s, n = 140) => String(s || "").replace(/\s+/g, " ").trim().slice(0, n);
   const flagged = countries.flatMap(c =>
     (c.depts || []).map(d => `${c.country} | ${d.deptKey} | ${d.deptLabel} | ${d.avg} | ${d.status}`));
@@ -67,6 +67,12 @@ export async function synthesizeLeadership({ countries = [], lowestQuestions = [
   const countryLines = countries.map(c => `- ${c.country}: ${c.concern} Concern, ${c.watch} Watch`);
   const lowLines = lowestQuestions.slice(0, 12).map(q => `- ${q.country} · ${q.deptLabel} · ${q.score} (${q.status}): ${clip(q.en)}`);
   const recLines = recurring.slice(0, 8).map(e => `- (${e.count} places) ${clip(e.en)} — ${(e.where || []).join("; ")}`);
+  const noteLines = notes
+    .map(n => `- ${n.country} · ${n.deptLabel}${n.question ? ` [${clip(n.question, 70)}]` : ""} (${n.author || "?"}): ${clip(n.body, 220)}`)
+    .filter(l => l.length > 20).slice(0, 45);
+  const respLines = openResponses
+    .map(r => `- ${r.country} · ${r.deptLabel}: ${clip(r.text, 220)}`)
+    .filter(l => l.length > 12).slice(0, 60);
 
   const prompt =
 `You are the strategic advisor to the People & Culture leaders (Mel & Chris) at Josiah Venture, a Christian youth-missions organisation working across several countries. They oversee staff care org-wide. Below is the current pulse rollup ${scope ? `for ${scope} (a single country)` : "across every country's latest survey"}. Your job is NOT to restate the numbers — it's to help them decide where to put their attention ${where} and WHAT to do.
@@ -89,6 +95,8 @@ Produce a short leadership brief as JSON only (no prose outside the JSON, no cod
 
 Give 3–5 priorities, most important first. Prefer synthesis over enumeration: if the same issue recurs across countries, make that ONE priority and name the pattern. Only use deptKey values that appear in the DEPARTMENTS list below. Be specific to THIS data; do not invent anything.
 
+Ground the story in what people actually said: where the DIRECTORS' NOTES or STAFF OPEN RESPONSES sharpen or explain a score, weave that in — name the human reality behind the number, and quote a short phrase sparingly (a few words). If a director is already acting on something, say so in the next step. Never invent quotes or attribute anything not in the material below.
+
 COUNTRIES (flagged counts):
 ${countryLines.join("\n")}
 
@@ -99,7 +107,13 @@ LOWEST-SCORING QUESTIONS (the specific pain points):
 ${lowLines.join("\n") || "- (none)"}
 
 RECURRING ACROSS TEAMS (same question low in multiple places):
-${recLines.join("\n") || "- (none)"}`;
+${recLines.join("\n") || "- (none)"}
+
+DIRECTORS' NOTES (what directors have written; may be empty):
+${noteLines.join("\n") || "- (none yet)"}
+
+STAFF OPEN RESPONSES (in staff's own words, translated; may be empty):
+${respLines.join("\n") || "- (none)"}`;
 
   const raw = await callClaude(prompt, 1600);
   let parsed;
