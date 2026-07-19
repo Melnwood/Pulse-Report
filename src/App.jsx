@@ -1970,7 +1970,7 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
   return (
     <div style={{ minHeight:"100vh", background:"#F6F1E8", padding: isMobile ? "24px 16px" : "40px 24px" }}>
       <div style={{ maxWidth:900, margin:"0 auto" }}>
-        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:24 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:24, flexWrap:"wrap" }}>
           <button onClick={() => setView("__back__")}
             style={{ ...navBtn, background:"transparent", border:"1px solid #ECE2D2" }}>← Back</button>
           <span style={{ fontFamily:FONT_DISPLAY, fontSize:22, fontWeight:600, color:"#2C2621" }}>Leadership</span>
