@@ -39,8 +39,11 @@ async function call(payload) {
   });
   const text = await res.text();
   if (res.status === 401) {
-    // Session expired / not signed in — clear it so the app returns to login.
+    // Session expired / token no longer valid (e.g. the sign-in key changed).
+    // Clear it AND return to the login screen — otherwise the app stays "signed
+    // in" with a dead token and just shows no data ("no countries").
     try { localStorage.removeItem("pulse:token"); localStorage.removeItem("pulse:user"); } catch {}
+    try { if (typeof window !== "undefined" && !window.__pulseReauth) { window.__pulseReauth = true; window.location.reload(); } } catch {}
     throw new Error("Your session expired. Please sign in again.");
   }
   if (!res.ok) throw new Error(`Airtable ${res.status}: ${text.slice(0, 300)}`);
