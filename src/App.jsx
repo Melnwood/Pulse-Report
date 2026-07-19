@@ -1675,17 +1675,43 @@ function DeptDetailModal({ country, year, deptKey, deptLabel, me, isPCLead, onCl
 // The leadership brief — an on-demand AI synthesis of the whole-org rollup:
 // a headline plus a few prioritised "what's happening + next step" cards, each
 // clickable into that department's detail. Button-triggered (no auto AI cost).
-function LeadershipBriefPanel({ rollup, onOpenDept }) {
+function LeadershipBriefPanel({ countriesData = [], issues = [], allCountries = [], onOpenDept }) {
   const [busy, setBusy] = useState(false);
   const [brief, setBrief] = useState(null);
   const [err, setErr] = useState("");
+  const [scope, setScope] = useState("all");   // "all" or a country name
+
+  // Build the rollup for the chosen scope. For a single country we compute that
+  // country's own lowest questions and within-country recurrences, so a country
+  // brief is as rich as the org one.
+  const rollupFor = (sc) => {
+    const inScope = (c) => sc === "all" || c === sc;
+    const countries = countriesData.filter(c => inScope(c.country));
+    const qs = issues.filter(q => inScope(q.country)).slice().sort((a, b) => (parseFloat(a.score) || 9) - (parseFloat(b.score) || 9));
+    const lowestQuestions = qs.slice(0, 12);
+    const g = {};
+    qs.forEach(q => { const k = normQ(q.en); (g[k] = g[k] || { en: q.en, where: [] }).where.push(`${q.country} · ${q.deptLabel}`); });
+    const recurring = Object.values(g).filter(e => e.where.length >= 2)
+      .map(e => ({ en: e.en, count: e.where.length, where: e.where }))
+      .sort((a, b) => b.count - a.count).slice(0, 8);
+    return { countries, lowestQuestions, recurring, scope: sc === "all" ? null : sc };
+  };
+
   const run = async () => {
     setBusy(true); setErr("");
-    try { setBrief(await synthesizeLeadership(rollup)); }
+    try { setBrief(await synthesizeLeadership(rollupFor(scope))); }
     catch (e) { setErr(e.message || "Couldn't synthesize right now."); }
     setBusy(false);
   };
+  const pickScope = (s) => { setScope(s); setBrief(null); setErr(""); };   // changing scope clears the stale brief
   const priorities = (brief && brief.priorities) || [];
+  const scopeChip = (val, label) => (
+    <button key={val} onClick={() => pickScope(val)} style={{
+      fontSize:12, fontWeight:600, padding:"5px 11px", borderRadius:20, cursor:"pointer",
+      background: scope === val ? "#2C2621" : "#FFFFFF", color: scope === val ? "#fff" : "#5A4A3B",
+      border:`1px solid ${scope === val ? "#2C2621" : "#E2D3C2"}` }}>{label}</button>
+  );
+
   return (
     <div style={{ ...card, marginBottom:24, padding:"16px 18px" }}>
       <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
@@ -1697,9 +1723,21 @@ function LeadershipBriefPanel({ rollup, onOpenDept }) {
           {busy ? "Synthesizing…" : brief ? "↻ Refresh" : "✦ Synthesize"}
         </button>
       </div>
+
+      {/* Scope: whole org, or one country */}
+      {allCountries.length > 1 && (
+        <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginTop:12 }}>
+          <span style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1, marginRight:2 }}>Summarize</span>
+          {scopeChip("all", "All countries")}
+          {allCountries.map(c => scopeChip(c, c))}
+        </div>
+      )}
+
       {!brief && !busy && (
-        <div style={{ fontSize:12.5, color:"#A89C8D", marginTop:8, lineHeight:1.5 }}>
-          Reads every country's latest pulse and tells you the story — the patterns worth acting on, and a next step for each. Click a card to open that department.
+        <div style={{ fontSize:12.5, color:"#A89C8D", marginTop:10, lineHeight:1.5 }}>
+          {scope === "all"
+            ? "Reads every country's latest pulse and tells you the story — the patterns worth acting on, and a next step for each."
+            : `Focuses on ${scope} — its story, the patterns worth acting on, and a next step for each.`} Click a card to open that department.
         </div>
       )}
       {err && <div style={{ color:"#BE6650", fontSize:12, marginTop:10 }}>{err}</div>}
@@ -1851,15 +1889,16 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
       .sort((a, b) => b.where.length - a.where.length || a.avg - b.avg).slice(0, 6);
   })();
 
-  // Compact rollup handed to the AI for the leadership brief.
-  const briefRollup = {
-    countries: attentionByCountry.map(c => ({
-      country: c.country, concern: c.concern, watch: c.watch,
-      depts: c.depts.map(d => ({ deptKey: d.key, deptLabel: d.label || d.key, avg: d.avg, status: d.status })),
-    })),
-    lowestQuestions: topConcerns.map(q => ({ country: q.country, deptLabel: q.deptLabel, en: q.en, score: q.score, status: q.status, deptKey: q.deptKey })),
-    recurring: recurring.map(e => ({ en: e.en, count: e.where.length, where: e.where })),
-  };
+  // Data handed to the leadership brief. countriesData + the full concern/watch
+  // question set let the panel build either an org-wide or a per-country brief.
+  const briefCountries = attentionByCountry.map(c => ({
+    country: c.country, concern: c.concern, watch: c.watch,
+    depts: c.depts.map(d => ({ deptKey: d.key, deptLabel: d.label || d.key, avg: d.avg, status: d.status })),
+  }));
+  const briefIssues = (orgIssues || [])
+    .filter(q => q.status === "Concern" || q.status === "Watch")
+    .map(q => ({ country: q.country, deptKey: q.deptKey, deptLabel: q.deptLabel, en: q.en, score: q.score, status: q.status }));
+  const briefAllCountries = [...new Set(latestRuns.map(r => r.country).filter(Boolean))].sort();
 
   const Tile = ({ n, label, color }) => (
     <div style={{ ...card, padding:"14px 16px", textAlign:"center", minWidth:0 }}>
@@ -2056,7 +2095,8 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
 
         {/* Leadership brief — synthesis, right after the dashboard numbers */}
         {allDepts.length > 0 && (
-          <LeadershipBriefPanel rollup={briefRollup} onOpenDept={openDeptDetail} />
+          <LeadershipBriefPanel countriesData={briefCountries} issues={briefIssues}
+            allCountries={briefAllCountries} onOpenDept={openDeptDetail} />
         )}
 
         {/* ── Detail — collapsible, closed by default; open the one you want ── */}

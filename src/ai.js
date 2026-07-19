@@ -56,19 +56,20 @@ ${dn.length ? `DEPARTMENT NOTES:\n${dn.join("\n")}\n` : ""}${qn.length ? `\nQUES
 // Returns { empty } or { headline, priorities:[{title, insight, nextStep,
 // country, deptKey, deptLabel, status}] }. deptKey lets the UI make each
 // priority click straight into that department's detail (null = systemic).
-export async function synthesizeLeadership({ countries = [], lowestQuestions = [], recurring = [] }) {
+export async function synthesizeLeadership({ countries = [], lowestQuestions = [], recurring = [], scope = null }) {
   const clip = (s, n = 140) => String(s || "").replace(/\s+/g, " ").trim().slice(0, n);
   const flagged = countries.flatMap(c =>
     (c.depts || []).map(d => `${c.country} | ${d.deptKey} | ${d.deptLabel} | ${d.avg} | ${d.status}`));
+  const where = scope ? `in ${scope}` : "across the org";
   if (flagged.length === 0) {
-    return { empty: true, text: "Nothing is at Concern or Watch across the org right now — no brief to synthesize." };
+    return { empty: true, text: `Nothing is at Concern or Watch ${where} right now — no brief to synthesize.` };
   }
   const countryLines = countries.map(c => `- ${c.country}: ${c.concern} Concern, ${c.watch} Watch`);
   const lowLines = lowestQuestions.slice(0, 12).map(q => `- ${q.country} · ${q.deptLabel} · ${q.score} (${q.status}): ${clip(q.en)}`);
   const recLines = recurring.slice(0, 8).map(e => `- (${e.count} places) ${clip(e.en)} — ${(e.where || []).join("; ")}`);
 
   const prompt =
-`You are the strategic advisor to the People & Culture leaders (Mel & Chris) at Josiah Venture, a Christian youth-missions organisation working across several countries. They oversee staff care org-wide. Below is the current pulse rollup across every country's latest survey. Your job is NOT to restate the numbers — it's to help them decide where to put their attention and WHAT to do.
+`You are the strategic advisor to the People & Culture leaders (Mel & Chris) at Josiah Venture, a Christian youth-missions organisation working across several countries. They oversee staff care org-wide. Below is the current pulse rollup ${scope ? `for ${scope} (a single country)` : "across every country's latest survey"}. Your job is NOT to restate the numbers — it's to help them decide where to put their attention ${where} and WHAT to do.
 
 Produce a short leadership brief as JSON only (no prose outside the JSON, no code fences), in exactly this shape:
 {
