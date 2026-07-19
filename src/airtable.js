@@ -567,4 +567,23 @@ export async function saveSurveyBasicsMaster({ key, sbKey, question, level, text
   else await call({ action: "create", table: "surveyBasics", records: [{ fields }] });
 }
 
+// ─── HELP VIDEOS ─────────────────────────────────────────────────────────────
+// Instructional videos shown in the "How scoring works" panel. Leaders add rows
+// (title + a YouTube/Vimeo/Loom link) in the Help Videos table; the app renders
+// the active ones, sorted by Order. Shared read for everyone.
+export async function loadHelpVideos() {
+  const res = await call({ action: "list", table: "helpVideos" });
+  return (res.records || [])
+    .map(r => ({
+      id: r.id,
+      title: r.fields["Title"] || "",
+      url: r.fields["URL"] || "",
+      description: r.fields["Description"] || "",
+      order: r.fields["Order"] ?? 999,
+      active: r.fields["Active"] !== false,
+    }))
+    .filter(v => v.active && v.url)
+    .sort((a, b) => (a.order - b.order) || a.title.localeCompare(b.title));
+}
+
 export { F as AIRTABLE_FIELDS };

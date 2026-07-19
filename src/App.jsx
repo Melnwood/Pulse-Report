@@ -7,7 +7,7 @@ import Login from "./components/Login";
 import UsersView from "./components/UsersView";
 import { authStatus, tokenValid, getUser, logout } from "./authClient";
 import SURVEY_BASICS from "./surveyBasics.json";
-import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, loadMeasures, loadSurveyBasicsMaster, saveSurveyBasicsMaster } from "./airtable";
+import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, loadMeasures, loadSurveyBasicsMaster, saveSurveyBasicsMaster, loadHelpVideos } from "./airtable";
 import MeasurePanel from "./components/MeasurePanel";
 import NotesDigest from "./components/NotesDigest";
 import CountryTrends from "./components/CountryTrends";
@@ -2341,8 +2341,22 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
 
 
 // ─── SCORING HELP PANEL ───────────────────────────────────────────────────────
+// Turn a YouTube / Vimeo / Loom share link into its embeddable URL (or null).
+function videoEmbedUrl(url) {
+  if (!url) return null;
+  let m = String(url).match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
+  if (m) return `https://www.youtube.com/embed/${m[1]}`;
+  m = String(url).match(/vimeo\.com\/(?:video\/)?(\d+)/);
+  if (m) return `https://player.vimeo.com/video/${m[1]}`;
+  m = String(url).match(/loom\.com\/(?:share|embed)\/([\w-]+)/);
+  if (m) return `https://www.loom.com/embed/${m[1]}`;
+  return null;
+}
+
 function ScoringHelpPanel({ onClose }) {
   const isMobile = useIsMobile();
+  const [videos, setVideos] = useState([]);
+  useEffect(() => { loadHelpVideos().then(setVideos).catch(() => setVideos([])); }, []);
   return (
     <div style={{
       position:"fixed", top:0, left:0, right:0, bottom:0,
@@ -2360,6 +2374,38 @@ function ScoringHelpPanel({ onClose }) {
           <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer",
             fontSize:20, color:"#7A6F63", lineHeight:1, padding:"0 4px" }}>✕</button>
         </div>
+
+        {/* Instructional videos — added by leaders in the Help Videos table */}
+        {videos.length > 0 && (
+          <div style={{ marginBottom:24 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase",
+              letterSpacing:1.5, marginBottom:12 }}>Watch</div>
+            <div style={{ display:"grid", gap:16 }}>
+              {videos.map(v => {
+                const embed = videoEmbedUrl(v.url);
+                return (
+                  <div key={v.id}>
+                    {v.title && <div style={{ fontSize:13, fontWeight:700, color:"#2C2621", marginBottom:v.description?2:6 }}>{v.title}</div>}
+                    {v.description && <div style={{ fontSize:12, color:"#7A6F63", lineHeight:1.5, marginBottom:6 }}>{v.description}</div>}
+                    {embed ? (
+                      <div style={{ position:"relative", width:"100%", paddingBottom:"56.25%",
+                        borderRadius:10, overflow:"hidden", border:"1px solid #ECE2D2", background:"#000" }}>
+                        <iframe src={embed} title={v.title || "Instructional video"} loading="lazy"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                          allowFullScreen
+                          style={{ position:"absolute", top:0, left:0, width:"100%", height:"100%", border:"none" }} />
+                      </div>
+                    ) : (
+                      <a href={v.url} target="_blank" rel="noopener noreferrer"
+                        style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:13, fontWeight:600,
+                          color:"#B96524", textDecoration:"none" }}>▶ Watch the video →</a>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* MEAN vs DIST */}
         <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase",

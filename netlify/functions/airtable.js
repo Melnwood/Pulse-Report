@@ -23,6 +23,7 @@ const TABLES = {
   questionNotes: "Question Notes",
   measures:      "Measures",
   surveyBasics:  "Survey Basics",
+  helpVideos:    "Help Videos",
 };
 
 // Department code -> Survey Basics key (lowercase, culture-merged), mirroring the
@@ -130,6 +131,7 @@ exports.handler = async (event) => {
     if (tbl === "deptNotes" || tbl === "questionNotes") return startsWithCountry(fields.Run);
     if (tbl === "measures") return String(fields.Country || "").toLowerCase() === country.toLowerCase();
     if (tbl === "surveyBasics") return true; // shared org-wide defaults — everyone reads them
+    if (tbl === "helpVideos") return true;   // shared help content — everyone reads it
     if (tbl === "selections") { const set = await allowedCountryDeptIds(); const id = selectionDeptId(fields); return !!id && set.has(id); }
     return false;
   };
