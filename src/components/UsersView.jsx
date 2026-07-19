@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { listUsers, saveUser, deleteUser, resetPassword } from "../authClient";
-import { card, navBtn, lbl, inp } from "../theme";
+import { card, navBtn, lbl, inp, useIsMobile } from "../theme";
 
 const ROLES = [
   { value: "director", label: "Director — edits their department" },
@@ -11,6 +11,7 @@ const blank = { id: null, name: "", email: "", role: "director", country: "", de
 
 // Leaders-only screen to add / edit / remove accounts.
 export default function UsersView({ setView, me }) {
+  const isMobile = useIsMobile();
   const [users, setUsers] = useState(null);
   const [form, setForm] = useState(null);   // the user being added/edited, or null
   const [busy, setBusy] = useState(false);
@@ -67,7 +68,7 @@ export default function UsersView({ setView, me }) {
             <div style={{ fontSize: 13, fontWeight: 700, color: "#E0863C", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 14 }}>
               {form.id ? "Edit person" : "Add person"}
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
               <div><label style={lbl}>Name</label><input style={inp} value={form.name} onChange={e => set("name", e.target.value)} /></div>
               <div><label style={lbl}>Email</label><input style={inp} type="email" value={form.email} onChange={e => set("email", e.target.value)} /></div>
               <div><label style={lbl}>Role</label>
