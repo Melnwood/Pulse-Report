@@ -106,7 +106,9 @@ exports.handler = async (event) => {
 
     try {
       if (body.action === "listUsers") {
-        const res = await doFetch(`${T}?pageSize=200`, { headers: authHeaders });
+        // Airtable caps pageSize at 100 (200 returns a 422 → "Could not list
+        // users."). 100 is plenty for the accounts list.
+        const res = await doFetch(`${T}?pageSize=100`, { headers: authHeaders });
         const data = JSON.parse(await res.text());
         if (!res.ok) return { statusCode: res.status, headers, body: JSON.stringify({ error: "Could not list users." }) };
         const users = (data.records || []).map(sanitize).sort((a, b) => (a.country || "").localeCompare(b.country || "") || a.name.localeCompare(b.name));
