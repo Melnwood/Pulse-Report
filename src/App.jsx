@@ -32,6 +32,13 @@ const normQ = (s) => String(s || "")
   .replace(/\s+/g, " ")
   .trim();
 
+// Friendly "Jul 19, 2026" label for today — shown in note composers so the
+// author knows the date is stamped automatically.
+const todayLabel = () => {
+  try { return new Date().toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }); }
+  catch { return ""; }
+};
+
 // Find the Survey Basics entry for a question, tolerant of small text differences.
 const findSurveyBasics = (deptKey, qText) => {
   const list = getSurveyBasics(deptKey);
@@ -1543,19 +1550,22 @@ function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin, authUser, onSig
 function PreviewAsPanel({ allRuns, setPreviewAs, setView }) {
   const [mode, setMode] = useState(null);   // null | "country" | "director" — closed by default
   const [country, setCountry] = useState("");
-  const [dept, setDept] = useState("");
+  const [depts, setDepts] = useState([]);   // one or more department keys (directors can own several)
   const countries = [...new Set(allRuns.map(r => r.country).filter(Boolean))].sort();
 
   const pick = (m) => { setMode(prev => prev === m ? null : m); };
+  const toggleDept = (key) => setDepts(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
   const startCountry = () => {
     if (!country) return;
     setPreviewAs({ role: "country", country, label: `${country} country leader` });
     setView("sections");
   };
   const startDirector = () => {
-    if (!dept) return;
-    const d = DEPARTMENTS.find(x => x.key === dept);
-    setPreviewAs({ role: "director", department: dept, label: `${d ? d.label : dept} director` });
+    if (!depts.length) return;
+    const names = depts.map(k => (DEPARTMENTS.find(x => x.key === k)?.label) || k);
+    const label = names.length === 1 ? `${names[0]} director`
+      : `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]} director`;
+    setPreviewAs({ role: "director", department: depts.join(","), label });
     setView("sections");
   };
   const modeBtn = (m, txt) => (
@@ -1592,13 +1602,25 @@ function PreviewAsPanel({ allRuns, setPreviewAs, setView }) {
       )}
 
       {mode === "director" && (
-        <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap", marginTop:14 }}>
-          <select value={dept} onChange={e => setDept(e.target.value)} style={{ ...inp, maxWidth:240 }}>
-            <option value="">Choose a department…</option>
-            {DEPARTMENTS.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
-          </select>
-          <button onClick={startDirector} disabled={!dept}
-            style={{ ...navBtn, background: dept ? "#E0863C" : "#ECE2D2", color: dept ? "#fff" : "#A89C8D",
+        <div style={{ marginTop:14 }}>
+          <div style={{ fontSize:12, color:"#7A6F63", marginBottom:8 }}>
+            Pick one or more departments (directors can cover several — e.g. Counseling &amp; Marriages):
+          </div>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:12 }}>
+            {DEPARTMENTS.map(d => {
+              const on = depts.includes(d.key);
+              return (
+                <button key={d.key} onClick={() => toggleDept(d.key)} style={{
+                  fontSize:12.5, fontWeight:600, padding:"6px 12px", borderRadius:20, cursor:"pointer",
+                  background: on ? "#2C2621" : "#FFFFFF", color: on ? "#fff" : "#5A4A3B",
+                  border:`1px solid ${on ? "#2C2621" : "#E2D3C2"}` }}>
+                  {on ? "✓ " : ""}{d.label}
+                </button>
+              );
+            })}
+          </div>
+          <button onClick={startDirector} disabled={!depts.length}
+            style={{ ...navBtn, background: depts.length ? "#E0863C" : "#ECE2D2", color: depts.length ? "#fff" : "#A89C8D",
               border:"1px solid transparent", fontWeight:700 }}>Start preview →</button>
         </div>
       )}
@@ -2816,12 +2838,17 @@ function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes
           {visible.map(n => (
             <div key={n.id} style={{ padding:"6px 0", borderTop:"1px dashed #FDFAF4" }}>
               <div style={{ fontSize:11, color:"#7A6F63", display:"flex", gap:8, alignItems:"center" }}>
-                <b style={{ color:"#5A4A3B" }}>{n.author}</b>{fmt(n.created)}
+                <b style={{ color:"#5A4A3B" }}>{n.author || "Unknown"}</b>{fmt(n.created) && <span>{fmt(n.created)}</span>}
                 <VisibilityChip visibility={n.visibility} onClick={() => onFlip(n)} />
               </div>
               <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{n.body}</div>
             </div>
           ))}
+          {me && (
+            <div style={{ fontSize:11, color:"#7A6F63", marginTop:6 }}>
+              Posting as <b style={{ color:"#5A4A3B" }}>{me}</b> · {todayLabel()}
+            </div>
+          )}
           <textarea value={draft} onChange={e=>setDraft(e.target.value)} rows={2}
             placeholder="Write a note…"
             style={{ width:"100%", boxSizing:"border-box", fontSize:13, padding:8, marginTop:6,
@@ -3078,14 +3105,37 @@ function WorkspaceView({ allRuns, setView, authRole, authUser, authDepts = [], c
               {countries.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           )}
-          {(myDeptCodes ? depts.filter(d => myDeptCodes.includes(d.key)) : depts).length > 1 && (
-            <select value={deptKey || ""} onChange={e => setDeptKey(e.target.value)}
-              style={{ fontSize: 13, padding: "8px 12px", border: "1px solid #E2D3C2", borderRadius: 8, background: "#fff", color: "#2C2621" }}>
-              {(myDeptCodes ? depts.filter(d => myDeptCodes.includes(d.key)) : depts).map(d => <option key={d.key} value={d.key}>{d.label || d.key}</option>)}
-            </select>
-          )}
           {country && <span style={{ alignSelf: "center", fontSize: 12, color: "#A89C8D" }}>{country}{year ? ` · ${year}` : ""}</span>}
         </div>
+
+        {/* Department picker — shown as clear tabs so a director over more than one
+            department sees all of theirs at once (not hidden in a dropdown). */}
+        {(() => {
+          const myDepts = myDeptCodes ? depts.filter(d => myDeptCodes.includes(d.key)) : depts;
+          if (myDepts.length <= 1) return null;
+          return (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
+              {myDeptCodes && (
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#7A6F63", textTransform: "uppercase", letterSpacing: 1, marginRight: 2 }}>
+                  Your {myDepts.length} departments
+                </span>
+              )}
+              {myDepts.map(d => {
+                const active = d.key === deptKey;
+                return (
+                  <button key={d.key} onClick={() => setDeptKey(d.key)} style={{
+                    fontSize: 12.5, fontWeight: 600, padding: "7px 13px", borderRadius: 20, cursor: "pointer",
+                    background: active ? "#2C2621" : "#FFFFFF", color: active ? "#fff" : "#5A4A3B",
+                    border: `1px solid ${active ? "#2C2621" : "#E2D3C2"}`,
+                    display: "inline-flex", alignItems: "center", gap: 7 }}>
+                    {d.status && <span style={{ width: 8, height: 8, borderRadius: "50%", background: sc(d.status), flexShrink: 0 }} />}
+                    {d.label || d.key}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })()}
 
         {sd === null ? (
           <div style={{ ...card, color: "#7A6F63", fontSize: 13, fontStyle: "italic" }}>Loading the latest pulse…</div>
@@ -3229,6 +3279,11 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
         )}
 
         {/* Composer */}
+        {me && (
+          <div style={{ fontSize: 11.5, color: "#7A6F63", marginBottom: 6 }}>
+            Posting as <b style={{ color: "#5A4A3B" }}>{me}</b> · {todayLabel()} — your name &amp; the date are added automatically.
+          </div>
+        )}
         <textarea value={draft} onChange={e => setDraft(e.target.value)}
           placeholder="Write a note for this department — thoughts on the scores, what to raise in the next meeting…"
           rows={3}
