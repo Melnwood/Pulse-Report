@@ -5,7 +5,7 @@ import { FONT_DISPLAY } from "../theme";
 // The login screen shown when auth is switched on and there's no valid session.
 // Two steps: sign in, or — for a brand-new account with no password yet — create
 // your own password. A person a leader just added lands in "create" automatically.
-export default function Login({ onLogin }) {
+export default function Login({ onLogin, sessionError }) {
   const [step, setStep] = useState("signin");   // "signin" | "create"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -60,6 +60,8 @@ export default function Login({ onLogin }) {
           {step === "create" ? "Create your password to finish setting up." : "Sign in to continue."}
         </div>
 
+        {sessionError && step === "signin" && <div style={{ marginBottom: 16, fontSize: 12.5, color: "#BE6650", background: "#F6E5DE",
+          border: "1px solid #E4C4BA", borderRadius: 8, padding: "8px 12px", lineHeight: 1.45 }}>{sessionError}</div>}
         {notice && <div style={{ marginBottom: 16, fontSize: 12.5, color: "#5C9A6D", background: "#E9F1E9",
           border: "1px solid #CDE3CD", borderRadius: 8, padding: "8px 12px", lineHeight: 1.45 }}>{notice}</div>}
 
