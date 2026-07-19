@@ -2117,20 +2117,19 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
         </div>
         )}
 
-        {/* ── Org overview: summary tiles (always visible) ── */}
+        {/* ── Org overview: summary tiles — collapsible, open by default ── */}
         {allDepts.length > 0 && (
-          <div style={{ marginBottom:20 }}>
-            <div style={{ fontSize:13, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:2, marginBottom:14 }}>
-              Across the org <span style={{ fontWeight:500, color:"#A89C8D", letterSpacing:0, textTransform:"none" }}>· latest pulse per country</span>
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(90px,1fr))", gap:10 }}>
-              <Tile n={latestRuns.length} label={latestRuns.length===1?"Country":"Countries"} />
-              {totalResp > 0 && <Tile n={totalResp} label={totalResp===1?"Respondent":"Respondents"} />}
-              <Tile n={counts.Concern} label="Concern" color="#BE6650" />
-              <Tile n={counts.Watch} label="Watch" color="#C08636" />
-              <Tile n={counts.Healthy} label="Healthy" color="#5C9A6D" />
-              <Tile n={`${finishedCt}/${allDepts.length}`} label="Reviews done" color={finishedCt===allDepts.length?"#5C9A6D":"#2C2621"} />
-            </div>
+          <div style={{ ...card, padding:0, overflow:"hidden", marginBottom:20 }}>
+            <Disclosure title="Across the org" count="latest pulse per country" defaultOpen>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(90px,1fr))", gap:10, padding:"4px 0 4px" }}>
+                <Tile n={latestRuns.length} label={latestRuns.length===1?"Country":"Countries"} />
+                {totalResp > 0 && <Tile n={totalResp} label={totalResp===1?"Respondent":"Respondents"} />}
+                <Tile n={counts.Concern} label="Concern" color="#BE6650" />
+                <Tile n={counts.Watch} label="Watch" color="#C08636" />
+                <Tile n={counts.Healthy} label="Healthy" color="#5C9A6D" />
+                <Tile n={`${finishedCt}/${allDepts.length}`} label="Reviews done" color={finishedCt===allDepts.length?"#5C9A6D":"#2C2621"} />
+              </div>
+            </Disclosure>
           </div>
         )}
 
