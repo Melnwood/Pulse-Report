@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { listUsers, saveUser, deleteUser } from "../authClient";
+import { listUsers, saveUser, deleteUser, resetPassword } from "../authClient";
 import { card, navBtn, lbl, inp } from "../theme";
 
 const ROLES = [
@@ -43,6 +43,11 @@ export default function UsersView({ setView, me }) {
     if (!window.confirm(`Remove ${u.name}'s account? They will no longer be able to sign in.`)) return;
     try { await deleteUser(u.id); await load(); } catch (e) { setErr(e.message); }
   };
+  const resetPw = async (u) => {
+    if (!window.confirm(`Reset ${u.name}'s password? They'll choose a new one the next time they sign in with their email.`)) return;
+    try { await resetPassword(u.id); await load(); window.alert(`Done. Have ${u.name} sign in with their email — they'll be asked to create a new password.`); }
+    catch (e) { setErr(e.message); }
+  };
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -75,8 +80,8 @@ export default function UsersView({ setView, me }) {
               {form.role === "director" && (
                 <div><label style={lbl}>Department</label><input style={inp} value={form.department} onChange={e => set("department", e.target.value)} placeholder="e.g. HR" /></div>
               )}
-              <div><label style={lbl}>{form.id ? "New password (blank = keep)" : "Password"}</label>
-                <input style={inp} type="password" value={form.password} onChange={e => set("password", e.target.value)} placeholder={form.id ? "leave blank to keep" : "set a password"} /></div>
+              <div><label style={lbl}>{form.id ? "New password (blank = keep)" : "Password (optional)"}</label>
+                <input style={inp} type="password" value={form.password} onChange={e => set("password", e.target.value)} placeholder={form.id ? "leave blank to keep" : "leave blank — they set their own"} /></div>
             </div>
             <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 13, color: "#5A4A3B" }}>
               <input type="checkbox" checked={form.active} onChange={e => set("active", e.target.checked)} /> Active (can sign in)
@@ -107,6 +112,8 @@ export default function UsersView({ setView, me }) {
                   {u.role === "leader" ? "P&C leader" : u.role === "country" ? `${u.country || "?"} leader` : `${u.country || "?"} · ${u.department || "?"}`}
                 </span>
                 <button onClick={() => startEdit(u)} style={{ ...navBtn, fontSize: 12, padding: "6px 12px" }}>Edit</button>
+                <button onClick={() => resetPw(u)} title="Clear their password so they set a new one at next sign-in"
+                  style={{ ...navBtn, fontSize: 12, padding: "6px 12px" }}>Reset password</button>
                 <button onClick={() => remove(u)} disabled={u.name === me} title={u.name === me ? "You can't remove yourself" : ""}
                   style={{ ...navBtn, fontSize: 12, padding: "6px 12px", color: u.name === me ? "#A89C8D" : "#BE6650", borderColor: "#E4C4BA" }}>Remove</button>
               </div>

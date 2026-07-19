@@ -21,9 +21,23 @@ export async function authStatus() {
   } catch { return { enabled: false }; }
 }
 
+// Returns the signed-in user, OR { needsPassword:true, email } when the account
+// exists but hasn't set a password yet (the caller shows the create-password step).
 export async function login(email, password) {
   const { ok, data } = await post({ action: "login", email, password });
+  if (data && data.needsPassword) return { needsPassword: true, email: data.email || email };
   if (!ok || !data.token) throw new Error(data.error || "Login failed. Please try again.");
+  try {
+    localStorage.setItem(TOKEN_KEY, data.token);
+    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+  } catch {}
+  return data.user;
+}
+
+// First-time setup: the person chooses their own password. Signs them in on success.
+export async function setPassword(email, password) {
+  const { ok, data } = await post({ action: "setPassword", email, password });
+  if (!ok || !data.token) throw new Error(data.error || "Couldn't set your password.");
   try {
     localStorage.setItem(TOKEN_KEY, data.token);
     localStorage.setItem(USER_KEY, JSON.stringify(data.user));
@@ -45,6 +59,7 @@ async function authed(payload) {
 export async function listUsers() { return (await authed({ action: "listUsers" })).users || []; }
 export async function saveUser(user) { return (await authed({ action: "saveUser", user })).user; }
 export async function deleteUser(id) { return authed({ action: "deleteUser", id }); }
+export async function resetPassword(id) { return authed({ action: "resetPassword", id }); }
 
 export function getToken() { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } }
 export function getUser() { try { const u = localStorage.getItem(USER_KEY); return u ? JSON.parse(u) : null; } catch { return null; } }
