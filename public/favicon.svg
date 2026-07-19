@@ -1,7 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <rect width="64" height="64" rx="14" fill="#FFF8F5"/>
-  <polyline points="4,32 14,32 18,16 22,48 28,24 33,40 37,28 41,36 45,32 60,32"
-    stroke="#FF6600" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-  <circle cx="50" cy="14" r="5" fill="#FF6600"/>
-  <text x="47.5" y="17.5" font-family="Inter,sans-serif" font-size="6" font-weight="800" fill="white">JV</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="15" fill="#FFF7F1"/>
+  <rect x="1.25" y="1.25" width="61.5" height="61.5" rx="13.75" fill="none" stroke="#FF6600" stroke-opacity="0.22" stroke-width="1.5"/>
+  <text x="32" y="33" text-anchor="middle" dominant-baseline="central"
+    font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="23" letter-spacing="-0.5" fill="#FF6600">P&amp;C</text>
 </svg>

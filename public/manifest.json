@@ -1,9 +1,13 @@
 {
-  "short_name": "JV Pulse",
-  "name": "JV Pulse Report Platform",
-  "icons": [{ "src": "favicon.svg", "type": "image/svg+xml", "sizes": "any" }],
+  "short_name": "JV P&C",
+  "name": "JV People & Culture — Pulse Report",
+  "icons": [
+    { "src": "favicon.svg", "type": "image/svg+xml", "sizes": "any" },
+    { "src": "logo192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "logo512.png", "type": "image/png", "sizes": "512x512" }
+  ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#0F172A",
-  "background_color": "#0F172A"
+  "theme_color": "#FF6600",
+  "background_color": "#F6F1E8"
 }
