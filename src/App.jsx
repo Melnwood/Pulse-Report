@@ -2377,7 +2377,9 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
       <div style={{ background:"linear-gradient(135deg,#FFFFFF 0%,#F6F1E8 100%)", borderBottom:"1px solid #F7E7D5", padding: isMobile ? "16px" : "24px 40px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
         <div>
           <div style={{ fontSize:11, letterSpacing:3, color:"#E0863C", fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>Josiah Venture</div>
-          <div style={{ fontFamily:FONT_DISPLAY, fontSize:24, fontWeight:600, color:"#2C2621" }}>Pulse Report Platform</div>
+          <div style={{ fontFamily:FONT_DISPLAY, fontSize:24, fontWeight:600, color:"#2C2621" }}>
+            {myDepts ? "Director Review & Platform" : "People & Culture Platform"}
+          </div>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
           <button onClick={() => setView("__back__")} style={{ ...navBtn, background:"transparent", border:"1px solid #ECE2D2" }}>← Back</button>
