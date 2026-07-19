@@ -1967,7 +1967,6 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(90px,1fr))", gap:10, marginBottom:24 }}>
               <Tile n={latestRuns.length} label={latestRuns.length===1?"Country":"Countries"} />
-              <Tile n={withStatus.length} label="Departments" />
               {totalResp > 0 && <Tile n={totalResp} label={totalResp===1?"Respondent":"Respondents"} />}
               <Tile n={counts.Concern} label="Concern" color="#BE6650" />
               <Tile n={counts.Watch} label="Watch" color="#C08636" />
