@@ -2403,6 +2403,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
           </div>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <HowToVideosButton />
           <button onClick={() => setView("__back__")} style={{ ...navBtn, background:"transparent", border:"1px solid #ECE2D2" }}>← Back</button>
           {authUser ? (
             <span style={{ fontSize:12, color:"#7A6F63", whiteSpace:"nowrap" }}>
@@ -2597,6 +2598,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
             {cloudLoading && <span style={{ color:"#7A6F63", marginLeft:8, fontWeight:500, fontStyle:"italic" }}>☁ syncing…</span>}
           </div>
         </div>
+        <HowToVideosButton />
         <button onClick={()=>setShowHelp(true)} style={{ ...navBtn, display:"inline-flex", alignItems:"center", gap:6, background:"white",
           border:"1px solid #ECE2D2", color:"#E0863C", fontWeight:700 }}>
           <IconHelp/> How scoring works
@@ -2927,6 +2929,23 @@ function HowToVideosPanel({ onClose }) {
       </div>
       <VideoPlayerModal video={playing} onClose={() => setPlaying(null)} />
     </div>
+  );
+}
+
+// Inline "How-to videos" button for the director-page top bars (Home, Review,
+// Workspace) — sits with the other header buttons. Reuses the existing
+// HowToVideosPanel; matches the "How scoring works" button styling.
+function HowToVideosButton({ style }) {
+  const [showHowTo, setShowHowTo] = useState(false);
+  return (
+    <>
+      <button onClick={() => setShowHowTo(true)} title="How-to videos"
+        style={{ ...navBtn, display:"inline-flex", alignItems:"center", gap:6, background:"white",
+          border:"1px solid #ECE2D2", color:"#E0863C", fontWeight:700, ...(style||{}) }}>
+        <IconHelp/> How-to videos
+      </button>
+      {showHowTo && <HowToVideosPanel onClose={() => setShowHowTo(false)} />}
+    </>
   );
 }
 
@@ -3418,6 +3437,7 @@ function WorkspaceView({ allRuns, setView, authRole, authUser, authDepts = [], c
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
           <button onClick={() => setView("__back__")} style={{ ...navBtn }}>← Back</button>
+          <HowToVideosButton />
           <span style={{ fontFamily: FONT_DISPLAY, fontSize: 22, fontWeight: 600, color: "#2C2621" }}>Question workspace</span>
         </div>
 
