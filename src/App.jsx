@@ -1323,6 +1323,23 @@ export default function App() {
     } catch (e) { console.warn("Run reload failed:", e.message); }
   };
 
+  // The reports list is fetched once on mount — which can happen before login or
+  // before the backend function has warmed up. If that first fetch failed or was
+  // slow, the list would stay empty and the user would see "No reports available
+  // yet" after logging in, with no automatic recovery. Re-fetch once the user is
+  // authenticated so a failed/slow initial load heals itself.
+  useEffect(() => {
+    if (authGate !== "authed") return;
+    let alive = true;
+    (async () => {
+      setRunsLoading(true);
+      try { await reloadRuns(); }
+      finally { if (alive) setRunsLoading(false); }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line
+  }, [authGate]);
+
   // Open a run into the Director Review — used by the leaders' dashboard to
   // drill into a run for the full detail. Loads local cache first, then merges
   // the shared Airtable data (survey scores, selections, sb overrides).
