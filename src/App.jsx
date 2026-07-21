@@ -4004,7 +4004,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, addItem, saveRefin
                         ? "Leave blank to use as-is. Edit only if correcting a translation."
                         : (!item.text
                           ? `Write a new ${sec.label.replace(/s$/,"").toLowerCase()} — it appears exactly as written in the report.`
-                          : "Type here to override wording exactly as it will appear in the report. Saves for future countries.")}
+                          : "Type here to override wording exactly as it will appear in the report.")}
                       style={{ width:"100%", background:"#FBEFE4", border:"0.5px solid #F0DFCE",
                         borderRadius:6, padding:"7px 10px", color:"#2C2621", fontSize:12,
                         resize:"vertical", minHeight:52, fontFamily:"inherit",
