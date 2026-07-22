@@ -28,27 +28,49 @@ const F = {
 const SECTION_LABEL = { strengths: "Strength", growth: "Growth", leadershipQs: "Leadership Q", quotes: "Quote" };
 const SECTION_KEY   = { "Strength": "strengths", "Growth": "growth", "Leadership Q": "leadershipQs", "Quote": "quotes" };
 
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+// Exponential backoff with jitter: ~0.5s, 1s, 2s, 4s, capped at 6s.
+const backoffMs = (attempt) => Math.min(6000, 500 * Math.pow(2, attempt)) + Math.floor(Math.random() * 250);
+
 async function call(payload) {
   const headers = { "Content-Type": "application/json" };
   let token = null;
   try { token = localStorage.getItem("pulse:token"); } catch {}
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch("/.netlify/functions/airtable", {
-    method: "POST",
-    headers,
-    body: JSON.stringify(payload),
-  });
-  const text = await res.text();
-  if (res.status === 401) {
-    // Session expired / token no longer valid. Clear it and ask the app to show
-    // the login screen — a soft event, NOT a page reload, so a token that keeps
-    // getting rejected can't spin the app in a reload loop (a "flash").
-    try { localStorage.removeItem("pulse:token"); localStorage.removeItem("pulse:user"); } catch {}
-    try { if (typeof window !== "undefined") window.dispatchEvent(new Event("pulse:unauthorized")); } catch {}
-    throw new Error("Your session expired. Please sign in again.");
+
+  const MAX_ATTEMPTS = 5;
+  let lastStatus = 0, lastText = "";
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    let res;
+    try {
+      res = await fetch("/.netlify/functions/airtable", { method: "POST", headers, body: JSON.stringify(payload) });
+    } catch (netErr) {
+      // Transient network blip (offline, dropped connection) — back off and retry.
+      if (attempt < MAX_ATTEMPTS - 1) { await sleep(backoffMs(attempt)); continue; }
+      throw netErr;
+    }
+    const text = await res.text();
+    if (res.status === 401) {
+      // Session expired / token no longer valid. Clear it and ask the app to show
+      // the login screen — a soft event, NOT a page reload, so a token that keeps
+      // getting rejected can't spin the app in a reload loop (a "flash").
+      try { localStorage.removeItem("pulse:token"); localStorage.removeItem("pulse:user"); } catch {}
+      try { if (typeof window !== "undefined") window.dispatchEvent(new Event("pulse:unauthorized")); } catch {}
+      throw new Error("Your session expired. Please sign in again.");
+    }
+    if (res.ok) {
+      try { return JSON.parse(text); } catch { throw new Error(`Airtable returned non-JSON: ${text.slice(0, 200)}`); }
+    }
+    // Airtable rate-limit (429) or a transient server error (5xx): wait and retry
+    // instead of surfacing a "sync failed". Only give up after several attempts.
+    lastStatus = res.status; lastText = text;
+    if ((res.status === 429 || res.status >= 500) && attempt < MAX_ATTEMPTS - 1) {
+      await sleep(backoffMs(attempt));
+      continue;
+    }
+    throw new Error(`Airtable ${res.status}: ${text.slice(0, 300)}`);
   }
-  if (!res.ok) throw new Error(`Airtable ${res.status}: ${text.slice(0, 300)}`);
-  try { return JSON.parse(text); } catch { throw new Error(`Airtable returned non-JSON: ${text.slice(0, 200)}`); }
+  throw new Error(`Airtable ${lastStatus}: ${lastText.slice(0, 300)}`);
 }
 
 // Connectivity check — returns true if the token + base are reachable.
