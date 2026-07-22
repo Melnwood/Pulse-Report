@@ -984,6 +984,7 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState("idle");
   const syncTimer = useRef(null);
   const lastSyncedRef = useRef("");   // JSON of last-synced selections, to skip no-op saves
+  const lastSyncedByDept = useRef({}); // JSON of last-synced selections per dept, to save only what changed
   const skipNextSyncRef = useRef(true); // don't autosync the very first load of a run
   const syncInFlightRef = useRef(false); // guard so overlapping saves can't race/duplicate
   const [dashCountry, setDashCountry] = useState("all");
@@ -1207,7 +1208,13 @@ export default function App() {
     const snapshot = JSON.stringify(selections || {});
     // skip empty, unchanged, or the initial load of a run
     if (!selections || !Object.keys(selections).length) return;
-    if (skipNextSyncRef.current) { skipNextSyncRef.current = false; lastSyncedRef.current = snapshot; return; }
+    if (skipNextSyncRef.current) {
+      skipNextSyncRef.current = false; lastSyncedRef.current = snapshot;
+      // Seed per-dept snapshots so the first edit only re-saves the dept that changed.
+      const seed = {}; Object.entries(selections).forEach(([k, v]) => { seed[k] = JSON.stringify(v); });
+      lastSyncedByDept.current = seed;
+      return;
+    }
     if (snapshot === lastSyncedRef.current) return;
 
     // local save is instant
@@ -1239,12 +1246,17 @@ export default function App() {
         for (const [deptKey, sel] of Object.entries(selections)) {
           const d = surveyData?.depts?.[deptKey];
           if (!d) continue;
+          // Only write departments whose selections actually changed since the last
+          // successful sync — cuts Airtable requests (and rate-limit risk) sharply.
+          const deptSnap = JSON.stringify(sel);
+          if (lastSyncedByDept.current[deptKey] === deptSnap) continue;
           const deptRecId = await upsertDepartment(runId, runName, {
             key: deptKey, label: d.label, avg: d.avg, status: d.status, n: d.n,
             openQLabel: d.openQLabel,
             surveyDataJSON: JSON.stringify({ questions: d.questions || [] }).slice(0, 95000),
           });
           await atSaveSelections(deptRecId, sel);
+          lastSyncedByDept.current[deptKey] = deptSnap;
         }
         lastSyncedRef.current = snapshot;
         setSyncStatus("saved");
