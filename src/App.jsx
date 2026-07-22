@@ -1243,24 +1243,43 @@ export default function App() {
           // stored unique respondent count with a double-counted/empty value.
           respondents: surveyData?.raw?.length || null,
         });
+        let anyFailed = false;
         for (const [deptKey, sel] of Object.entries(selections)) {
           const d = surveyData?.depts?.[deptKey];
           if (!d) continue;
+          // A director may only WRITE their own department(s). The browser holds the
+          // whole run's selections, but attempting to save a department they don't own
+          // returns 403 "Outside your department" from the server — and that would
+          // abort this entire sync, silently dropping the director's real edits along
+          // with it. So skip any department this user can't edit. (Leaders and the
+          // auth-off state can edit all, so nothing is skipped for them.)
+          if (!canEditDept(deptKey)) continue;
           // Only write departments whose selections actually changed since the last
           // successful sync — cuts Airtable requests (and rate-limit risk) sharply.
           const deptSnap = JSON.stringify(sel);
           if (lastSyncedByDept.current[deptKey] === deptSnap) continue;
-          const deptRecId = await upsertDepartment(runId, runName, {
-            key: deptKey, label: d.label, avg: d.avg, status: d.status, n: d.n,
-            openQLabel: d.openQLabel,
-            surveyDataJSON: JSON.stringify({ questions: d.questions || [] }).slice(0, 95000),
-          });
-          await atSaveSelections(deptRecId, sel);
-          lastSyncedByDept.current[deptKey] = deptSnap;
+          // Save each department independently: one department's failure must never
+          // discard the others' saves (or roll back the whole run's edits).
+          try {
+            const deptRecId = await upsertDepartment(runId, runName, {
+              key: deptKey, label: d.label, avg: d.avg, status: d.status, n: d.n,
+              openQLabel: d.openQLabel,
+              surveyDataJSON: JSON.stringify({ questions: d.questions || [] }).slice(0, 95000),
+            });
+            await atSaveSelections(deptRecId, sel);
+            lastSyncedByDept.current[deptKey] = deptSnap;
+          } catch (err) {
+            anyFailed = true;
+            console.warn(`Autosync: department "${deptKey}" did not save:`, err.message);
+          }
         }
-        lastSyncedRef.current = snapshot;
-        setSyncStatus("saved");
-        setTimeout(() => setSyncStatus(s => s === "saved" ? "idle" : s), 2500);
+        if (anyFailed) {
+          setSyncStatus("error");
+        } else {
+          lastSyncedRef.current = snapshot;
+          setSyncStatus("saved");
+          setTimeout(() => setSyncStatus(s => s === "saved" ? "idle" : s), 2500);
+        }
       } catch (e) {
         console.warn("Autosync failed:", e.message);
         setSyncStatus("error");
