@@ -15,6 +15,7 @@ const F = {
     openQuestion: "fldCHcHldlZeE1Krj", reviewStatus: "fldtb8tiiIkb3S7pw",
     surveyData: "fld3Wh12t2T8jvGXU", run: "fldqIzzYgH4rFEgFX",
     sbOverrides: "fldrMavYHDwp3fcWv",
+    statusOverrides: "fldCZs87ofZi4h782",
   },
   selections: {
     item: "fldJisxHvmDIK4yGC", section: "fldGViHWpebqdgjDx", text: "fldD4bJvQ3FavY575",
@@ -97,6 +98,7 @@ export async function upsertDepartment(runId, runName, dept) {
     [F.departments.openQuestion]: dept.openQLabel || undefined,
     [F.departments.surveyData]: dept.surveyDataJSON || undefined,
     [F.departments.sbOverrides]: dept.sbOverridesJSON || undefined,
+    [F.departments.statusOverrides]: dept.statusOverridesJSON || undefined,
     [F.departments.run]: [runId],
   };
   if (existing.records.length) {
@@ -299,6 +301,7 @@ export async function loadRunSurveyData(country, year) {
   const recByCode = {};
   const dd = {};
   const sbOverrides = {};   // merged Survey Basics edits across all depts in this run
+  const statusOverrides = {};   // merged borderline status choices across all depts
   for (const d of depts.records) {
     const key = d.fields["Department Key"] || "";
     const code = d.fields["Dept Code"]?.name || d.fields["Dept Code"] ||
@@ -323,6 +326,10 @@ export async function loadRunSurveyData(country, year) {
     try {
       const ov = JSON.parse(d.fields["SB Overrides"] || "{}");
       if (ov && typeof ov === "object") Object.assign(sbOverrides, ov);
+    } catch {}
+    try {
+      const so = JSON.parse(d.fields["Status Overrides"] || "{}");
+      if (so && typeof so === "object") Object.assign(statusOverrides, so);
     } catch {}
   }
 
@@ -354,7 +361,7 @@ export async function loadRunSurveyData(country, year) {
     });
   } catch (e) { /* quotes optional — leave empty if unavailable */ }
 
-  return { depts: dd, merged: {}, raw: [], sbOverrides };
+  return { depts: dd, merged: {}, raw: [], sbOverrides, statusOverrides };
 }
 
 // Mark a department's director review as finished (or reopen it). Persists to the
@@ -470,6 +477,15 @@ export async function loadQuestionNotes(country, year, deptKey, question) {
 export async function setQuestionNoteVisibility(noteId, visibility) {
   await call({ action: "update", table: "questionNotes",
     records: [{ id: noteId, fields: { "Visibility": visibility === "Public" ? "Public" : "Private" } }] });
+}
+
+// Update a question/section note's body (and optionally visibility) in place —
+// lets a single note autosave as the author types instead of creating new rows.
+export async function updateQuestionNote(noteId, { body, visibility }) {
+  const fields = {};
+  if (body !== undefined) fields["Body"] = body;
+  if (visibility !== undefined) fields["Visibility"] = visibility === "Public" ? "Public" : "Private";
+  await call({ action: "update", table: "questionNotes", records: [{ id: noteId, fields }] });
 }
 
 // Delete a question / section note. Proxy enforces the same permissions.

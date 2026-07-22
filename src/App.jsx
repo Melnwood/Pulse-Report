@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useIsMobile, sc, sb, sbd, card, navBtn, lbl, inp, C, FONT_DISPLAY } from "./theme";
 import Disclosure from "./components/Disclosure";
 import { VisibilityPicker, VisibilityChip } from "./components/Visibility";
@@ -8,7 +8,7 @@ import UsersView from "./components/UsersView";
 import VideosView from "./components/VideosView";
 import { authStatus, tokenValid, getUser, logout } from "./authClient";
 import SURVEY_BASICS from "./surveyBasics.json";
-import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, deleteDepartmentNote, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, deleteQuestionNote, loadMeasures, loadSurveyBasicsMaster, saveSurveyBasicsMaster, loadHelpVideos } from "./airtable";
+import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, deleteDepartmentNote, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, updateQuestionNote, deleteQuestionNote, loadMeasures, loadSurveyBasicsMaster, saveSurveyBasicsMaster, loadHelpVideos } from "./airtable";
 import { synthesizeLeadership } from "./ai";
 import MeasurePanel from "./components/MeasurePanel";
 import NotesDigest from "./components/NotesDigest";
@@ -333,6 +333,59 @@ function deptStatus(questions) {
   if (avg >= 3.50) return "Healthy";
   if (avg >= 2.50) return "Watch";
   return "Concern";
+}
+
+// ── Borderline status override ──────────────────────────────────────────────
+// When a question's score/distribution sits within this margin of a band boundary,
+// the director may nudge it to the adjacent band. Single tunable constant.
+const BORDERLINE_MARGIN = 0.15;
+
+function distPosNeg(vals, burden) {
+  const nums = (vals || []).filter(v => v >= 1 && v <= 5);
+  const inv = burden ? nums.map(v => 6 - v) : nums;
+  const n = inv.length || 1;
+  return { pos: inv.filter(v => v >= 4).length / n, neg: inv.filter(v => v <= 2).length / n };
+}
+
+// If the question sits near a band boundary, return the two adjacent bands
+// (lowest first) the director may choose between; otherwise null.
+function borderlineOptions(q) {
+  const auto = q.autoStatus || q.status;
+  if (!auto) return null;
+  const isDist = q.scale === "dist" && (q.vals || []).filter(v => v >= 1 && v <= 5).length >= 5;
+  if (isDist) {
+    const { pos, neg } = distPosNeg(q.vals, q.burden);
+    const dHigh = Math.min(Math.abs(pos - 0.75), Math.abs(neg - 0.15));  // Watch/Healthy line
+    const dLow  = Math.min(Math.abs(pos - 0.50), Math.abs(neg - 0.30));  // Concern/Watch line
+    if (auto === "Healthy") return dHigh <= BORDERLINE_MARGIN ? { options: ["Watch", "Healthy"] } : null;
+    if (auto === "Concern") return dLow  <= BORDERLINE_MARGIN ? { options: ["Concern", "Watch"] } : null;
+    if (dHigh <= BORDERLINE_MARGIN && dHigh <= dLow) return { options: ["Watch", "Healthy"] };
+    if (dLow  <= BORDERLINE_MARGIN) return { options: ["Concern", "Watch"] };
+    return null;
+  }
+  const s = q.score;
+  if (s == null) return null;
+  if (Math.abs(s - 3.50) <= BORDERLINE_MARGIN) return { options: ["Watch", "Healthy"] };
+  if (Math.abs(s - 2.50) <= BORDERLINE_MARGIN) return { options: ["Concern", "Watch"] };
+  return null;
+}
+
+// Apply saved status overrides onto a surveyData object: preserve each question's
+// auto status (autoStatus), swap in the director-chosen status, and recompute each
+// department's roll-up status from the effective statuses. Averages are unaffected
+// (scores don't change). Returns a NEW object; the input is untouched.
+function applyStatusOverrides(sd, overrides, country, year) {
+  if (!sd || !sd.depts || !overrides) return sd;
+  const depts = {};
+  for (const [key, d] of Object.entries(sd.depts)) {
+    const questions = (d.questions || []).map(q => {
+      const auto = q.autoStatus || q.status;
+      const ov = overrides[`${country}:${year}:${key}:${normQ(q.en)}`];
+      return { ...q, autoStatus: auto, status: (ov && ov !== auto) ? ov : auto };
+    });
+    depts[key] = { ...d, questions, status: deptStatus(questions) };
+  }
+  return { ...sd, depts };
 }
 
 // ─── PARSE SURVEY FILE ────────────────────────────────────────────────────────
@@ -1029,6 +1082,56 @@ export default function App() {
     }, 1200);
   };
 
+  // Borderline status overrides — a director's chosen band for a near-boundary
+  // question. Keyed country:year:deptKey:normalizedQuestion. Persisted (localStorage
+  // cache + Airtable, mirroring sbOverrides). Invisible downstream; only the review
+  // shows a marker.
+  const [statusOverrides, setStatusOverrides] = useState(() => {
+    try { const r = localStorage.getItem("pulse:statusOverrides"); return r ? JSON.parse(r) : {}; }
+    catch { return {}; }
+  });
+  const saveStatusOverride = (deptKey, qText, status) => {
+    const key = `${country}:${year}:${deptKey}:${normQ(qText)}`;
+    const updated = { ...statusOverrides };
+    if (status) updated[key] = status;
+    else delete updated[key];   // clearing restores the auto band
+    setStatusOverrides(updated);
+    try { localStorage.setItem("pulse:statusOverrides", JSON.stringify(updated)); } catch {}
+    syncStatusOverridesForDept(deptKey, updated);
+  };
+  const statusSyncTimers = useRef({});
+  const syncStatusOverridesForDept = (deptKey, allOverrides) => {
+    if (!country || !year || !surveyData?.depts?.[deptKey]) return;
+    const prefix = `${country}:${year}:${deptKey}:`;
+    const slice = {};
+    Object.entries(allOverrides).forEach(([k, v]) => { if (k.startsWith(prefix)) slice[k] = v; });
+    if (statusSyncTimers.current[deptKey]) clearTimeout(statusSyncTimers.current[deptKey]);
+    statusSyncTimers.current[deptKey] = setTimeout(async () => {
+      try {
+        const runName = `${country} ${year}`;
+        // Bake the effective status into the stored department + question data so
+        // downstream readers (dashboards read the stored Status; a reloaded report
+        // reads the stored questions) honor the override with no marker.
+        const eff = applyStatusOverrides({ depts: { [deptKey]: surveyData.depts[deptKey] } }, allOverrides, country, year).depts[deptKey];
+        const runId = await upsertRun({ country, year, status: "In Review", overallAvg: null, respondents: surveyData?.raw?.length || null });
+        await upsertDepartment(runId, runName, {
+          key: deptKey, label: eff.label, avg: eff.avg, status: eff.status, n: eff.n,
+          openQLabel: eff.openQLabel,
+          surveyDataJSON: JSON.stringify({ questions: eff.questions || [] }).slice(0, 95000),
+          statusOverridesJSON: JSON.stringify(slice),
+        });
+      } catch (e) { console.warn("Status override sync failed:", e.message); }
+    }, 1200);
+  };
+
+  // The survey data everything downstream reads, with borderline overrides applied
+  // (question statuses swapped, department roll-ups recomputed). The raw surveyData
+  // keeps the auto statuses; the review compares the two to show its marker.
+  const effSurveyData = useMemo(
+    () => applyStatusOverrides(surveyData, statusOverrides, country, year),
+    [surveyData, statusOverrides, country, year]
+  );
+
   // MASTER Survey Basics interpretations — the shared default each report uses for
   // a question + score band. Editing a Survey Basics line writes here, so the edit
   // becomes the default in every report going forward. Keyed sbKey:normQuestion:level
@@ -1360,6 +1463,10 @@ export default function App() {
         setSbOverrides(prev => { const m = { ...prev, ...sd.sbOverrides };
           try { localStorage.setItem("pulse:sbOverrides", JSON.stringify(m)); } catch {} return m; });
       }
+      if (sd?.statusOverrides && Object.keys(sd.statusOverrides).length) {
+        setStatusOverrides(prev => { const m = { ...prev, ...sd.statusOverrides };
+          try { localStorage.setItem("pulse:statusOverrides", JSON.stringify(m)); } catch {} return m; });
+      }
       if (sd && Object.keys(sd.depts).length) {
         setSurveyData(sd);
         try { localStorage.setItem(`pulse:data:${run.country}:${run.year}`, JSON.stringify(sd)); } catch {}
@@ -1452,7 +1559,7 @@ export default function App() {
       generating={generating} genProgress={genProgress}
       allRuns={allRuns} setAllRuns={setAllRuns} setView={setView}
       setSurveyData={setSurveyData} setSelections={setSelections}
-      setSbOverrides={setSbOverrides}
+      setSbOverrides={setSbOverrides} setStatusOverrides={setStatusOverrides}
       setOpenToDept={setOpenToDept}
       setCountry2={setCountry} setYear2={setYear}
       isAdmin={effIsAdmin} toggleAdmin={toggleAdmin}
@@ -1464,7 +1571,7 @@ export default function App() {
   if (view === "review") return wrap(
     <ReviewView
       country={country} year={year}
-      surveyData={surveyData} selections={selections}
+      surveyData={effSurveyData} selections={selections}
       toggleItem={toggleItem} setRewrite={setRewrite} addItem={addItem}
       saveSelections={saveSelections} saved={saved}
       saveRefinement={saveRefinement} refinements={refinements}
@@ -1472,6 +1579,7 @@ export default function App() {
       isAdmin={effIsAdmin} toggleAdmin={toggleAdmin}
       pendingImport={pendingImport} clearPendingImport={() => setPendingImport(null)}
       sbOverrides={sbOverrides} saveSbOverride={saveSbOverride} setSbOverrides={setSbOverrides}
+      statusOverrides={statusOverrides} saveStatusOverride={saveStatusOverride}
       sbMaster={sbMaster} saveSbMaster={saveSbMaster}
       cloudLoading={cloudLoading} syncStatus={syncStatus}
       me={effMe} saveMe={saveMe} isPCLead={effIsPCLead}
@@ -1484,11 +1592,12 @@ export default function App() {
   if (view === "report") return wrap(
     <ReportView
       country={country} year={year}
-      surveyData={surveyData} getApproved={getApproved}
+      surveyData={effSurveyData} getApproved={getApproved}
       // Run-level unique respondent count (survives reload; raw rows don't).
       runRespondents={allRuns.find(r => r.country === country && String(r.year) === String(year))?.respondents ?? null}
       setView={setView}
       sbOverrides={sbOverrides} sbMaster={sbMaster}
+      me={me} isPCLead={isPCLead}
     />
   );
 
@@ -1505,7 +1614,7 @@ export default function App() {
     <DashboardView
       allRuns={allRuns} dashCountry={dashCountry}
       setDashCountry={setDashCountry} setView={setView}
-      country={country} year={year} surveyData={surveyData}
+      country={country} year={year} surveyData={effSurveyData}
       refinements={refinements} setRefinements={setRefinements}
       openReport={openReport}
       lockCountry={viewRole === "country" ? (viewUser && viewUser.country) : null}
@@ -2340,7 +2449,7 @@ function pctDone(run) {
 // ─── HOME VIEW ────────────────────────────────────────────────────────────────
 function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
   generating, genProgress, allRuns, setAllRuns, setView, setSurveyData, setSelections,
-  setCountry2, setYear2, isAdmin, toggleAdmin, runsLoading, setSbOverrides, setOpenToDept, authUser, onSignOut }) {
+  setCountry2, setYear2, isAdmin, toggleAdmin, runsLoading, setSbOverrides, setStatusOverrides, setOpenToDept, authUser, onSignOut }) {
 
   const isMobile = useIsMobile();
   const countries = [...new Set(allRuns.map(r=>r.country))].sort();
@@ -2369,6 +2478,13 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
         setSbOverrides(prev => {
           const merged = { ...prev, ...sd2.sbOverrides };
           try { localStorage.setItem("pulse:sbOverrides", JSON.stringify(merged)); } catch {}
+          return merged;
+        });
+      }
+      if (sd2?.statusOverrides && Object.keys(sd2.statusOverrides).length && setStatusOverrides) {
+        setStatusOverrides(prev => {
+          const merged = { ...prev, ...sd2.statusOverrides };
+          try { localStorage.setItem("pulse:statusOverrides", JSON.stringify(merged)); } catch {}
           return merged;
         });
       }
@@ -2534,7 +2650,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 }
 
 // ─── REVIEW VIEW ──────────────────────────────────────────────────────────────
-function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, addItem, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, sbMaster, saveSbMaster, cloudLoading, syncStatus, me, saveMe, isPCLead, openToDept, setOpenToDept, toggleDeptFinished, canEditDept, authRole, authUser, onSignOut, authDepts, pendingImport, clearPendingImport }) {
+function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, addItem, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, statusOverrides, saveStatusOverride, sbMaster, saveSbMaster, cloudLoading, syncStatus, me, saveMe, isPCLead, openToDept, setOpenToDept, toggleDeptFinished, canEditDept, authRole, authUser, onSignOut, authDepts, pendingImport, clearPendingImport }) {
   const canEdit = (d) => (canEditDept ? canEditDept(d) : true);
   const isMobile = useIsMobile();
   const [activeDept, setActiveDept] = useState(null);
@@ -2774,7 +2890,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
                     style={{ fontSize:13, fontWeight:600, padding:"8px 16px", border:"none", cursor:"pointer",
                       background:"transparent", color: deptTab===tab ? "#E0863C" : "#7A6F63",
                       borderBottom: deptTab===tab ? "2px solid #E0863C" : "2px solid transparent" }}>
-                    {tab === "review" ? "Review" : "Notes"}
+                    {tab === "review" ? "Review" : "Meeting Notes"}
                   </button>
                 ))}
               </div>
@@ -2795,6 +2911,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
               saveRefinement={saveRefinement} refinements={refinements}
               country={country} year={year} canEdit={canEdit(dept.key)}
               sbOverrides={sbOverrides} saveSbOverride={saveSbOverride}
+              statusOverrides={statusOverrides} saveStatusOverride={saveStatusOverride}
               sbMaster={sbMaster} saveSbMaster={saveSbMaster} isAdmin={isAdmin}
               me={me} saveMe={saveMe} isPCLead={isPCLead}
             />
@@ -2802,8 +2919,8 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
           {dept && deptTab === "notes" && (
             <DeptNotesTab
               dept={dept} country={country} year={year}
-              me={me} saveMe={saveMe} isPCLead={isPCLead} canEdit={canEdit(dept.key)}
-              sbOverrides={sbOverrides} sbMaster={sbMaster}
+              me={me} saveMe={saveMe} isPCLead={isPCLead}
+              sel={selections[dept.key]}
             />
           )}
         </div>
@@ -3229,119 +3346,106 @@ function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes
 
 // The "Notes" tab of a department page — notes at every level:
 // general department log, a thread per section, and a thread per question.
-function DeptNotesTab({ dept, country, year, me, saveMe, isPCLead, canEdit = true, sbOverrides, sbMaster }) {
-  const [qNotes, setQNotes] = useState(null);   // all question+section notes for this run+dept
-  const [measures, setMeasures] = useState([]); // behavioural-change measures for this dept, by question
-  const measureFor = (question) => measures.find(x => x.question === question) || null;
-  const upsertMeasureLocal = (saved) => setMeasures(prev => {
-    const i = prev.findIndex(x => x.id === saved.id || x.question === saved.question);
-    if (i >= 0) { const next = prev.slice(); next[i] = saved; return next; }
-    return [saved, ...prev];
-  });
+function DeptNotesTab({ dept, country, year, me, saveMe, isPCLead, sel = {} }) {
+  const isMobile = useIsMobile();
+  const [qNotes, setQNotes] = useState(null);   // all director notes for this run+dept
+  const [openRef, setOpenRef] = useState(null); // which reference panel is open (closed by default)
 
-  // The Survey Basics interpretation shown next to a question — same resolution
-  // the report/heatmap use: run override first, then promoted master, then the
-  // default library text for the question's status band.
-  const sbTextFor = (q) => {
-    const m = findSurveyBasics(dept.key, q.en);
-    if (!m) return "";
-    const level = q.status === 'Healthy' ? 'high' : q.status === 'Watch' ? 'mid' : 'low';
-    const sbKey = SB_KEY[dept.key] || String(dept.key || "").toLowerCase();
-    const ovKey = `${country}:${year}:${dept.key}:${normQ(q.en)}`;
-    const masterKey = `${sbKey}:${normQ(q.en)}:${level}`;
-    return (sbMaster && sbMaster[masterKey]) || (sbOverrides && sbOverrides[ovKey]) || m[level] || "";
-  };
-  const SECTIONS = [
-    { key: "§ Strengths", label: "Strengths" },
-    { key: "§ Growth areas", label: "Growth areas" },
-    { key: "§ Quotes", label: "Quotes" },
-    { key: "§ Leadership questions", label: "Leadership questions" },
-  ];
+  // Read-only reference to the review content, so a director can glance at the
+  // questions / strengths / growth / leadership questions / quotes while in the meeting.
+  const statusOrder = { Concern: 0, Watch: 1, Healthy: 2 };
+  const refQuestions = [...(dept.questions || [])].sort((a, b) => (statusOrder[a.status] ?? 1) - (statusOrder[b.status] ?? 1) || a.score - b.score);
+  const refItems = (key) => (sel[key] || []).filter(it => it.include).map(it => (it.rewrite && it.rewrite.trim()) ? it.rewrite.trim() : it.text).filter(Boolean);
+  const REF = [
+    { key: "questions", label: "Questions", n: refQuestions.length },
+    { key: "strengths", label: "Strengths", n: refItems("strengths").length },
+    { key: "growth", label: "Growth areas", n: refItems("growth").length },
+    { key: "leadershipQs", label: "Leadership questions", n: refItems("leadershipQs").length },
+    { key: "quotes", label: "Staff quotes", n: refItems("quotes").length },
+  ].filter(r => r.n > 0);
 
   const reload = async () => {
     try { setQNotes(await loadQuestionNotes(country, year, dept.key)); }
     catch { setQNotes([]); }
   };
-  useEffect(() => {
-    setQNotes(null); reload();
-    // Behavioural-change measures are threaded by country+dept (not run), loaded once.
-    loadMeasures(country, dept.key).then(setMeasures).catch(() => setMeasures([]));
-    /* eslint-disable-next-line */
-  }, [country, year, dept.key]);
+  useEffect(() => { setQNotes(null); reload(); /* eslint-disable-next-line */ }, [country, year, dept.key]);
 
-  const notesFor = (label) => (qNotes || []).filter(n => n.question === label);
   const flip = async (n) => {
     const next = n.visibility === "Public" ? "Private" : "Public";
-    setQNotes(prev => prev.map(x => x.id===n.id ? { ...x, visibility: next } : x));
+    setQNotes(prev => prev.map(x => x.id === n.id ? { ...x, visibility: next } : x));
     try { await setQuestionNoteVisibility(n.id, next); } catch { reload(); }
   };
 
+  // Notes the viewer can see: public ones, their own, and (for P&C leads) all.
+  const visible = (qNotes || []).filter(n => (n.body || "").trim() && (n.visibility === "Public" || n.author === me || isPCLead));
+  const aboutLabel = (question) => {
+    const s = String(question || "");
+    return s.startsWith("§") ? s.replace(/^§\s*/, "") + " (section)" : s;
+  };
+  const fmt = (iso) => { try { return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }); } catch { return ""; } };
+
+  const noteCard = { border: "1px solid #ECE2D2", borderRadius: 10, background: "#fff", padding: "11px 13px", marginBottom: 9 };
+  const h3 = { fontFamily: FONT_DISPLAY, fontSize: 15, fontWeight: 600, color: "#2C2621", margin: "0 0 3px" };
+  const subline = { fontSize: 12, color: "#7A6F63", margin: "0 0 12px", lineHeight: 1.45 };
+
   return (
     <div>
-      {/* AI digest of everything the viewer can see */}
-      <NotesDigest country={country} year={year} deptKey={dept.key} deptLabel={dept.label}
-        me={me} isPCLead={isPCLead} openResponses={dept.openResponses || []} />
-
-      {/* General department log */}
-      <NotesPanel country={country} year={year} deptKey={dept.key} deptLabel={dept.label}
-        me={me} saveMe={saveMe} isPCLead={isPCLead} />
-
-      {/* Section notes */}
-      <div style={{ marginTop:22, border:"1px solid #ECE2D2", borderRadius:12, overflow:"hidden" }}>
-        <div style={{ background:"#FBEFE4", padding:"10px 14px", fontSize:13, fontWeight:700, color:"#9A6B26" }}>Notes by section</div>
-        <div style={{ padding:"4px 14px 12px" }}>
-          {qNotes === null ? <div style={{ fontSize:12, color:"#7A6F63", padding:"8px 0" }}>Loading…</div> :
-            SECTIONS.map(s => (
-              <NoteThread key={s.key} country={country} year={year} deptKey={dept.key}
-                questionLabel={s.key} displayLabel={s.label} notes={notesFor(s.key)} me={me} isPCLead={isPCLead}
-                onAdded={reload} onFlip={flip} />
+      {REF.length > 0 && (
+        <div style={{ border: "1px solid #ECE2D2", borderRadius: 12, background: "#FDFAF4", padding: "10px 12px", marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#7A6F63", textTransform: "uppercase", letterSpacing: .5, marginRight: 2 }}>Reference</span>
+            {REF.map(r => (
+              <button key={r.key} onClick={() => setOpenRef(openRef === r.key ? null : r.key)}
+                style={{ fontSize: 12, fontWeight: 600, cursor: "pointer", borderRadius: 7, padding: "5px 11px",
+                  border: "1px solid " + (openRef === r.key ? "#E0863C" : "#ECE2D2"),
+                  background: openRef === r.key ? "#F7E7D5" : "#fff",
+                  color: openRef === r.key ? "#B96524" : "#7A6F63" }}>
+                {r.label}
+              </button>
             ))}
+          </div>
+          {openRef && (
+            <div style={{ marginTop: 10, borderTop: "1px solid #ECE2D2", paddingTop: 10, maxHeight: 320, overflowY: "auto" }}>
+              {openRef === "questions"
+                ? refQuestions.map((q, i) => (
+                    <div key={i} style={{ display: "flex", gap: 8, padding: "5px 0", borderBottom: "1px solid #F3EBDD", alignItems: "flex-start" }}>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: sc(q.status), minWidth: 34 }}>{q.score != null ? q.score.toFixed(2) : ""}</span>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: sc(q.status), background: sb(q.status), border: `1px solid ${sbd(q.status)}`, borderRadius: 4, padding: "2px 6px", whiteSpace: "nowrap" }}>{q.status}</span>
+                      <span style={{ fontSize: 12.5, color: "#2C2621", lineHeight: 1.45 }}>{q.en}</span>
+                    </div>))
+                : refItems(openRef).map((t, i) => (
+                    <div key={i} style={{ fontSize: 12.5, color: "#2C2621", lineHeight: 1.45, padding: "5px 0", borderBottom: "1px solid #F3EBDD" }}>• {t}</div>))
+              }
+            </div>
+          )}
         </div>
+      )}
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 18, alignItems: "start" }}>
+      <div>
+        <div style={h3}>Director&apos;s notes</div>
+        <div style={subline}>Every note added with the Director&apos;s Note button in the review, in one place.</div>
+        {qNotes === null ? <div style={{ fontSize: 12, color: "#7A6F63" }}>Loading&hellip;</div> :
+          visible.length === 0 ? <div style={{ fontSize: 12.5, color: "#A89C8D", fontStyle: "italic" }}>No director&apos;s notes yet. Add them with the Director&apos;s Note button on the Review tab.</div> :
+          visible.map(n => (
+            <div key={n.id} style={noteCard}>
+              <div style={{ fontSize: 11, color: "#7A6F63", marginBottom: 5, lineHeight: 1.4 }}>{aboutLabel(n.question)}</div>
+              <div style={{ fontSize: 13, color: "#2C2621", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{n.body}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 7 }}>
+                <button onClick={() => flip(n)} title="Toggle who can see this"
+                  style={{ fontSize: 9, fontWeight: 700, borderRadius: 4, padding: "2px 7px", cursor: "pointer", border: "1px solid",
+                    ...(n.visibility === "Public" ? { color: "#5C9A6D", background: "#E9F1E9", borderColor: "#C7E0CB" } : { color: "#7A6F63", background: "#F1EAE1", borderColor: "#E4D8C8" }) }}>
+                  {n.visibility === "Public" ? "Shared" : "Private"}
+                </button>
+                <span style={{ fontSize: 11, color: "#A89C8D" }}>{n.author}{n.created ? " · " + fmt(n.created) : ""}</span>
+              </div>
+            </div>
+          ))}
       </div>
-
-      {/* Question notes */}
-      <div style={{ marginTop:22, border:"1px solid #ECE2D2", borderRadius:12, overflow:"hidden" }}>
-        <div style={{ background:"#FBEFE4", padding:"10px 14px", fontSize:13, fontWeight:700, color:"#9A6B26" }}>Notes by question</div>
-        <div style={{ padding:"4px 14px 12px" }}>
-          {qNotes === null ? <div style={{ fontSize:12, color:"#7A6F63", padding:"8px 0" }}>Loading…</div> :
-            (dept.questions || []).map((q, i) => {
-              const sbText = sbTextFor(q);
-              return (
-              <NoteThread key={i} country={country} year={year} deptKey={dept.key}
-                questionLabel={q.en} notes={notesFor(q.en)} me={me} isPCLead={isPCLead}
-                onAdded={reload} onFlip={flip}
-                displayLabel={
-                  <div>
-                    {/* 1) Score + status */}
-                    <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:4 }}>
-                      <span style={{ fontSize:15, fontWeight:800, color:sc(q.status) }}>{q.score?.toFixed(2)}</span>
-                      <span style={{ fontSize:9, fontWeight:700, color:sc(q.status), background:sb(q.status),
-                        border:`1px solid ${sbd(q.status)}`, borderRadius:4, padding:"2px 7px" }}>{q.status}</span>
-                      {q.burden && <span style={{ fontSize:9, color:"#C08636" }}>Burden [inv.]</span>}
-                    </div>
-                    {/* 2) The question */}
-                    <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.5 }}>{q.en}</div>
-                  </div>
-                }
-                sub={
-                  <>
-                    {/* 3) Survey Basics — what this score means, so directors know what they're noting */}
-                    <div style={{ marginTop:6, borderLeft:"2px solid #F0DFCE", paddingLeft:8 }}>
-                      <span style={{ fontSize:9, fontWeight:700, color:"#7A6F63",
-                        textTransform:"uppercase", letterSpacing:.5, display:"block", marginBottom:2 }}>Survey Basics</span>
-                      <span style={{ fontSize:12, color:"#5A4A3B", lineHeight:1.45, fontStyle: sbText ? "normal" : "italic" }}>
-                        {sbText || "No Survey Basics interpretation is on file for this question."}
-                      </span>
-                    </div>
-                    {/* 4) Behavioural-change tracking (threaded across runs) */}
-                    <MeasurePanel country={country} deptKey={dept.key} question={q.en}
-                      currentScore={q.score} author={me} canEdit={canEdit}
-                      measure={measureFor(q.en)} onSaved={upsertMeasureLocal} />
-                  </>
-                } />
-              );
-            })}
-        </div>
+      <div>
+        <div style={h3}>Meeting notes</div>
+        <div style={subline}>Write notes as you talk through the report together in your meeting.</div>
+        <NotesPanel country={country} year={year} deptKey={dept.key} deptLabel={dept.label} me={me} saveMe={saveMe} isPCLead={isPCLead} />
+      </div>
       </div>
     </div>
   );
@@ -3695,7 +3799,111 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
   );
 }
 
-function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, addItem, saveRefinement, refinements, country, year, canEdit = true, sbOverrides, saveSbOverride, sbMaster, saveSbMaster, isAdmin, me, saveMe, isPCLead }) {
+// Borderline band chooser for a near-boundary question (shown in the review only).
+// Offers the two adjacent bands with the current one selected; picking the auto
+// band clears the override. Returns null when the question isn't borderline.
+function BorderlineChooser({ q, deptKey, canEdit, saveStatusOverride }) {
+  const bl = borderlineOptions(q);
+  if (!bl) return null;
+  const overridden = q.status !== q.autoStatus;
+  return (
+    <span className="no-print" style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+      <span style={{ fontSize: 9, fontWeight: 700, color: "#7A6F63", textTransform: "uppercase", letterSpacing: .4 }}>Borderline</span>
+      {bl.options.map(band => {
+        const on = q.status === band;
+        return (
+          <button key={band} disabled={!canEdit}
+            onClick={() => canEdit && saveStatusOverride && saveStatusOverride(deptKey, q.en, band === q.autoStatus ? null : band)}
+            style={{ fontSize: 10.5, fontWeight: 700, cursor: canEdit ? "pointer" : "default", borderRadius: 5, padding: "3px 9px",
+              border: "1px solid " + (on ? sbd(band) : "#ECE2D2"), background: on ? sb(band) : "#fff", color: on ? sc(band) : "#7A6F63" }}>
+            {band}
+          </button>
+        );
+      })}
+      {overridden && <span style={{ fontSize: 10, color: "#9C8F82", fontStyle: "italic" }}>· you set this</span>}
+    </span>
+  );
+}
+
+// A small "Director's Note" button that opens a popup to write a note about one
+// question or review item. The note autosaves as you type (no save button) into
+// the existing Question Notes store — one note per item, updated in place.
+function DirectorNoteButton({ country, year, deptKey, question, label, me, hasNote, onSaved, compact, btnLabel = "Director's Note" }) {
+  const [open, setOpen] = useState(false);
+  const [noteId, setNoteId] = useState(null);
+  const [text, setText] = useState("");
+  const [vis, setVis] = useState("Private");
+  const [saved, setSaved] = useState(false);
+  const timer = useRef(null);
+
+  const openModal = async () => {
+    setOpen(true); setSaved(false);
+    try {
+      const all = await loadQuestionNotes(country, year, deptKey);   // this run's dept notes
+      const mine = (all || []).find(n => n.question === question && n.author === me)
+                || (all || []).find(n => n.question === question);
+      if (mine) { setNoteId(mine.id); setText(mine.body || ""); setVis(mine.visibility || "Private"); }
+      else { setNoteId(null); setText(""); setVis("Private"); }
+    } catch { setNoteId(null); setText(""); }
+  };
+  const persist = async (t, v) => {
+    if (!t.trim()) return;
+    try {
+      if (!noteId) { const id = await addQuestionNote({ country, year, deptKey, question, author: me, body: t, visibility: v }); if (id) setNoteId(id); }
+      else { await updateQuestionNote(noteId, { body: t, visibility: v }); }
+      setSaved(true); onSaved && onSaved();
+    } catch { /* offline — keep what's typed */ }
+  };
+  const onType = (v) => { setText(v); setSaved(false); clearTimeout(timer.current); timer.current = setTimeout(() => persist(v, vis), 500); };
+  const setVisibility = (v) => { setVis(v); persist(text, v); };
+  const close = () => { clearTimeout(timer.current); if (text.trim() && !saved) persist(text, vis); setOpen(false); };
+
+  const bstyle = { fontSize: compact ? 10 : 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+    borderRadius: 5, padding: compact ? "3px 8px" : "4px 10px", display: "inline-flex", alignItems: "center", gap: 4,
+    color: hasNote ? "#5C9A6D" : "#E0863C", background: hasNote ? "#E9F1E9" : "#F7E7D5", border: "0.5px solid " + (hasNote ? "#C7E0CB" : "#E0A56F") };
+
+  return (<>
+    <button onClick={openModal} style={bstyle}>{hasNote ? "✓" : "✎"} {btnLabel}</button>
+    {open && (
+      <div onClick={e => { if (e.target === e.currentTarget) close(); }}
+        style={{ position: "fixed", inset: 0, background: "rgba(44,38,33,.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <div style={{ background: "#fff", borderRadius: 14, width: "min(560px,100%)", boxShadow: "0 24px 60px rgba(44,38,33,.35)", overflow: "hidden" }}>
+          <div style={{ display: "flex", gap: 12, padding: "14px 16px", borderBottom: "1px solid #ECE2D2", background: "#FDFAF4" }}>
+            <div><div style={{ fontSize: 10, fontWeight: 700, letterSpacing: .5, textTransform: "uppercase", color: "#E0863C", marginBottom: 3 }}>{btnLabel}</div>
+              <div style={{ fontSize: 13, lineHeight: 1.45, color: "#2C2621" }}>{label || question}</div></div>
+            <button onClick={close} aria-label="Close" style={{ marginLeft: "auto", border: "none", background: "none", fontSize: 18, color: "#7A6F63", cursor: "pointer", lineHeight: 1 }}>✕</button>
+          </div>
+          <div style={{ padding: "14px 16px" }}>
+            <textarea autoFocus value={text} onChange={e => onType(e.target.value)} placeholder="Type your note here — it saves automatically."
+              style={{ width: "100%", minHeight: 120, border: "1px solid #F0DFCE", borderRadius: 8, padding: "10px 12px", fontSize: 13.5, fontFamily: "inherit", color: "#2C2621", lineHeight: 1.55, resize: "vertical", boxSizing: "border-box" }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 4 }}>
+                {["Private", "Public"].map(v => (
+                  <button key={v} onClick={() => setVisibility(v)} style={{ fontSize: 11.5, fontWeight: 600, borderRadius: 6, padding: "6px 11px", cursor: "pointer",
+                    border: "1px solid " + (vis === v ? "#2C2621" : "#ECE2D2"), background: vis === v ? "#2C2621" : "#fff", color: vis === v ? "#fff" : "#7A6F63" }}>
+                    {v === "Private" ? "Private to me" : "Share with team"}</button>
+                ))}
+              </div>
+              <span style={{ fontSize: 11, color: "#5C9A6D", fontWeight: 600, opacity: saved ? 1 : 0, transition: "opacity .2s" }}>Saved</span>
+              <button onClick={close} style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, color: "#7A6F63", background: "transparent", border: "1px solid #ECE2D2", borderRadius: 7, padding: "6px 12px", cursor: "pointer" }}>Done</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+  </>);
+}
+
+function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, addItem, saveRefinement, refinements, country, year, canEdit = true, sbOverrides, saveSbOverride, statusOverrides, saveStatusOverride, sbMaster, saveSbMaster, isAdmin, me, saveMe, isPCLead }) {
+  const [noted, setNoted] = useState({});
+  const reloadNoted = async () => {
+    try {
+      const all = await loadQuestionNotes(country, year, dept.key);
+      const m = {}; (all || []).forEach(n => { if ((n.body || "").trim()) m[n.question] = true; });
+      setNoted(m);
+    } catch { /* offline */ }
+  };
+  useEffect(() => { reloadNoted(); /* eslint-disable-next-line */ }, [country, year, dept.key]);
   const isMobile = useIsMobile();
   // Which question's heatmap popup is open on mobile (index), or null. One at a time.
   const [openHeatmap, setOpenHeatmap] = useState(null);
@@ -3790,17 +3998,28 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, addItem, saveRefin
                           background:sb(q.status), border:`1px solid ${sbd(q.status)}`,
                           borderRadius:4, padding:"2px 6px" }}>{q.status}</span>
                         {q.burden && <span style={{ fontSize:9, color:"#C08636" }}>Burden [inv.]</span>}
-                        <button onClick={() => setOpenHeatmap(openHeatmap===i ? null : i)}
-                          style={{ marginLeft:"auto", fontSize:11, fontWeight:600, color:"#E0863C",
-                            background:"#F7E7D5", border:"0.5px solid #E0A56F", borderRadius:5,
-                            padding:"3px 10px", cursor:"pointer" }}>
-                          {openHeatmap===i ? "Close" : "Heatmap"}
-                        </button>
+                        <span style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", justifyContent:"flex-end" }}>
+                          <BorderlineChooser q={q} deptKey={dept.key} canEdit={canEdit} saveStatusOverride={saveStatusOverride} />
+                          <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={q.en} label={q.en} me={me} hasNote={!!noted[q.en]} onSaved={reloadNoted} compact />
+                          <button onClick={() => setOpenHeatmap(openHeatmap===i ? null : i)}
+                            style={{ fontSize:11, fontWeight:600, color:"#E0863C",
+                              background:"#F7E7D5", border:"0.5px solid #E0A56F", borderRadius:5,
+                              padding:"3px 10px", cursor:"pointer" }}>
+                            {openHeatmap===i ? "Close" : "Heatmap"}
+                          </button>
+                        </span>
                       </div>
                     )}
                     <div style={{ fontSize:12, color:"#2C2621", lineHeight:1.5, marginBottom:6 }}>
                       {q.en}{q.burden && !isMobile ? <span style={{ color:"#C08636", fontSize:10, marginLeft:4 }}>[Burden]</span> : ""}
                     </div>
+                    {!isMobile && (
+                      <div className="no-print" style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginTop:2 }}>
+                        <BorderlineChooser q={q} deptKey={dept.key} canEdit={canEdit} saveStatusOverride={saveStatusOverride} />
+                        <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={q.en} label={q.en} me={me} hasNote={!!noted[q.en]} onSaved={reloadNoted} compact />
+                      </div>
+                    )}
+
                     {/* Mobile heatmap popup — overlays the question, one at a time */}
                     {isMobile && openHeatmap===i && (
                       <div style={{ position:"absolute", top:4, left:8, right:8, zIndex:20,
@@ -4011,6 +4230,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, addItem, saveRefin
                       );
                     })()}
                   </div>
+                  <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={item.text} label={item.rewrite?.trim() || item.text} me={me} hasNote={!!noted[item.text]} onSaved={reloadNoted} compact />
                   {item.include && canEdit && (
                     <button
                       onClick={() => {
@@ -4075,7 +4295,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, addItem, saveRefin
 }
 
 // ─── REPORT VIEW ──────────────────────────────────────────────────────────────
-function ReportView({ country, year, surveyData, getApproved, setView, sbOverrides, sbMaster, runRespondents }) {
+function ReportView({ country, year, surveyData, getApproved, setView, sbOverrides, sbMaster, runRespondents, me, isPCLead }) {
   const isMobile = useIsMobile();
   const [activeDept, setActiveDept] = useState(null);
   // Same ordering as the review sidebar: Concern → Watch → Healthy, worst score first.
@@ -4262,7 +4482,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
         <div id="dept-detail-section" />
         {activeDept ? (
           // Single dept selected — show just that one
-          <DeptReportPage dept={activeDeptData} getApproved={getApproved} country={country} year={year} sbOverrides={sbOverrides} sbMaster={sbMaster} />
+          <DeptReportPage dept={activeDeptData} getApproved={getApproved} country={country} year={year} sbOverrides={sbOverrides} sbMaster={sbMaster} me={me} isPCLead={isPCLead} />
         ) : (
           // No tab selected — show all for print
           <div>
@@ -4270,7 +4490,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
               Select a department above to focus, or download PDF to get the full report.
             </div>
             <div className="print-only">
-              {depts.map(dept => <DeptReportPage key={dept.key} dept={dept} getApproved={getApproved} country={country} year={year} sbOverrides={sbOverrides} sbMaster={sbMaster} />)}
+              {depts.map(dept => <DeptReportPage key={dept.key} dept={dept} getApproved={getApproved} country={country} year={year} sbOverrides={sbOverrides} sbMaster={sbMaster} me={me} isPCLead={isPCLead} />)}
             </div>
           </div>
         )}
@@ -4294,8 +4514,19 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
   );
 }
 
-function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaster }) {
+function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaster, me, isPCLead }) {
   const isMobile = useIsMobile();
+  // Which questions/areas the viewer has already noted (so the button shows a ✓).
+  const [noted, setNoted] = useState({});
+  const reloadNoted = async () => {
+    if (!dept) return;
+    try {
+      const all = await loadQuestionNotes(country, year, dept.key);
+      const m = {}; (all || []).forEach(n => { if ((n.body || "").trim() && n.author === me) m[n.question] = true; });
+      setNoted(m);
+    } catch { /* offline */ }
+  };
+  useEffect(() => { reloadNoted(); /* eslint-disable-next-line */ }, [country, year, dept && dept.key, me]);
   if (!dept) return null;
   const strengths    = getApproved(dept.key, "strengths");
   const growth       = getApproved(dept.key, "growth");
@@ -4315,6 +4546,9 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
         <div>
           <div style={{ fontFamily:FONT_DISPLAY, fontSize:24, fontWeight:600, color:"#2C2621", marginBottom:2 }}>{dept.label}</div>
           <div style={{ fontSize:13, color:"#7A6F63" }}>n = {dept.n} respondents</div>
+          <div className="no-print" style={{ marginTop:8 }}>
+            <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={"§ Area"} label={"Your notes on " + dept.label} me={me} hasNote={!!noted["§ Area"]} onSaved={reloadNoted} btnLabel="Notes on this area" />
+          </div>
         </div>
         <div style={{ textAlign:"right" }}>
           <div style={{ fontSize:34, fontWeight:800, color:statusColor, lineHeight:1, fontVariantNumeric:"tabular-nums" }}>{dept.avg}</div>
@@ -4386,6 +4620,9 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
                       </div>
                     );
                   })()}
+                  <div className="no-print" style={{ marginTop:6 }}>
+                    <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={q.en} label={q.en} me={me} hasNote={!!noted[q.en]} onSaved={reloadNoted} compact btnLabel="My note" />
+                  </div>
                 </td>
                 <td style={{ textAlign:"center", padding:"8px 10px", fontWeight:700, color:sc(q.status) }}>{q.score?.toFixed(2)}</td>
                 <td style={{ textAlign:"center", padding:"8px 10px" }}>
