@@ -982,6 +982,15 @@ export default function App() {
   const [saved, setSaved]         = useState(false);
   // Autosync status: "idle" | "saving" | "saved" | "error". Shown as a quiet indicator.
   const [syncStatus, setSyncStatus] = useState("idle");
+  // The time of the last confirmed save to the shared database. Shown to the user
+  // as "Saved at 3:42 PM" so they can SEE their work was saved, and when. Every
+  // write path in the review (item edits, rewrites, survey-basics text, status
+  // calls) reports through the helpers below into this one honest indicator.
+  const [lastSavedAt, setLastSavedAt] = useState(null);
+  const markSaving    = () => setSyncStatus("saving");
+  const markSaved     = () => { setLastSavedAt(Date.now()); setSyncStatus("saved");
+    setTimeout(() => setSyncStatus(s => s === "saved" ? "idle" : s), 2500); };
+  const markSaveError = () => setSyncStatus("error");
   const syncTimer = useRef(null);
   const lastSyncedRef = useRef("");   // JSON of last-synced selections, to skip no-op saves
   const lastSyncedByDept = useRef({}); // JSON of last-synced selections per dept, to save only what changed
@@ -1064,6 +1073,7 @@ export default function App() {
     const slice = {};
     Object.entries(allOverrides).forEach(([k, v]) => { if (k.startsWith(prefix)) slice[k] = v; });
     if (sbSyncTimers.current[deptKey]) clearTimeout(sbSyncTimers.current[deptKey]);
+    markSaving();
     sbSyncTimers.current[deptKey] = setTimeout(async () => {
       try {
         const runName = `${country} ${year}`;
@@ -1079,7 +1089,8 @@ export default function App() {
           surveyDataJSON: JSON.stringify({ questions: d.questions || [] }).slice(0, 95000),
           sbOverridesJSON: JSON.stringify(slice),
         });
-      } catch (e) { console.warn("SB override sync failed:", e.message); }
+        markSaved();
+      } catch (e) { console.warn("SB override sync failed:", e.message); markSaveError(); }
     }, 1200);
   };
 
@@ -1107,6 +1118,7 @@ export default function App() {
     const slice = {};
     Object.entries(allOverrides).forEach(([k, v]) => { if (k.startsWith(prefix)) slice[k] = v; });
     if (statusSyncTimers.current[deptKey]) clearTimeout(statusSyncTimers.current[deptKey]);
+    markSaving();
     statusSyncTimers.current[deptKey] = setTimeout(async () => {
       try {
         const runName = `${country} ${year}`;
@@ -1121,7 +1133,8 @@ export default function App() {
           surveyDataJSON: JSON.stringify({ questions: eff.questions || [] }).slice(0, 95000),
           statusOverridesJSON: JSON.stringify(slice),
         });
-      } catch (e) { console.warn("Status override sync failed:", e.message); }
+        markSaved();
+      } catch (e) { console.warn("Status override sync failed:", e.message); markSaveError(); }
     }, 1200);
   };
 
@@ -1159,8 +1172,10 @@ export default function App() {
     if (clean) updated[key] = clean; else delete updated[key];
     setSbMaster(updated);
     try { localStorage.setItem("pulse:sbMaster", JSON.stringify(updated)); } catch(e) {}
+    markSaving();
     saveSurveyBasicsMaster({ key, sbKey, question: qText, level, text: clean, author: effMe })
-      .catch(e => console.warn("Survey Basics master save failed:", e.message));
+      .then(markSaved)
+      .catch(e => { console.warn("Survey Basics master save failed:", e.message); markSaveError(); });
   };
 
   // Loading indicator while pulling the shared version from Airtable.
@@ -1274,11 +1289,10 @@ export default function App() {
           }
         }
         if (anyFailed) {
-          setSyncStatus("error");
+          markSaveError();
         } else {
           lastSyncedRef.current = snapshot;
-          setSyncStatus("saved");
-          setTimeout(() => setSyncStatus(s => s === "saved" ? "idle" : s), 2500);
+          markSaved();
         }
       } catch (e) {
         console.warn("Autosync failed:", e.message);
@@ -1612,7 +1626,7 @@ export default function App() {
       sbOverrides={sbOverrides} saveSbOverride={saveSbOverride} setSbOverrides={setSbOverrides}
       statusOverrides={statusOverrides} saveStatusOverride={saveStatusOverride}
       sbMaster={sbMaster} saveSbMaster={saveSbMaster}
-      cloudLoading={cloudLoading} syncStatus={syncStatus}
+      cloudLoading={cloudLoading} syncStatus={syncStatus} lastSavedAt={lastSavedAt}
       me={effMe} saveMe={saveMe} isPCLead={effIsPCLead}
       openToDept={openToDept} setOpenToDept={setOpenToDept}
       toggleDeptFinished={toggleDeptFinished}
@@ -2681,7 +2695,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 }
 
 // ─── REVIEW VIEW ──────────────────────────────────────────────────────────────
-function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, addItem, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, statusOverrides, saveStatusOverride, sbMaster, saveSbMaster, cloudLoading, syncStatus, me, saveMe, isPCLead, openToDept, setOpenToDept, toggleDeptFinished, canEditDept, authRole, authUser, onSignOut, authDepts, pendingImport, clearPendingImport }) {
+function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, addItem, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, statusOverrides, saveStatusOverride, sbMaster, saveSbMaster, cloudLoading, syncStatus, lastSavedAt, me, saveMe, isPCLead, openToDept, setOpenToDept, toggleDeptFinished, canEditDept, authRole, authUser, onSignOut, authDepts, pendingImport, clearPendingImport }) {
   const canEdit = (d) => (canEditDept ? canEditDept(d) : true);
   const isMobile = useIsMobile();
   const [activeDept, setActiveDept] = useState(null);
@@ -2773,10 +2787,10 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
             Edits save themselves; this just reassures the user it's handled. */}
         <span style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12,
           color: syncStatus==="error" ? "#BE6650" : "#7A6F63", padding:"0 8px", whiteSpace:"nowrap" }}>
-          {syncStatus==="saving" && <>☁ Saving…</>}
-          {syncStatus==="saved"  && <span style={{ color:"#5C9A6D" }}>✓ Saved</span>}
-          {syncStatus==="error"  && <>⚠ Sync failed — will retry on next edit</>}
-          {syncStatus==="idle"   && <span style={{ color:"#A89C8D" }}>✓ All changes saved</span>}
+          {syncStatus==="saving" ? <>☁ Saving…</>
+           : syncStatus==="error" ? <>⚠ Not saved yet — we’ll keep trying</>
+           : lastSavedAt ? <span style={{ color:"#5C9A6D" }}>✓ Saved at {new Date(lastSavedAt).toLocaleTimeString([], { hour:"numeric", minute:"2-digit" })}</span>
+           : <span style={{ color:"#A89C8D" }}>✓ All changes saved</span>}
         </span>
         {isAdmin && (
         <button onClick={()=>setView("report")} style={{ ...navBtn, background:"#E0863C" }}>
@@ -3865,10 +3879,12 @@ function DirectorNoteButton({ country, year, deptKey, question, label, me, hasNo
   const [text, setText] = useState("");
   const [vis, setVis] = useState("Private");
   const [saved, setSaved] = useState(false);
+  const [savedAt, setSavedAt] = useState(null);
+  const [saveErr, setSaveErr] = useState(false);
   const timer = useRef(null);
 
   const openModal = async () => {
-    setOpen(true); setSaved(false);
+    setOpen(true); setSaved(false); setSavedAt(null); setSaveErr(false);
     try {
       const all = await loadQuestionNotes(country, year, deptKey);   // this run's dept notes
       const mine = (all || []).find(n => n.question === question && n.author === me)
@@ -3882,10 +3898,10 @@ function DirectorNoteButton({ country, year, deptKey, question, label, me, hasNo
     try {
       if (!noteId) { const id = await addQuestionNote({ country, year, deptKey, question, author: me, body: t, visibility: v }); if (id) setNoteId(id); }
       else { await updateQuestionNote(noteId, { body: t, visibility: v }); }
-      setSaved(true); onSaved && onSaved();
-    } catch { /* offline — keep what's typed */ }
+      setSaved(true); setSavedAt(Date.now()); setSaveErr(false); onSaved && onSaved();
+    } catch { setSaveErr(true); /* keep what's typed */ }
   };
-  const onType = (v) => { setText(v); setSaved(false); clearTimeout(timer.current); timer.current = setTimeout(() => persist(v, vis), 500); };
+  const onType = (v) => { setText(v); setSaved(false); setSaveErr(false); clearTimeout(timer.current); timer.current = setTimeout(() => persist(v, vis), 500); };
   const setVisibility = (v) => { setVis(v); persist(text, v); };
   const close = () => { clearTimeout(timer.current); if (text.trim() && !saved) persist(text, vis); setOpen(false); };
 
@@ -3915,7 +3931,11 @@ function DirectorNoteButton({ country, year, deptKey, question, label, me, hasNo
                     {v === "Private" ? "Private to me" : "Share with team"}</button>
                 ))}
               </div>
-              <span style={{ fontSize: 11, color: "#5C9A6D", fontWeight: 600, opacity: saved ? 1 : 0, transition: "opacity .2s" }}>Saved</span>
+              <span style={{ fontSize: 11, fontWeight: 600 }}>
+                {saveErr ? <span style={{ color: "#BE6650" }}>⚠ Not saved — check connection</span>
+                 : savedAt ? <span style={{ color: "#5C9A6D" }}>✓ Saved at {new Date(savedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
+                 : null}
+              </span>
               <button onClick={close} style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, color: "#7A6F63", background: "transparent", border: "1px solid #ECE2D2", borderRadius: 7, padding: "6px 12px", cursor: "pointer" }}>Done</button>
             </div>
           </div>
