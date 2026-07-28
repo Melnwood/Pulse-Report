@@ -3,6 +3,11 @@
   publish = "build"
   functions = "netlify/functions"
 
+# The Claude proxy waits on a full model completion — give it the Pro-plan
+# maximum instead of the 10s default so Synthesize doesn't 504.
+[functions.claude]
+  timeout = 26
+
 # SPA catch-all — serve the React app for all routes. With force = false (the
 # default), Netlify matches real files and serverless functions FIRST, so calls
 # to /.netlify/functions/* reach the functions and are not replaced by index.html.

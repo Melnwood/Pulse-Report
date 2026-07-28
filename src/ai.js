@@ -67,12 +67,14 @@ export async function synthesizeLeadership({ countries = [], lowestQuestions = [
   const countryLines = countries.map(c => `- ${c.country}: ${c.concern} Concern, ${c.watch} Watch`);
   const lowLines = lowestQuestions.slice(0, 12).map(q => `- ${q.country} · ${q.deptLabel} · ${q.score} (${q.status}): ${clip(q.en)}`);
   const recLines = recurring.slice(0, 8).map(e => `- (${e.count} places) ${clip(e.en)} — ${(e.where || []).join("; ")}`);
+  // Keep the prompt lean — an oversized prompt + big completion is what pushed
+  // the Netlify function past its timeout (504). Cap both count and length.
   const noteLines = notes
-    .map(n => `- ${n.country} · ${n.deptLabel}${n.question ? ` [${clip(n.question, 70)}]` : ""} (${n.author || "?"}): ${clip(n.body, 220)}`)
-    .filter(l => l.length > 20).slice(0, 45);
+    .map(n => `- ${n.country} · ${n.deptLabel}${n.question ? ` [${clip(n.question, 60)}]` : ""} (${n.author || "?"}): ${clip(n.body, 160)}`)
+    .filter(l => l.length > 20).slice(0, 25);
   const respLines = openResponses
-    .map(r => `- ${r.country} · ${r.deptLabel}: ${clip(r.text, 220)}`)
-    .filter(l => l.length > 12).slice(0, 60);
+    .map(r => `- ${r.country} · ${r.deptLabel}: ${clip(r.text, 160)}`)
+    .filter(l => l.length > 12).slice(0, 35);
 
   const prompt =
 `You are the strategic advisor to the People & Culture leaders (Mel & Chris) at Josiah Venture, a Christian youth-missions organisation working across several countries. They oversee staff care org-wide. Below is the current pulse rollup ${scope ? `for ${scope} (a single country)` : "across every country's latest survey"}. Your job is NOT to restate the numbers — it's to help them decide where to put their attention ${where} and WHAT to do.
@@ -115,7 +117,9 @@ ${noteLines.join("\n") || "- (none yet)"}
 STAFF OPEN RESPONSES (in staff's own words, translated; may be empty):
 ${respLines.join("\n") || "- (none)"}`;
 
-  const raw = await callClaude(prompt, 1600);
+  // 1024 max_tokens: enough for 3–5 JSON priorities, small enough to finish
+  // inside the function timeout.
+  const raw = await callClaude(prompt, 1024);
   let parsed;
   try {
     const jsonText = raw.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();

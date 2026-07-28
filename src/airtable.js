@@ -159,7 +159,14 @@ export async function loadSelections(deptRecordId) {
 
 // Save a department's selections: replace all its items with the current set.
 // Simple + reliable: delete existing rows for this dept, then create fresh ones.
-export async function saveSelections(deptRecordId, selections) {
+//
+// GUARD (data-loss protection): an empty/stale local copy must NEVER wipe
+// non-empty stored selections — a department's review content was lost exactly
+// this way. We always load the server rows first (the stale-row scan below);
+// if the incoming set is empty but the server holds rows for this department,
+// we skip the save entirely unless the caller passes { allowEmpty: true } from
+// an explicit user action.
+export async function saveSelections(deptRecordId, selections, opts = {}) {
   // 1. delete existing items for this department.
   //    NOTE: we match the Department link LOCALLY rather than with a
   //    filterByFormula. `ARRAYJOIN({Department})` yields the linked records'
@@ -177,6 +184,14 @@ export async function saveSelections(deptRecordId, selections) {
     return linked.some(l =>
       (l && typeof l === "object" ? l.id : l) === deptRecordId);
   }).map(r => r.id);
+
+  // Count what the caller is about to write BEFORE deleting anything.
+  const incomingCount = Object.keys(SECTION_LABEL)
+    .reduce((a, k) => a + ((selections && selections[k] ? selections[k].length : 0)), 0);
+  if (incomingCount === 0 && staleIds.length > 0 && !opts.allowEmpty) {
+    console.warn(`saveSelections: refusing to overwrite ${staleIds.length} stored selection row(s) with an empty set (dept ${deptRecordId}). Pass allowEmpty from an explicit user action to force.`);
+    return -1;   // guarded — nothing deleted, nothing written
+  }
   if (staleIds.length) {
     await call({ action: "delete", table: "selections", recordIds: staleIds });
   }

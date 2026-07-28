@@ -370,18 +370,53 @@ function borderlineOptions(q) {
   return null;
 }
 
-// Apply saved status overrides onto a surveyData object: preserve each question's
-// auto status (autoStatus), swap in the director-chosen status, and recompute each
-// department's roll-up status from the effective statuses. Averages are unaffected
-// (scores don't change). Returns a NEW object; the input is untouched.
+// Master question lookup by survey column — the CODE is the source of truth for
+// each question's scale/burden/wording. Loaded runs render a snapshot frozen in
+// Airtable's "Survey Data JSON" at import time, so a code change (e.g. a scale
+// moving from mean → dist) would otherwise only affect NEW imports and appear to
+// "revert" on every reload. Re-sourcing from this map makes such changes
+// retroactive for every stored run with no re-import.
+const MASTER_BY_COL = (() => {
+  const m = new Map();
+  for (const d of DEPARTMENTS) for (const mq of d.questions) m.set(mq.col, mq);
+  return m;
+})();
+const MASTER_BY_NORM = (() => {
+  const m = new Map();
+  for (const d of DEPARTMENTS) for (const mq of d.questions) m.set(normQ(mq.en), mq);
+  return m;
+})();
+
+// Apply saved status overrides onto a surveyData object — and, first, re-source
+// each question's scale/burden/wording from the code question master and
+// recompute its AUTO band under the corrected scale (score VALUES stay exactly
+// as stored). Then swap in the director-chosen status where one exists and
+// recompute each department's roll-up from the effective statuses. Runs even
+// with no overrides (the re-sourcing must always happen). Returns a NEW object;
+// the input is untouched.
 function applyStatusOverrides(sd, overrides, country, year) {
-  if (!sd || !sd.depts || !overrides) return sd;
+  if (!sd || !sd.depts) return sd;
+  const ov = overrides || {};
   const depts = {};
   for (const [key, d] of Object.entries(sd.depts)) {
     const questions = (d.questions || []).map(q => {
-      const auto = q.autoStatus || q.status;
-      const ov = overrides[`${country}:${year}:${key}:${normQ(q.en)}`];
-      return { ...q, autoStatus: auto, status: (ov && ov !== auto) ? ov : auto };
+      // 1. Re-source scale/burden/en from the code master (by col; fall back to
+      //    normalized text for older snapshots without a col).
+      const master = (q.col != null && MASTER_BY_COL.get(q.col)) || MASTER_BY_NORM.get(normQ(q.en)) || null;
+      const eff = master ? { ...q, en: master.en, burden: master.burden, scale: master.scale } : { ...q };
+      // 2. Recompute the auto band under the corrected scale from the stored
+      //    response values. Scores are NOT touched.
+      let auto;
+      if (Array.isArray(eff.vals) && eff.vals.length) {
+        auto = getStatus(eff.vals, eff).status || eff.autoStatus || eff.status;
+      } else {
+        auto = eff.autoStatus || eff.status;
+      }
+      // 3. Only then apply any borderline override (check the master wording
+      //    first, then the frozen wording older overrides were keyed under).
+      const chosen = ov[`${country}:${year}:${key}:${normQ(eff.en)}`] ||
+                     ov[`${country}:${year}:${key}:${normQ(q.en)}`];
+      return { ...eff, autoStatus: auto, status: (chosen && chosen !== auto) ? chosen : auto };
     });
     depts[key] = { ...d, questions, status: deptStatus(questions) };
   }
