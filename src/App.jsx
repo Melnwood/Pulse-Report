@@ -4359,37 +4359,14 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
       return (parseFloat(a.avg)||0) - (parseFloat(b.avg)||0);
     }) : [];
 
-  // For the SUMMARY only, combine culture-split departments (JVK1+JVK2 -> JVK,
-  // LC1+LC2 -> Language & Culture) so the health overview matches the director's
-  // report (9 departments). The detail pages below still use the split `depts`.
-  const COMBINE = {
-    JVK1: { group: "JVK", label: "JVK — Josiah Venture Kids" },
-    JVK2: { group: "JVK", label: "JVK — Josiah Venture Kids" },
-    LC1:  { group: "LC",  label: "Language & Culture" },
-    LC2:  { group: "LC",  label: "Language & Culture" },
-  };
-  const summaryDepts = (() => {
-    const singles = [];
-    const groups = {}; // group -> combined dept
-    for (const d of depts) {
-      const c = COMBINE[d.key];
-      if (!c) { singles.push(d); continue; }
-      if (!groups[c.group]) groups[c.group] = { key: c.group, label: c.label, _questions: [], _n: 0 };
-      groups[c.group]._questions.push(...(d.questions || []));
-      groups[c.group]._n += d.n || 0;
-    }
-    const combined = Object.values(groups).map(g => {
-      const scored = g._questions.filter(q => q.score);
-      const avg = scored.length ? scored.reduce((a,q)=>a+q.score,0)/scored.length : 0;
-      return { key: g.key, label: g.label, n: g._n, avg: +avg.toFixed(2),
-               status: deptStatus(g._questions), questions: g._questions };
-    });
-    return [...singles, ...combined].sort((a,b) => {
-      const sa = STATUS_ORDER[a.status] ?? 3, sb = STATUS_ORDER[b.status] ?? 3;
-      if (sa !== sb) return sa - sb;
-      return (parseFloat(a.avg)||0) - (parseFloat(b.avg)||0);
-    });
-  })();
+  // Every department stands on its own at its own score — JVK 1st/2nd Culture and
+  // Language & Culture 1st/2nd Culture are NOT merged, because they land differently
+  // and people need to see where each one actually falls.
+  const summaryDepts = [...depts].sort((a,b) => {
+    const sa = STATUS_ORDER[a.status] ?? 3, sb = STATUS_ORDER[b.status] ?? 3;
+    if (sa !== sb) return sa - sb;
+    return (parseFloat(a.avg)||0) - (parseFloat(b.avg)||0);
+  });
 
   const concerns = summaryDepts.filter(d=>d.status==="Concern");
   const watches  = summaryDepts.filter(d=>d.status==="Watch");
@@ -4402,32 +4379,12 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
   const totalN = (surveyData?.raw?.length || null) ?? runRespondents
     ?? (depts.length ? depts.reduce((a,d)=>Math.max(a, Number(d.n)||0), 0) : null);
 
-  // Tab ordering: keep culture-split pairs together, slotted by their COMBINED score,
-  // with the worse half first inside each pair; standalone depts sort by their own score.
-  const PAIR_OF = { JVK1:"JVK", JVK2:"JVK", LC1:"LC", LC2:"LC" };
-  const orderedDepts = (() => {
-    // combined score per group (from summaryDepts, which already computed it)
-    const combinedScore = {};
-    summaryDepts.forEach(s => { if (s.key==="JVK"||s.key==="LC") combinedScore[s.key]=parseFloat(s.avg)||0; });
-    // group members
-    const members = { JVK:[], LC:[] };
-    const standalone = [];
-    depts.forEach(d => { const g=PAIR_OF[d.key]; if (g) members[g].push(d); else standalone.push(d); });
-    // build sortable units: each unit is {sortStatus, sortScore, items:[...]}
-    const units = [];
-    standalone.forEach(d => units.push({ st: STATUS_ORDER[d.status]??3, sc: parseFloat(d.avg)||0, items:[d] }));
-    ["JVK","LC"].forEach(g => {
-      if (!members[g].length) return;
-      // worse half first (lowest own score first)
-      const pair = members[g].slice().sort((a,b)=>(parseFloat(a.avg)||0)-(parseFloat(b.avg)||0));
-      const cs = combinedScore[g] ?? 0;
-      const st = cs>=3.50?"Healthy":cs>=2.50?"Watch":"Concern";
-      units.push({ st: STATUS_ORDER[st]??3, sc: cs, items: pair });
-    });
-    // sort units by status band then combined/own score, then flatten
-    units.sort((a,b)=> a.st!==b.st ? a.st-b.st : a.sc-b.sc);
-    return units.flatMap(u => u.items);
-  })();
+  // Tab ordering: every department on its own, sorted by status then its own score.
+  const orderedDepts = [...depts].sort((a,b) => {
+    const sa = STATUS_ORDER[a.status] ?? 3, sb = STATUS_ORDER[b.status] ?? 3;
+    if (sa !== sb) return sa - sb;
+    return (parseFloat(a.avg)||0) - (parseFloat(b.avg)||0);
+  });
 
   const activeDeptData = activeDept ? depts.find(d=>d.key===activeDept) : null;
 
