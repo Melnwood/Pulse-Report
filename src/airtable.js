@@ -530,6 +530,50 @@ export async function deleteQuestionNote(noteId) {
   await call({ action: "delete", table: "questionNotes", recordIds: [noteId] });
 }
 
+// ─── COUNTRY LEADER PREP ─────────────────────────────────────────────────────
+// One Prep row per run (country + year): the leader's per-department reactions,
+// five reflections, meeting agenda, and the Ready gate. JSON blobs, like the
+// other long-text stores. The proxy scopes reads/writes (directors never see it).
+const parseJSONObj = (s) => { try { const v = JSON.parse(s || ""); return v && typeof v === "object" && !Array.isArray(v) ? v : {}; } catch { return {}; } };
+
+export async function loadPrep(country, year) {
+  const run = `${country} ${year}`;
+  const res = await call({ action: "list", table: "prep", filterByFormula: `{Run} = ${q(run)}` });
+  const r = (res.records || [])[0];
+  if (!r) return { _recordId: null, reactions: {}, reflections: {}, agenda: [], ready: false, readyAt: null, author: "" };
+  const f = r.fields || {};
+  let agenda = []; try { const a = JSON.parse(f["Agenda"] || ""); if (Array.isArray(a)) agenda = a; } catch {}
+  return {
+    _recordId: r.id,
+    reactions: parseJSONObj(f["Reactions"]),
+    reflections: parseJSONObj(f["Reflections"]),
+    agenda,
+    ready: !!f["Ready"],
+    readyAt: f["Ready At"] || null,
+    author: f["Author"] || "",
+  };
+}
+
+// Upsert the run's Prep row with a partial patch ({reactions} | {reflections} |
+// {agenda} | {ready}). Returns the record id.
+export async function savePrep(country, year, patch, author) {
+  const run = `${country} ${year}`;
+  const existing = await call({ action: "list", table: "prep", filterByFormula: `{Run} = ${q(run)}` });
+  const fields = { "Run": run, "Country": country, "Year": Number(year), "Updated": new Date().toISOString() };
+  if (author) fields["Author"] = author;
+  if (patch.reactions !== undefined) fields["Reactions"] = JSON.stringify(patch.reactions).slice(0, 95000);
+  if (patch.reflections !== undefined) fields["Reflections"] = JSON.stringify(patch.reflections).slice(0, 95000);
+  if (patch.agenda !== undefined) fields["Agenda"] = JSON.stringify(patch.agenda).slice(0, 95000);
+  if (patch.ready !== undefined) { fields["Ready"] = !!patch.ready; fields["Ready At"] = patch.ready ? new Date().toISOString() : null; }
+  if (existing.records.length) {
+    const id = existing.records[0].id;
+    await call({ action: "update", table: "prep", records: [{ id, fields }] });
+    return id;
+  }
+  const created = await call({ action: "create", table: "prep", records: [{ fields }] });
+  return created.records?.[0]?.id || null;
+}
+
 // ─── MEASURES (behavioural-change tracking) ──────────────────────────────────
 // One record per Country + Department + Question, threaded across runs. Stores a
 // baseline/target and behaviour, plus interventions[] {date,action} and

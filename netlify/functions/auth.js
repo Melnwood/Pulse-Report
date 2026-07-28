@@ -124,6 +124,35 @@ exports.handler = async (event) => {
     }
   }
 
+  // ── Country-leader directory (any signed-in user) ──────────────────────────
+  // Powers the personalized report greeting and note attribution. Returns ONLY
+  // role=country accounts, sanitized to id+country+name+email — never hashes.
+  if (body.action === "countryLeaders") {
+    if (secret) {
+      const authz = event.headers.authorization || event.headers.Authorization || "";
+      const requester = verifyToken(authz.replace(/^Bearer\s+/i, "").trim(), secret);
+      if (!requester) return { statusCode: 401, headers, body: JSON.stringify({ error: "Please sign in." }) };
+    }
+    const token = process.env.AIRTABLE_TOKEN;
+    if (!token) return { statusCode: 500, headers, body: JSON.stringify({ error: "AIRTABLE_TOKEN is not set." }) };
+    const baseId = process.env.AIRTABLE_BASE_ID || BASE_ID_FALLBACK;
+    const doFetch = (typeof fetch !== "undefined") ? fetch : (await import("node-fetch")).default;
+    const AT = "https://api.airtable.com/v0";
+    const authHeaders = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+    try {
+      const res = await doFetch(`${AT}/${baseId}/${encodeURIComponent(USERS_TABLE)}?pageSize=100`, { headers: authHeaders });
+      const data = JSON.parse(await res.text());
+      if (!res.ok) return { statusCode: res.status, headers, body: JSON.stringify({ error: "Could not read the directory." }) };
+      const leaders = (data.records || [])
+        .filter(r => String((r.fields || {}).Role || "").toLowerCase().trim() === "country" && (r.fields || {}).Active !== false)
+        .map(r => ({ id: r.id, country: r.fields.Country || "", name: r.fields.Name || "", email: r.fields.Email || "" }))
+        .sort((a, b) => a.country.localeCompare(b.country));
+      return { statusCode: 200, headers, body: JSON.stringify({ leaders }) };
+    } catch (e) {
+      return { statusCode: 502, headers, body: JSON.stringify({ error: "Directory lookup failed: " + e.message }) };
+    }
+  }
+
   // ── Leader-only user management: listUsers / saveUser / deleteUser / resetPassword ──
   if (["listUsers", "saveUser", "deleteUser", "resetPassword"].includes(body.action)) {
     if (!secret) return { statusCode: 400, headers, body: JSON.stringify({ error: "Login isn't configured yet." }) };

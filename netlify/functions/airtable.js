@@ -24,7 +24,13 @@ const TABLES = {
   measures:      "Measures",
   surveyBasics:  "Survey Basics",
   helpVideos:    "Help Videos",
+  prep:          "Prep",
 };
+
+// Tables a COUNTRY LEADER may write to (scoped to their own country below):
+// their prep (reactions/reflections/agenda/ready), and notes — which is how
+// their leadership-question answers and shared notes are stored.
+const COUNTRY_WRITABLE = new Set(["prep", "deptNotes", "questionNotes"]);
 
 // Department code -> Survey Basics key (lowercase, culture-merged), mirroring the
 // client's SB_KEY. Used to scope director writes to the Survey Basics table.
@@ -60,7 +66,9 @@ exports.handler = async (event) => {
   const deptSet = new Set(String((user && user.department) || "")
     .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean));
   const readScoped   = role === "country";                 // only country leaders are read-filtered
-  const writeBlocked = role === "country";                 // country leaders are read-only
+  // Country leaders are read-only EXCEPT their prep + notes (their own country
+  // only — enforced per-record below). Directors write within their departments.
+  const writeByCountry = role === "country";
   const writeByDept  = role === "director";                // directors write within their departments
 
   let body;
@@ -132,6 +140,7 @@ exports.handler = async (event) => {
     if (tbl === "measures") return String(fields.Country || "").toLowerCase() === country.toLowerCase();
     if (tbl === "surveyBasics") return true; // shared org-wide defaults — everyone reads them
     if (tbl === "helpVideos") return true;   // shared help content — everyone reads it
+    if (tbl === "prep") return startsWithCountry(fields.Run);
     if (tbl === "selections") { const set = await allowedCountryDeptIds(); const id = selectionDeptId(fields); return !!id && set.has(id); }
     return false;
   };
@@ -160,6 +169,11 @@ exports.handler = async (event) => {
   try {
     // ── LIST ──
     if (action === "list") {
+      // Prep (reflections + agenda) is for P&C leadership and the country's own
+      // leader — never directors.
+      if (table === "prep" && role === "director") {
+        return { statusCode: 200, headers, body: JSON.stringify({ records: [] }) };
+      }
       let all = await listAll(tableId, filterByFormula, params && params.pageSize, params && params.sort);
       // Country leaders see only their own country; directors and leaders read everything.
       if (readScoped) {
@@ -168,14 +182,14 @@ exports.handler = async (event) => {
         all = kept;
       }
       // Notes carry a visibility. Non-leaders never receive someone else's PRIVATE
-      // note — a country leader gets public notes only; a director also gets their
-      // own. (Enforced here on the server, not just hidden in the client.)
+      // note — a country leader gets public notes plus their own; a director also
+      // gets their own. (Enforced here on the server, not just hidden in the client.)
       if ((table === "deptNotes" || table === "questionNotes") && role && role !== "leader") {
         const myName = String((user && user.name) || "");
         all = all.filter(r => {
           const f = r.fields || {};
           if ((f.Visibility || "Private") === "Public") return true;
-          return role === "director" && myName !== "" && String(f.Author || "") === myName;
+          return (role === "director" || role === "country") && myName !== "" && String(f.Author || "") === myName;
         });
       }
       return { statusCode: 200, headers, body: JSON.stringify({ records: all }) };
@@ -183,7 +197,30 @@ exports.handler = async (event) => {
 
     // ── WRITES: create / update / delete ──
     if (action === "create" || action === "update" || action === "delete") {
-      if (writeBlocked) return fail(403, "Read-only access.");
+      if (writeByCountry) {
+        // Country leaders write ONLY their prep + notes, ONLY within their country.
+        if (!COUNTRY_WRITABLE.has(table)) return fail(403, "Read-only access.");
+        if (action === "create") {
+          for (const rec of (records || [])) {
+            if (!(await recordInCountry(table, rec.fields))) return fail(403, "Outside your country.");
+          }
+        } else if (action === "update") {
+          for (const rec of (records || [])) {
+            let ok = await recordInCountry(table, rec.fields);
+            if (!ok) { const f = await getRecord(tableId, rec.id); ok = f && await recordInCountry(table, f.fields); }
+            if (!ok) return fail(403, "Outside your country.");
+          }
+        } else if (action === "delete") {
+          // Only their own notes (never someone else's, never prep rows).
+          if (table === "prep") return fail(403, "Prep rows can't be deleted.");
+          const myName = String((user && user.name) || "");
+          for (const id of (recordIds || [])) {
+            const f = await getRecord(tableId, id);
+            const ok = f && await recordInCountry(table, f.fields) && myName !== "" && String((f.fields || {}).Author || "") === myName;
+            if (!ok) return fail(403, "You can only delete your own notes.");
+          }
+        }
+      }
       if (writeByDept) {
         // director: every affected record must belong to one of their departments
         // (in any country). Updates/deletes fetch the record so the check uses

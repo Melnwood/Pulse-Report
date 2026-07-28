@@ -1,14 +1,16 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useIsMobile, sc, sb, sbd, card, navBtn, lbl, inp, C, FONT_DISPLAY } from "./theme";
 import Disclosure from "./components/Disclosure";
+import QuestionHeatmap from "./components/QuestionHeatmap";
 import { VisibilityPicker, VisibilityChip } from "./components/Visibility";
 import { IconHelp, IconUpload } from "./components/Icons";
 import Login from "./components/Login";
 import UsersView from "./components/UsersView";
 import VideosView from "./components/VideosView";
-import { authStatus, tokenValid, getUser, logout } from "./authClient";
+import { authStatus, tokenValid, getUser, logout, listCountryLeaders } from "./authClient";
+import CountryLeadersView from "./components/CountryLeadersView";
 import SURVEY_BASICS from "./surveyBasics.json";
-import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, deleteDepartmentNote, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, updateQuestionNote, deleteQuestionNote, loadMeasures, loadSurveyBasicsMaster, saveSurveyBasicsMaster, loadHelpVideos } from "./airtable";
+import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, deleteDepartmentNote, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, updateQuestionNote, deleteQuestionNote, loadMeasures, loadSurveyBasicsMaster, saveSurveyBasicsMaster, loadHelpVideos, loadPrep, savePrep } from "./airtable";
 import { synthesizeLeadership } from "./ai";
 import MeasurePanel from "./components/MeasurePanel";
 import NotesDigest from "./components/NotesDigest";
@@ -1213,6 +1215,22 @@ export default function App() {
       .catch(e => { console.warn("Survey Basics master save failed:", e.message); markSaveError(); });
   };
 
+  // Country-leader directory — powers the personalized report greeting and the
+  // note attribution. Keyed lower(country) -> { name, email }. Refreshed after
+  // edits on the Country Leaders screen.
+  const [countryLeaders, setCountryLeaders] = useState({});
+  const reloadCountryLeaders = useCallback(() => {
+    listCountryLeaders().then(list => {
+      const m = {};
+      (list || []).forEach(l => { if (l.country) m[String(l.country).toLowerCase()] = { name: l.name, email: l.email }; });
+      setCountryLeaders(m);
+    });
+  }, []);
+  useEffect(() => {
+    if (authGate === "open" || authGate === "authed") reloadCountryLeaders();
+  }, [authGate, reloadCountryLeaders]);
+  const leaderForCountry = country ? (countryLeaders[String(country).toLowerCase()] || null) : null;
+
   // Loading indicator while pulling the shared version from Airtable.
   const [cloudLoading, setCloudLoading] = useState(false);
 
@@ -1615,6 +1633,12 @@ export default function App() {
     <UsersView setView={setView} me={effMe} />
   );
 
+  if (view === "leaders" && effIsAdmin) return wrap(
+    <CountryLeadersView setView={setView}
+      countries={[...new Set(allRuns.map(r => r.country))].filter(Boolean).sort()}
+      onChanged={reloadCountryLeaders} />
+  );
+
   if (view === "videos" && effIsAdmin) return wrap(
     <VideosView setView={setView} />
   );
@@ -1666,6 +1690,7 @@ export default function App() {
       openToDept={openToDept} setOpenToDept={setOpenToDept}
       toggleDeptFinished={toggleDeptFinished}
       canEditDept={canEditDept} authRole={viewRole} authUser={viewUser} onSignOut={signOut} authDepts={authDepts}
+      leaderName={leaderForCountry ? leaderForCountry.name : null}
     />
   );
 
@@ -1678,6 +1703,9 @@ export default function App() {
       setView={setView}
       sbOverrides={sbOverrides} sbMaster={sbMaster}
       me={me} isPCLead={isPCLead}
+      leaderName={leaderForCountry ? leaderForCountry.name : null}
+      prepMode={viewRole === "country"}
+      prepAuthor={(viewUser && viewUser.name) || effMe || ""}
     />
   );
 
@@ -2182,6 +2210,9 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
           <span style={{ fontFamily:FONT_DISPLAY, fontSize:22, fontWeight:600, color:"#2C2621" }}>Leadership</span>
           {authUser && authUser.role === "leader" && (
             <button onClick={() => setView("users")} style={{ ...navBtn, fontSize:12, padding:"6px 12px" }}>Manage people</button>
+          )}
+          {isAdmin && (
+            <button onClick={() => setView("leaders")} style={{ ...navBtn, fontSize:12, padding:"6px 12px" }}>Country leaders</button>
           )}
           {isAdmin && (
             <button onClick={() => setView("videos")} style={{ ...navBtn, fontSize:12, padding:"6px 12px" }}>Manage videos</button>
@@ -2730,7 +2761,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 }
 
 // ─── REVIEW VIEW ──────────────────────────────────────────────────────────────
-function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, addItem, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, statusOverrides, saveStatusOverride, sbMaster, saveSbMaster, cloudLoading, syncStatus, lastSavedAt, me, saveMe, isPCLead, openToDept, setOpenToDept, toggleDeptFinished, canEditDept, authRole, authUser, onSignOut, authDepts, pendingImport, clearPendingImport }) {
+function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, addItem, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, statusOverrides, saveStatusOverride, sbMaster, saveSbMaster, cloudLoading, syncStatus, lastSavedAt, me, saveMe, isPCLead, openToDept, setOpenToDept, toggleDeptFinished, canEditDept, authRole, authUser, onSignOut, authDepts, pendingImport, clearPendingImport, leaderName }) {
   const canEdit = (d) => (canEditDept ? canEditDept(d) : true);
   const isMobile = useIsMobile();
   const [activeDept, setActiveDept] = useState(null);
@@ -2997,10 +3028,19 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
             />
           )}
           {dept && deptTab === "notes" && (
-            <DeptNotesTab
+            <DeptMeetingNotesPage
               dept={dept} country={country} year={year}
               me={me} saveMe={saveMe} isPCLead={isPCLead}
-              sel={selections[dept.key]}
+              getApproved={(deptKey, section) =>
+                (selections[deptKey]?.[section] || [])
+                  .filter(i => i.include)
+                  .map(i => {
+                    const text = (i.rewrite || "").trim() || i.text;
+                    if (section === 'quotes') return { text, translation: i.translation || null, isOriginalLang: !!i.isOriginalLang };
+                    return text;
+                  })}
+              sbOverrides={sbOverrides} sbMaster={sbMaster}
+              leaderName={leaderName}
             />
           )}
         </div>
@@ -3526,6 +3566,160 @@ function DeptNotesTab({ dept, country, year, me, saveMe, isPCLead, sel = {} }) {
         <div style={subline}>Write notes as you talk through the report together in your meeting.</div>
         <NotesPanel country={country} year={year} deptKey={dept.key} deptLabel={dept.label} me={me} saveMe={saveMe} isPCLead={isPCLead} />
       </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── MEETING NOTES PAGE ───────────────────────────────────────────────────────
+// A native-<details> collapsible section (everything on the meeting-notes page
+// starts collapsed; the caret rotates when open).
+function MnSection({ title, count, dot, children }) {
+  return (
+    <details className="pulse-mn" style={{ background:"#FFFFFF", border:"1px solid #ECE2D2",
+      borderRadius:12, overflow:"hidden", marginBottom:14,
+      boxShadow:"0 1px 2px rgba(58,38,22,.06), 0 6px 22px -8px rgba(58,38,22,.10)" }}>
+      <summary style={{ display:"flex", alignItems:"center", gap:9, padding:"12px 14px",
+        cursor:"pointer", listStyle:"none" }}>
+        <svg className="pulse-mn-caret" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#A89C8D"
+          strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
+          style={{ flexShrink:0, transition:"transform .15s" }}>
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+        {dot && <span style={{ width:8, height:8, borderRadius:"50%", background:dot, flexShrink:0 }} />}
+        <span style={{ fontSize:13, fontWeight:700, color:"#2C2621" }}>{title}</span>
+        {count != null && <span style={{ marginLeft:"auto", fontSize:11, color:"#7A6F63",
+          fontVariantNumeric:"tabular-nums" }}>{count}</span>}
+      </summary>
+      <div style={{ padding:"2px 14px 14px" }}>{children}</div>
+    </details>
+  );
+}
+
+// Convention: a country leader's answer to a leadership question is stored as a
+// Question Note whose question field is "LQA: <the leadership question>" (written
+// by the Country Leader Prep flow). The meeting-notes page surfaces them here.
+const LEADER_ANSWER_PREFIX = "LQA: ";
+
+// The redesigned Meeting Notes page — two columns, everything collapsed.
+// Left (1.5fr): the real generated report (DeptReportPage, reused, collapsed) with
+// per-question inline heatmaps; then everything the country leader shared.
+// Right (1fr): the director's notes in a fixed scroll window, and the meeting log.
+function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getApproved, sbOverrides, sbMaster, leaderName }) {
+  const isMobile = useIsMobile();
+  const [dNotes, setDNotes] = useState(null);   // department-level notes
+  const [qNotes, setQNotes] = useState(null);   // question-level notes
+
+  const reload = async () => {
+    try { setDNotes(await loadDepartmentNotes(country, year, dept.key)); } catch { setDNotes([]); }
+    try { setQNotes(await loadQuestionNotes(country, year, dept.key)); } catch { setQNotes([]); }
+  };
+  useEffect(() => { setDNotes(null); setQNotes(null); reload(); /* eslint-disable-next-line */ }, [country, year, dept.key]);
+
+  const hasBody = n => (n.body || "").trim();
+  const isAnswer = n => String(n.question || "").startsWith(LEADER_ANSWER_PREFIX);
+  const pub = list => (list || []).filter(n => hasBody(n) && n.visibility === "Public");
+
+  // From the country leader: everything shared publicly for this department —
+  // notes + questions, tagged with who wrote them, plus leadership-question answers.
+  const leaderAnswers = pub(qNotes).filter(isAnswer);
+  const leaderShared = [...pub(dNotes), ...pub(qNotes).filter(n => !isAnswer(n))];
+
+  // Director's notes: same visibility rule as everywhere (public, yours, or P&C lead).
+  const dirNotes = (qNotes || []).filter(n => hasBody(n) && !isAnswer(n) &&
+    (n.visibility === "Public" || (me && n.author === me) || isPCLead));
+
+  const fmt = (iso) => { try { return new Date(iso).toLocaleDateString(undefined, { month:"short", day:"numeric" }); } catch { return ""; } };
+  const aboutLabel = (question) => {
+    const s = String(question || "");
+    return s.startsWith("§") ? s.replace(/^§\s*/, "") + " (section)" : s;
+  };
+  const noteCard = { border:"1px solid #ECE2D2", borderRadius:10, background:"#fff", padding:"11px 13px", marginBottom:9 };
+  const loading = dNotes === null || qNotes === null;
+
+  return (
+    <div>
+      <style>{`
+        details.pulse-mn > summary::-webkit-details-marker { display: none; }
+        details.pulse-mn[open] > summary .pulse-mn-caret { transform: rotate(90deg); }
+      `}</style>
+      <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1.5fr 1fr", gap:16, alignItems:"start" }}>
+
+        {/* ── LEFT COLUMN ─────────────────────────────────────────────── */}
+        <div>
+          {/* 1+2. The real report, sections collapsed, per-question heatmaps inline */}
+          <MnSection title={`Report — ${dept.label}`} count={`${dept.avg} avg · ${dept.status}`} dot={sc(dept.status)}>
+            <DeptReportPage dept={dept} getApproved={getApproved} country={country} year={year}
+              sbOverrides={sbOverrides} sbMaster={sbMaster} me={me} isPCLead={isPCLead} startCollapsed />
+          </MnSection>
+
+          {/* 3. Everything the country leader shared for this department */}
+          <MnSection title={leaderName ? `From ${leaderName} (country leader)` : "From the country leader"} dot="#E0863C"
+            count={loading ? "…" : `${leaderShared.length + leaderAnswers.length}`}>
+            {loading ? <div style={{ fontSize:12, color:"#7A6F63" }}>Loading…</div> : <>
+              {leaderAnswers.length > 0 && (
+                <div style={{ marginBottom:12 }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:.5, marginBottom:8 }}>
+                    Answers to this department's leadership questions
+                  </div>
+                  {leaderAnswers.map(n => (
+                    <div key={n.id} style={{ ...noteCard, background:"#FDFAF4" }}>
+                      <div style={{ fontSize:11, color:"#7A6F63", marginBottom:5, lineHeight:1.4, fontStyle:"italic" }}>
+                        {String(n.question).slice(LEADER_ANSWER_PREFIX.length)}
+                      </div>
+                      <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{n.body}</div>
+                      <div style={{ fontSize:11, color:"#A89C8D", marginTop:6 }}>{n.author || leaderName || "Country leader"}{n.created ? " · " + fmt(n.created) : ""}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {leaderShared.length > 0 ? leaderShared.map(n => (
+                <div key={n.id} style={noteCard}>
+                  {n.question && <div style={{ fontSize:11, color:"#7A6F63", marginBottom:5, lineHeight:1.4 }}>{aboutLabel(n.question)}</div>}
+                  <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{n.body}</div>
+                  <div style={{ fontSize:11, color:"#A89C8D", marginTop:6 }}>{n.author || "Unknown"}{n.created ? " · " + fmt(n.created) : ""}</div>
+                </div>
+              )) : leaderAnswers.length === 0 && (
+                <div style={{ fontSize:12.5, color:"#A89C8D", fontStyle:"italic" }}>
+                  Nothing shared yet — the country leader's public notes, questions, and prep answers for this department will appear here.
+                </div>
+              )}
+            </>}
+          </MnSection>
+        </div>
+
+        {/* ── RIGHT COLUMN ────────────────────────────────────────────── */}
+        <div>
+          {/* 4. Director's notes — fixed-height scroll window */}
+          <MnSection title="Director's notes" dot="#B96524" count={loading ? "…" : `${dirNotes.length}`}>
+            <div style={{ maxHeight:270, overflowY:"auto" }}>
+              {loading ? <div style={{ fontSize:12, color:"#7A6F63" }}>Loading…</div> :
+                dirNotes.length === 0 ? (
+                  <div style={{ fontSize:12.5, color:"#A89C8D", fontStyle:"italic" }}>
+                    No director's notes yet. Add them with the Director's Note button on the Review tab.
+                  </div>
+                ) : dirNotes.map(n => (
+                  <div key={n.id} style={noteCard}>
+                    <div style={{ fontSize:11, color:"#7A6F63", marginBottom:5, lineHeight:1.4 }}>{aboutLabel(n.question)}</div>
+                    <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{n.body}</div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:7 }}>
+                      <span style={{ fontSize:9, fontWeight:700, borderRadius:4, padding:"2px 7px", border:"1px solid",
+                        ...(n.visibility === "Public" ? { color:"#5C9A6D", background:"#E9F1E9", borderColor:"#C7E0CB" } : { color:"#7A6F63", background:"#F1EAE1", borderColor:"#E4D8C8" }) }}>
+                        {n.visibility === "Public" ? "Shared" : "Private"}
+                      </span>
+                      <span style={{ fontSize:11, color:"#A89C8D" }}>{n.author}{n.created ? " · " + fmt(n.created) : ""}</span>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </MnSection>
+
+          {/* 5. Meeting notes — the existing composer + log */}
+          <MnSection title="Meeting notes" dot="#5C9A6D">
+            <NotesPanel country={country} year={year} deptKey={dept.key} deptLabel={dept.label}
+              me={me} saveMe={saveMe} isPCLead={isPCLead} />
+          </MnSection>
+        </div>
       </div>
     </div>
   );
@@ -4207,39 +4401,10 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, addItem, saveRefin
                       {q.scale.toUpperCase()}
                     </span>
                   </div>)}
-                  {/* Heatmap cells — one per response option (desktop only; mobile uses popup) */}
+                  {/* Heatmap cells — the shared renderer (desktop only; mobile uses popup) */}
                   {!isMobile && (
-                  <div style={{ display:"flex", alignItems:"flex-start", padding:"8px 10px", gap:5 }}>
-                    {counts.map((c, ci) => (
-                      <div key={ci} style={{ flex:1, display:"flex", flexDirection:"column",
-                        alignItems:"center", gap:3 }}>
-                        {/* Coloured cell — fixed height so zeros don't shift labels */}
-                        <div style={{
-                          width:"100%", height:32,
-                          background: c > 0 ? CELL_COLORS[ci] : "#FBEFE4",
-                          borderRadius:5, flexShrink:0,
-                          display:"flex", alignItems:"center", justifyContent:"center",
-                          fontSize:13, fontWeight:700,
-                          color: c > 0 ? "white" : "#F0DFCE",
-                          border: c > 0 ? "none" : "1px solid #ECE2D2",
-                        }}>
-                          {c}
-                        </div>
-                        {/* Full label — fixed two-line height */}
-                        <div style={{ fontSize:8, fontWeight:600, color:"#7A6F63",
-                          textAlign:"center", lineHeight:1.25, height:22 }}>
-                          {ci===0 && <><span>Strongly</span><br/><span>Disagree</span></>}
-                          {ci===1 && <span>Disagree</span>}
-                          {ci===2 && <span>Unsure</span>}
-                          {ci===3 && <span>Agree</span>}
-                          {ci===4 && <><span>Strongly</span><br/><span>Agree</span></>}
-                        </div>
-                        {/* Percentage — fixed height so row stays aligned */}
-                        <div style={{ fontSize:8, color:"#A89C8D", textAlign:"center", height:12 }}>
-                          {c > 0 ? Math.round(c/n*100)+"%" : ""}
-                        </div>
-                      </div>
-                    ))}
+                  <div style={{ padding:"8px 10px" }}>
+                    <QuestionHeatmap q={q} showMeta={false} />
                   </div>)}
                 </div>
 
@@ -4380,8 +4545,204 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, addItem, saveRefin
   );
 }
 
+// ─── COUNTRY LEADER PREP (Priority 4) ─────────────────────────────────────────
+// The five standing reflection questions — identical for every country.
+const REFLECT_QS = [
+  { key: "celebrate", label: "Celebrate",       prompt: "Where is your team healthiest right now — and what's protecting that health?" },
+  { key: "evaluate",  label: "Evaluate",        prompt: "Where are you most concerned — and does this report match what daily life actually looks like?" },
+  { key: "honest",    label: "Be honest",       prompt: "What have you tried this year that hasn't moved the needle?" },
+  { key: "help",      label: "Ask for help",    prompt: "What's the real leadership work in front of you this year — and what do you need from us?" },
+  { key: "improve",   label: "Help us improve", prompt: "How was the survey experience for your team this cycle — and is there anything we could change to make it clearer, easier, or more valuable next time?" },
+];
+
+// The prep standing sections at the bottom of the country report: the meeting
+// agenda (drag to reorder, most important first), the five reflections, and the
+// required "Mark prep ready" gate. edit = the country leader; view = P&C reading
+// the same prep once it exists.
+function PrepFooter({ mode, prep, savePrepPatch, depts, country, isMobile }) {
+  const edit = mode === "edit";
+  const agenda = [...(prep.agenda || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
+  const [dragIdx, setDragIdx] = useState(null);
+  const [refl, setRefl] = useState(prep.reflections || {});
+  const reorder = (from, to) => {
+    if (from == null || to == null || from === to) return;
+    const next = [...agenda];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    savePrepPatch({ agenda: next.map((a, i) => ({ ...a, order: i })) });
+  };
+  const reacted = depts.filter(d => ((prep.reactions || {})[d.key] || {}).choice).length;
+  const reflDone = REFLECT_QS.filter(q => ((edit ? refl : (prep.reflections || {}))[q.key] || "").trim()).length;
+  const saveRefl = () => savePrepPatch({ reflections: refl });
+  const deptLabel = (k) => (depts.find(d => d.key === k) || {}).label || k;
+
+  const secTitle = { fontSize: 11, fontWeight: 700, color: "#7A6F63", textTransform: "uppercase", letterSpacing: 2, marginBottom: 12 };
+  const chip = (ok, text) => (
+    <span style={{ fontSize: 11, fontWeight: 700, color: ok ? "#5C9A6D" : "#C08636",
+      background: ok ? "#E9F1E9" : "#F7EEDC", border: `1px solid ${ok ? "#C7E0CB" : "#E8D5AE"}`,
+      borderRadius: 20, padding: "3px 10px" }}>{text}</span>
+  );
+
+  return (
+    <div className="no-print" style={{ marginTop: 8 }}>
+      <div style={{ background: "white", borderRadius: 16, padding: isMobile ? 18 : 32, border: "1px solid #ECE2D2",
+        boxShadow: "0 2px 8px rgba(124,111,224,0.08)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontSize: 24, fontWeight: 600, color: "#2C2621" }}>
+            {edit ? "Prepare for your pulse meeting" : `${country} leader prep`}
+          </div>
+          <span style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {chip(reacted >= depts.length && depts.length > 0, `${reacted}/${depts.length} departments`)}
+            {chip(reflDone >= REFLECT_QS.length, `${reflDone}/${REFLECT_QS.length} reflections`)}
+            {chip(agenda.length > 0, `${agenda.length} on agenda`)}
+          </span>
+        </div>
+        <div style={{ fontSize: 13, color: "#7A6F63", lineHeight: 1.55, marginBottom: 22 }}>
+          {edit
+            ? "Work through each department above — react to what you're seeing, answer the leadership questions, and add anything worth discussing to the agenda. Then finish the reflections below and mark your prep ready."
+            : "What the country leader prepared ahead of the pulse meeting."}
+        </div>
+
+        {/* Meeting agenda */}
+        <div style={{ marginBottom: 26 }}>
+          <div style={secTitle}>Meeting agenda — most important first{edit && agenda.length > 1 ? " (drag to reorder)" : ""}</div>
+          {agenda.length === 0 && (
+            <div style={{ fontSize: 12.5, color: "#A89C8D", fontStyle: "italic" }}>
+              {edit ? "Nothing yet — use the “+ Agenda” buttons on report items to build your meeting list." : "No agenda items."}
+            </div>
+          )}
+          {agenda.map((a, i) => (
+            <div key={a.id || i}
+              draggable={edit}
+              onDragStart={() => setDragIdx(i)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => { reorder(dragIdx, i); setDragIdx(null); }}
+              onDragEnd={() => setDragIdx(null)}
+              style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 12px", marginBottom: 6,
+                background: dragIdx === i ? "#FBEFE4" : "#FDFAF4", border: "1px solid #ECE2D2", borderRadius: 9,
+                cursor: edit ? "grab" : "default" }}>
+              {edit && <span style={{ color: "#A89C8D", fontSize: 14, lineHeight: "20px", flexShrink: 0 }}>≡</span>}
+              <span style={{ background: "#E0863C", color: "white", borderRadius: "50%", width: 20, height: 20,
+                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{i + 1}</span>
+              <span style={{ flex: 1, fontSize: 13, color: "#2C2621", lineHeight: 1.5 }}>
+                {a.label}
+                {a.deptKey && <span style={{ color: "#A89C8D", fontSize: 11 }}> · {deptLabel(a.deptKey)}</span>}
+              </span>
+              {edit && (
+                <button onClick={() => savePrepPatch({ agenda: agenda.filter(x => x !== a).map((x, xi) => ({ ...x, order: xi })) })}
+                  title="Remove from agenda"
+                  style={{ fontSize: 12, color: "#BE6650", background: "none", border: "none", cursor: "pointer", padding: "0 4px" }}>✕</button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Reactions summary — P&C view only (the leader edits these inside each department) */}
+        {!edit && Object.keys(prep.reactions || {}).length > 0 && (
+          <div style={{ marginBottom: 26 }}>
+            <div style={secTitle}>Department reactions</div>
+            {Object.entries(prep.reactions || {}).map(([k, r]) => (
+              <div key={k} style={{ padding: "8px 12px", marginBottom: 6, background: "#FDFAF4", border: "1px solid #ECE2D2", borderRadius: 9 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: "#2C2621" }}>{deptLabel(k)}</span>
+                <span style={{ fontSize: 12, color: "#B96524", marginLeft: 8, fontWeight: 600 }}>{r.choice}</span>
+                {r.note && <div style={{ fontSize: 12.5, color: "#5A4A3B", marginTop: 4, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{r.note}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Reflect — five standing questions */}
+        <div style={{ marginBottom: 26 }}>
+          <div style={secTitle}>Reflect</div>
+          {REFLECT_QS.map(qd => (
+            <div key={qd.key} style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#B96524", marginBottom: 2 }}>{qd.label}</div>
+              <div style={{ fontSize: 12.5, color: "#5A4A3B", lineHeight: 1.5, marginBottom: 6 }}>{qd.prompt}</div>
+              {edit ? (
+                <textarea rows={2} value={refl[qd.key] || ""}
+                  onChange={e => setRefl(prev => ({ ...prev, [qd.key]: e.target.value }))}
+                  onBlur={saveRefl}
+                  placeholder="Write your answer — it saves when you click away."
+                  style={{ width: "100%", boxSizing: "border-box", fontSize: 13, padding: 9,
+                    border: "1px solid #E2D3C2", borderRadius: 8, resize: "vertical", fontFamily: "inherit" }} />
+              ) : (
+                <div style={{ fontSize: 13, color: (prep.reflections || {})[qd.key] ? "#2C2621" : "#A89C8D",
+                  fontStyle: (prep.reflections || {})[qd.key] ? "normal" : "italic",
+                  background: "#FDFAF4", border: "1px solid #ECE2D2", borderRadius: 8, padding: "8px 11px",
+                  whiteSpace: "pre-wrap", lineHeight: 1.55 }}>
+                  {(prep.reflections || {})[qd.key] || "No answer yet."}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Ready gate */}
+        <div style={{ borderTop: "2px solid #FBEFE4", paddingTop: 18, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          {prep.ready ? (
+            <>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#5C9A6D" }}>
+                ✓ Prep is ready — People &amp; Culture has your agenda, answers, and reflections.
+              </span>
+              {edit && (
+                <button onClick={() => savePrepPatch({ ready: false })}
+                  style={{ ...navBtn, background: "transparent", border: "1px solid #ECE2D2" }}>Reopen prep</button>
+              )}
+            </>
+          ) : edit ? (
+            <>
+              <button onClick={() => { saveRefl(); savePrepPatch({ ready: true }); }}
+                style={{ ...navBtn, background: "#5C9A6D", color: "white", fontSize: 14, padding: "10px 18px" }}>
+                ✓ Mark prep ready
+              </button>
+              <span style={{ fontSize: 12, color: "#7A6F63", lineHeight: 1.5 }}>
+                Required before your pulse meeting — this sends your agenda, question answers, and reflections to People &amp; Culture.
+              </span>
+            </>
+          ) : (
+            <span style={{ fontSize: 13, color: "#C08636", fontWeight: 600 }}>Prep hasn't been marked ready yet.</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── REPORT VIEW ──────────────────────────────────────────────────────────────
-function ReportView({ country, year, surveyData, getApproved, setView, sbOverrides, sbMaster, runRespondents, me, isPCLead }) {
+function ReportView({ country, year, surveyData, getApproved, setView, sbOverrides, sbMaster, runRespondents, me, isPCLead, leaderName, prepMode = false, prepAuthor = "" }) {
+  const leaderFirst = leaderName ? String(leaderName).trim().split(/\s+/)[0] : null;
+
+  // ── Country Leader Prep (Priority 4) ──
+  // For the country-leader role this report is a prep workflow layered on top of
+  // the real report; P&C leadership sees the same prep read-only once it exists.
+  const prepEnabled = prepMode || isPCLead;
+  const [prep, setPrepState] = useState(null);   // null = loading / not enabled
+  useEffect(() => {
+    if (!prepEnabled || !country || !year) return;
+    let alive = true;
+    loadPrep(country, year)
+      .then(p => { if (alive) setPrepState(p); })
+      .catch(() => { if (alive) setPrepState({ reactions: {}, reflections: {}, agenda: [], ready: false }); });
+    return () => { alive = false; };
+  }, [country, year, prepEnabled]);
+  const savePrepPatch = (patch) => {
+    setPrepState(p => ({ ...(p || {}), ...patch }));
+    savePrep(country, year, patch, prepAuthor).catch(e => console.warn("Prep save failed:", e.message));
+  };
+  // The API DeptReportPage uses to render the prep layer on each department.
+  const prepApi = (prepMode && prep) ? {
+    author: prepAuthor,
+    reactionFor: (k) => (prep.reactions || {})[k] || null,
+    saveReaction: (k, choice, note) => savePrepPatch({ reactions: { ...(prep.reactions || {}), [k]: { choice, note } } }),
+    agendaHas: (label) => (prep.agenda || []).some(a => a.label === label),
+    agendaToggle: (label, deptKey) => {
+      const list = prep.agenda || [];
+      const next = list.some(a => a.label === label)
+        ? list.filter(a => a.label !== label)
+        : [...list, { id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, label, deptKey, order: list.length }];
+      savePrepPatch({ agenda: next.map((a, i) => ({ ...a, order: i })) });
+    },
+  } : null;
   const isMobile = useIsMobile();
   const [activeDept, setActiveDept] = useState(null);
   // Same ordering as the review sidebar: Concern → Watch → Healthy, worst score first.
@@ -4461,8 +4822,19 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
           <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:32, paddingBottom:24, borderBottom:"2px solid #FBEFE4" }}>
             <div>
               <div style={{ fontSize:11, fontWeight:700, color:"#E0863C", letterSpacing:3, textTransform:"uppercase", marginBottom:8 }}>Josiah Venture</div>
-              <div style={{ fontFamily:FONT_DISPLAY, fontSize:34, fontWeight:600, color:"#2C2621", marginBottom:4, letterSpacing:-.4 }}>{country} Staff Pulse Report</div>
-              <div style={{ fontSize:15, color:"#7A6F63" }}>{year}{totalN ? ` · ${totalN} respondents` : ""} across {depts.length} departments</div>
+              {leaderFirst ? (
+                <>
+                  <div style={{ fontFamily:FONT_DISPLAY, fontSize:34, fontWeight:600, color:"#2C2621", marginBottom:4, letterSpacing:-.4 }}>
+                    {leaderFirst}, here's your {country} report
+                  </div>
+                  <div style={{ fontSize:15, color:"#7A6F63" }}>Staff Pulse · {year}{totalN ? ` · ${totalN} respondents` : ""} across {depts.length} departments</div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontFamily:FONT_DISPLAY, fontSize:34, fontWeight:600, color:"#2C2621", marginBottom:4, letterSpacing:-.4 }}>{country} Staff Pulse Report</div>
+                  <div style={{ fontSize:15, color:"#7A6F63" }}>{year}{totalN ? ` · ${totalN} respondents` : ""} across {depts.length} departments</div>
+                </>
+              )}
             </div>
             <div style={{ textAlign:"right" }}>
               <div style={{ fontSize:42, fontWeight:800, color:sc(overallAvg>=3.5?"Healthy":overallAvg>=2.5?"Watch":"Concern") }}>{overallAvg}</div>
@@ -4525,7 +4897,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
         <div id="dept-detail-section" />
         {activeDept ? (
           // Single dept selected — show just that one
-          <DeptReportPage dept={activeDeptData} getApproved={getApproved} country={country} year={year} sbOverrides={sbOverrides} sbMaster={sbMaster} me={me} isPCLead={isPCLead} />
+          <DeptReportPage dept={activeDeptData} getApproved={getApproved} country={country} year={year} sbOverrides={sbOverrides} sbMaster={sbMaster} me={me} isPCLead={isPCLead} prep={prepApi} />
         ) : (
           // No tab selected — show all for print
           <div>
@@ -4533,9 +4905,15 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
               Select a department above to focus, or download PDF to get the full report.
             </div>
             <div className="print-only">
-              {depts.map(dept => <DeptReportPage key={dept.key} dept={dept} getApproved={getApproved} country={country} year={year} sbOverrides={sbOverrides} sbMaster={sbMaster} me={me} isPCLead={isPCLead} />)}
+              {depts.map(dept => <DeptReportPage key={dept.key} dept={dept} getApproved={getApproved} country={country} year={year} sbOverrides={sbOverrides} sbMaster={sbMaster} me={me} isPCLead={isPCLead} prep={prepApi} />)}
             </div>
           </div>
+        )}
+
+        {/* ── COUNTRY LEADER PREP — agenda, reflections, ready gate (bottom) ── */}
+        {prepEnabled && prep && (prepMode || prep._recordId) && (
+          <PrepFooter mode={prepMode ? "edit" : "view"} prep={prep} savePrepPatch={savePrepPatch}
+            depts={depts} country={country} isMobile={isMobile} />
         )}
       </div>
 
@@ -4557,7 +4935,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
   );
 }
 
-function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaster, me, isPCLead }) {
+function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaster, me, isPCLead, startCollapsed = false, prep = null }) {
   const isMobile = useIsMobile();
   // Which questions/areas the viewer has already noted (so the button shows a ✓).
   const [noted, setNoted] = useState({});
@@ -4570,6 +4948,67 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
     } catch { /* offline */ }
   };
   useEffect(() => { reloadNoted(); /* eslint-disable-next-line */ }, [country, year, dept && dept.key, me]);
+
+  // ── Country Leader Prep layer (only when `prep` is passed) ──
+  // Reaction ("Does this match what you're seeing?") — one per department.
+  const r0 = prep && dept ? prep.reactionFor(dept.key) : null;
+  const [reactChoice, setReactChoice] = useState(r0 ? r0.choice : null);
+  const [reactNote, setReactNote] = useState(r0 ? (r0.note || "") : "");
+  useEffect(() => {
+    const r = prep && dept ? prep.reactionFor(dept.key) : null;
+    setReactChoice(r ? r.choice : null); setReactNote(r ? (r.note || "") : "");
+    // eslint-disable-next-line
+  }, [dept && dept.key, !!prep]);
+  // Leadership-question answers — stored as PUBLIC question notes "LQA: <q>" so
+  // they flow into that department's Meeting Notes for the team to read.
+  const [lqa, setLqa] = useState({});
+  useEffect(() => {
+    if (!prep || !dept) return;
+    let alive = true;
+    loadQuestionNotes(country, year, dept.key).then(all => {
+      if (!alive) return;
+      const m = {};
+      (all || []).forEach(n => {
+        if (String(n.question || "").startsWith("LQA: ")) {
+          m[String(n.question).slice(5)] = { id: n.id, body: n.body || "" };
+        }
+      });
+      setLqa(m);
+    }).catch(() => {});
+    return () => { alive = false; };
+    // eslint-disable-next-line
+  }, [country, year, dept && dept.key, !!prep]);
+  const saveAnswer = async (qText) => {
+    const cur = { ...(lqa[qText] || {}) };
+    const body = (cur.body || "").trim();
+    if (!body && !cur.id) return;
+    setLqa(p => ({ ...p, [qText]: { ...cur, saving: true, err: null } }));
+    try {
+      if (cur.id) {
+        await updateQuestionNote(cur.id, { body });
+      } else {
+        cur.id = await addQuestionNote({ country, year, deptKey: dept.key, question: "LQA: " + qText,
+          author: (prep && prep.author) || "Country leader", title: body.slice(0, 80), body, visibility: "Public" });
+      }
+      setLqa(p => ({ ...p, [qText]: { ...cur, saving: false, savedAt: new Date().toISOString() } }));
+    } catch (e) {
+      setLqa(p => ({ ...p, [qText]: { ...cur, saving: false, err: e.message } }));
+    }
+  };
+  // "+ Agenda" — flips to "On agenda"; the list itself lives at the report's foot.
+  const AgendaBtn = ({ label }) => {
+    if (!prep) return null;
+    const on = prep.agendaHas(label);
+    return (
+      <button className="no-print" onClick={(e) => { e.preventDefault(); prep.agendaToggle(label, dept.key); }}
+        style={{ marginLeft: 8, flexShrink: 0, fontSize: 11, fontWeight: 600, cursor: "pointer",
+          color: on ? "#5C9A6D" : "#B96524", background: on ? "#E9F1E9" : "#FBEFE4",
+          border: `1px solid ${on ? "#C7E0CB" : "#E0A56F"}`, borderRadius: 5, padding: "2px 8px", whiteSpace: "nowrap" }}>
+        {on ? "✓ On agenda" : "+ Agenda"}
+      </button>
+    );
+  };
+
   if (!dept) return null;
   const strengths    = getApproved(dept.key, "strengths");
   const growth       = getApproved(dept.key, "growth");
@@ -4606,89 +5045,144 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
       <div style={{ background:"#FFFFFF", border:"1px solid #ECE2D2", borderRadius:12, overflow:"hidden", boxShadow: C.shadow }}>
 
       {strengths.length > 0 && (
-        <Disclosure title="What's working" count={`${strengths.length}`} dot="#5C9A6D" defaultOpen>
+        <Disclosure title="What's working" count={`${strengths.length}`} dot="#5C9A6D" defaultOpen={!startCollapsed}>
           {strengths.map((s,i) => (
             <div key={i} style={{ display:"flex", gap:10, marginBottom:8, alignItems:"flex-start" }}>
               <span style={{ color:"#5C9A6D", fontWeight:700, fontSize:14, marginTop:1, flexShrink:0 }}>✓</span>
-              <span style={{ fontSize:13, color:"#2C2621", lineHeight:1.6 }}>{s}</span>
+              <span style={{ fontSize:13, color:"#2C2621", lineHeight:1.6, flex:1 }}>{s}</span>
+              <AgendaBtn label={s} />
             </div>
           ))}
         </Disclosure>
       )}
 
       {growth.length > 0 && (
-        <Disclosure title="Where attention is needed" count={`${growth.length}`} dot={statusColor} defaultOpen>
+        <Disclosure title="Where attention is needed" count={`${growth.length}`} dot={statusColor} defaultOpen={!startCollapsed}>
           {growth.map((g,i) => (
             <div key={i} style={{ display:"flex", gap:10, marginBottom:8, alignItems:"flex-start" }}>
               <span style={{ color:statusColor, fontWeight:700, fontSize:14, marginTop:1, flexShrink:0 }}>→</span>
-              <span style={{ fontSize:13, color:"#2C2621", lineHeight:1.6 }}>{g}</span>
+              <span style={{ fontSize:13, color:"#2C2621", lineHeight:1.6, flex:1 }}>{g}</span>
+              <AgendaBtn label={g} />
             </div>
           ))}
         </Disclosure>
       )}
 
-      {/* Question scores table */}
-      <Disclosure title="Question scores" count={`${(dept.questions||[]).length} questions`} dot="#E0863C" defaultOpen flush>
-        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
-        <table style={{ width:"100%", minWidth: isMobile ? 460 : "auto", borderCollapse:"collapse", fontSize:12 }}>
-          <thead>
-            <tr style={{ background:"#FBEFE4", borderRadius:6 }}>
-              <th style={{ textAlign:"left", padding:"8px 10px", color:"#7A6F63", fontWeight:600, borderRadius:"6px 0 0 6px" }}>Question</th>
-              <th style={{ textAlign:"center", padding:"8px 10px", color:"#7A6F63", fontWeight:600, width:55 }}>Score</th>
-              <th style={{ textAlign:"center", padding:"8px 10px", color:"#7A6F63", fontWeight:600, width:75 }}>Status</th>
-              <th style={{ textAlign:"center", padding:"8px 10px", color:"#7A6F63", fontWeight:600, width:45, borderRadius:"0 6px 6px 0" }}>Scale</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[...dept.questions].sort((a,b)=>{
-              const o={Concern:0,Watch:1,Healthy:2};
-              return (o[a.status]??1)-(o[b.status]??1) || a.score-b.score;
-            }).map((q,i)=>(
-              <tr key={i} style={{ borderBottom:"1px solid #FBEFE4" }}>
-                <td style={{ padding:"8px 10px", color:"#2C2621", lineHeight:1.5 }}>
-                  {q.en}{q.burden ? <span style={{ color:"#7A6F63", fontSize:10 }}> [Burden]</span> : ""}
-                  {(() => {
-                    const sbMatch = findSurveyBasics(dept.key, q.en);
-                    if (!sbMatch) return null;
-                    const level = q.status === 'Healthy' ? 'high' : q.status === 'Watch' ? 'mid' : 'low';
-                    const sbKey = SB_KEY[dept.key] || String(dept.key||"").toLowerCase();
-                    const ovKey = `${country}:${year}:${dept.key}:${normQ(q.en)}`;
-                    const masterKey = `${sbKey}:${normQ(q.en)}:${level}`;
-                    const text = (sbMaster && sbMaster[masterKey]) || (sbOverrides && sbOverrides[ovKey]) || sbMatch[level];
-                    if (!text) return null;
-                    return (
-                      <div style={{ fontSize:11, color:"#7A6F63", fontStyle:"italic",
-                        lineHeight:1.4, marginTop:4 }}>
-                        {text}
-                      </div>
-                    );
-                  })()}
-                  <div className="no-print" style={{ marginTop:6 }}>
-                    <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={q.en} label={q.en} me={me} hasNote={!!noted[q.en]} onSaved={reloadNoted} compact btnLabel="My note" />
-                  </div>
-                </td>
-                <td style={{ textAlign:"center", padding:"8px 10px", fontWeight:700, color:sc(q.status) }}>{q.score?.toFixed(2)}</td>
-                <td style={{ textAlign:"center", padding:"8px 10px" }}>
+      {/* Question scores — each row a collapsed <details>; expanding shows that
+          question's heatmap inline (the same shared renderer the Director's
+          Review uses, burden flip included). One report component everywhere. */}
+      <Disclosure title="Question scores" count={`${(dept.questions||[]).length} questions`} dot="#E0863C" defaultOpen={!startCollapsed} flush>
+        <style>{`
+          details.pulse-qrow > summary { list-style: none; }
+          details.pulse-qrow > summary::-webkit-details-marker { display: none; }
+          details.pulse-qrow > summary .pulse-qrow-caret { transition: transform .15s; }
+          details.pulse-qrow[open] > summary .pulse-qrow-caret { transform: rotate(90deg); }
+        `}</style>
+        {/* Header strip */}
+        {!isMobile && (
+          <div style={{ display:"grid", gridTemplateColumns:"52px 1fr 66px 46px 84px", gap:0,
+            background:"#FBEFE4", padding:"8px 10px", fontSize:11, fontWeight:600, color:"#7A6F63" }}>
+            <span>Score</span><span>Question</span>
+            <span style={{ textAlign:"center" }}>Status</span>
+            <span style={{ textAlign:"center" }}>Scale</span>
+            <span style={{ textAlign:"center" }}>Heatmap</span>
+          </div>
+        )}
+        {[...dept.questions].sort((a,b)=>{
+          const o={Concern:0,Watch:1,Healthy:2};
+          return (o[a.status]??1)-(o[b.status]??1) || a.score-b.score;
+        }).map((q,i)=>(
+          <details key={i} className="pulse-qrow" style={{ borderBottom:"1px solid #FBEFE4" }}>
+            <summary style={{ cursor:"pointer", display:"grid",
+              gridTemplateColumns: isMobile ? "44px 1fr 84px" : "52px 1fr 66px 46px 84px",
+              gap:0, alignItems:"start", padding:"8px 10px", fontSize:12 }}>
+              <span style={{ fontWeight:700, color:sc(q.status), paddingTop:1 }}>{q.score?.toFixed(2)}</span>
+              <span style={{ color:"#2C2621", lineHeight:1.5, paddingRight:10 }}>
+                {q.en}{q.burden ? <span style={{ color:"#7A6F63", fontSize:10 }}> [Burden]</span> : ""}
+                {isMobile && (
+                  <span style={{ marginLeft:6, fontSize:10, fontWeight:700, color:sc(q.status), background:sb(q.status),
+                    border:`1px solid ${sbd(q.status)}`, borderRadius:4, padding:"1px 5px", whiteSpace:"nowrap" }}>{q.status}</span>
+                )}
+                {(() => {
+                  const sbMatch = findSurveyBasics(dept.key, q.en);
+                  if (!sbMatch) return null;
+                  const level = q.status === 'Healthy' ? 'high' : q.status === 'Watch' ? 'mid' : 'low';
+                  const sbKey = SB_KEY[dept.key] || String(dept.key||"").toLowerCase();
+                  const ovKey = `${country}:${year}:${dept.key}:${normQ(q.en)}`;
+                  const masterKey = `${sbKey}:${normQ(q.en)}:${level}`;
+                  const text = (sbMaster && sbMaster[masterKey]) || (sbOverrides && sbOverrides[ovKey]) || sbMatch[level];
+                  if (!text) return null;
+                  return (
+                    <span style={{ display:"block", fontSize:11, color:"#7A6F63", fontStyle:"italic",
+                      lineHeight:1.4, marginTop:4 }}>
+                      {text}
+                    </span>
+                  );
+                })()}
+                {/* Interactive bits must not toggle the row — preventDefault stops the <details> toggle only. */}
+                <span className="no-print" style={{ display:"block", marginTop:6 }} onClick={e => e.preventDefault()}>
+                  <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={q.en} label={q.en} me={me} hasNote={!!noted[q.en]} onSaved={reloadNoted} compact btnLabel="My note" />
+                  <AgendaBtn label={q.en} />
+                </span>
+              </span>
+              {!isMobile && (
+                <span style={{ textAlign:"center", paddingTop:1 }}>
                   <span style={{ fontSize:10, fontWeight:700, color:sc(q.status), background:sb(q.status),
                     border:`1px solid ${sbd(q.status)}`, borderRadius:4, padding:"2px 6px" }}>{q.status}</span>
-                </td>
-                <td style={{ textAlign:"center", padding:"8px 10px", color:"#7A6F63", fontSize:10 }}>{q.scale.toUpperCase()}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        </div>
+                </span>
+              )}
+              {!isMobile && (
+                <span style={{ textAlign:"center", color:"#7A6F63", fontSize:10, paddingTop:3 }}>
+                  <span style={{ background:"#FBEFE4", borderRadius:4, padding:"2px 6px", fontWeight:700 }}>{q.scale.toUpperCase()}</span>
+                </span>
+              )}
+              <span className="no-print" style={{ textAlign:"center" }}>
+                <span style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:11, fontWeight:600,
+                  color:"#E0863C", background:"#F7E7D5", border:"0.5px solid #E0A56F", borderRadius:5, padding:"3px 9px" }}>
+                  <svg className="pulse-qrow-caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#B96524"
+                    strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                  Heatmap
+                </span>
+              </span>
+            </summary>
+            <div style={{ padding:"2px 10px 12px", maxWidth:520 }}>
+              <QuestionHeatmap q={q} />
+            </div>
+          </details>
+        ))}
       </Disclosure>
 
       {/* Leadership Questions */}
       {leadershipQs.length > 0 && (
-        <Disclosure title="Questions for leadership" count={`${leadershipQs.length}`} dot="#B96524" defaultOpen>
+        <Disclosure title="Questions for leadership" count={`${leadershipQs.length}`} dot="#B96524" defaultOpen={!startCollapsed}>
           {leadershipQs.map((q,i) => (
-            <div key={i} style={{ display:"flex", gap:12, marginBottom:10, alignItems:"flex-start" }}>
-              <span style={{ background:"#E0863C", color:"white", borderRadius:"50%", width:20, height:20,
-                display:"flex", alignItems:"center", justifyContent:"center",
-                fontSize:11, fontWeight:700, flexShrink:0, marginTop:1 }}>{i+1}</span>
-              <span style={{ fontSize:13, color:"#2C2621", lineHeight:1.6 }}>{q}</span>
+            <div key={i} style={{ marginBottom: prep ? 16 : 10 }}>
+              <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
+                <span style={{ background:"#E0863C", color:"white", borderRadius:"50%", width:20, height:20,
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  fontSize:11, fontWeight:700, flexShrink:0, marginTop:1 }}>{i+1}</span>
+                <span style={{ fontSize:13, color:"#2C2621", lineHeight:1.6, flex:1 }}>{q}</span>
+                <AgendaBtn label={q} />
+              </div>
+              {/* Country leader prep: an answer box after EACH leadership question.
+                  Saved as a PUBLIC question note ("LQA: …") so the team reads it in
+                  this department's Meeting Notes. */}
+              {prep && (
+                <div className="no-print" style={{ margin:"8px 0 0 32px" }}>
+                  <textarea rows={2} value={(lqa[q] && lqa[q].body) || ""}
+                    onChange={e => setLqa(p => ({ ...p, [q]: { ...(p[q] || {}), body: e.target.value } }))}
+                    onBlur={() => saveAnswer(q)}
+                    placeholder="Your answer for the team — saves when you click away, and appears in this department's Meeting Notes."
+                    style={{ width:"100%", boxSizing:"border-box", fontSize:13, padding:9,
+                      border:"1px solid #E2D3C2", borderRadius:8, resize:"vertical", fontFamily:"inherit" }} />
+                  <div style={{ fontSize:11, marginTop:3, color: (lqa[q] && lqa[q].err) ? "#BE6650" : "#A89C8D" }}>
+                    {lqa[q] && lqa[q].saving ? "Saving…"
+                      : lqa[q] && lqa[q].err ? `Couldn't save: ${lqa[q].err}`
+                      : lqa[q] && lqa[q].savedAt ? "✓ Saved — shared with the team"
+                      : lqa[q] && lqa[q].id ? "On file — edit and click away to update" : ""}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </Disclosure>
@@ -4696,7 +5190,7 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
 
       {/* Staff Quotes */}
       {quotes.length > 0 && (
-        <Disclosure title="What staff said" count={`${quotes.length}`} dot="#5A4A3B" defaultOpen>
+        <Disclosure title="What staff said" count={`${quotes.length}`} dot="#5A4A3B" defaultOpen={!startCollapsed}>
           {dept.openQLabel && (
             <div style={{ fontSize:12, color:"#7A6F63", fontStyle:"italic", marginBottom:12 }}>
               In response to: "{dept.openQLabel}"
@@ -4733,6 +5227,34 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
         </Disclosure>
       )}
       </div>
+
+      {/* ── Country Leader Prep: department reaction ── */}
+      {prep && (
+        <div className="no-print" style={{ marginTop:12, background:"#FFFFFF", border:"1px solid #ECE2D2",
+          borderRadius:12, padding:"14px 16px", boxShadow: C.shadow }}>
+          <div style={{ fontSize:13.5, fontWeight:700, color:"#2C2621", marginBottom:10 }}>
+            Does this match what you're seeing in {dept.label}?
+          </div>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:10 }}>
+            {["Yes, this matches", "Partly", "This doesn't match"].map(c => (
+              <button key={c} onClick={() => { setReactChoice(c); prep.saveReaction(dept.key, c, reactNote); }}
+                style={{ fontSize:12.5, fontWeight:600, cursor:"pointer", borderRadius:20, padding:"7px 14px",
+                  color: reactChoice === c ? "#fff" : "#5A4A3B",
+                  background: reactChoice === c ? "#E0863C" : "#FDFAF4",
+                  border: `1px solid ${reactChoice === c ? "#E0863C" : "#E2D3C2"}` }}>
+                {c}
+              </button>
+            ))}
+            {reactChoice && <span style={{ alignSelf:"center", fontSize:11, color:"#5C9A6D", fontWeight:600 }}>✓ Saved</span>}
+          </div>
+          <textarea rows={2} value={reactNote}
+            onChange={e => setReactNote(e.target.value)}
+            onBlur={() => reactChoice && prep.saveReaction(dept.key, reactChoice, reactNote)}
+            placeholder="A short note on why (optional) — goes to People & Culture with your prep."
+            style={{ width:"100%", boxSizing:"border-box", fontSize:13, padding:9,
+              border:"1px solid #E2D3C2", borderRadius:8, resize:"vertical", fontFamily:"inherit" }} />
+        </div>
+      )}
     </div>
   );
 }

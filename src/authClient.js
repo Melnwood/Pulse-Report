@@ -70,6 +70,10 @@ async function authed(payload) {
   return data;
 }
 export async function listUsers() { return (await authed({ action: "listUsers" })).users || []; }
+// Country-leader directory (any signed-in user; never fails the app — returns []).
+export async function listCountryLeaders() {
+  try { return (await authed({ action: "countryLeaders" })).leaders || []; } catch { return []; }
+}
 export async function saveUser(user) { return (await authed({ action: "saveUser", user })).user; }
 export async function deleteUser(id) { return authed({ action: "deleteUser", id }); }
 export async function resetPassword(id) { return authed({ action: "resetPassword", id }); }
