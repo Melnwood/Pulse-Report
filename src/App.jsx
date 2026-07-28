@@ -122,7 +122,7 @@ const DEPARTMENTS = [
     questions: [
       { col:33, en:"The equipping resources available enable me to be developed in my role.", burden:false, scale:"dist" },
       { col:34, en:"I am continually learning how Christ's strategy shapes how I lead, train, and disciple others in ministry.", burden:false, scale:"mean" },
-      { col:35, en:"My uplink rhythms (meetings, guidance, support) help me thrive in ministry.", burden:false, scale:"mean" },
+      { col:35, en:"My uplink rhythms (meetings, guidance, support) help me thrive in ministry.", burden:false, scale:"dist" },
       { col:36, en:"I frequently feel unsure about how to move forward in my development.", burden:true,  scale:"dist" },
       { col:37, en:"I receive helpful feedback and encouragement that supports my learning and development.", burden:false, scale:"dist" },
       { col:38, en:"I am experiencing personal growth in this season.", burden:false, scale:"mean" },
