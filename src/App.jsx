@@ -1702,7 +1702,7 @@ export default function App() {
       runRespondents={allRuns.find(r => r.country === country && String(r.year) === String(year))?.respondents ?? null}
       setView={setView}
       sbOverrides={sbOverrides} sbMaster={sbMaster}
-      me={me} isPCLead={isPCLead}
+      me={effMe} saveMe={saveMe} isPCLead={effIsPCLead}
       leaderName={leaderForCountry ? leaderForCountry.name : null}
       prepMode={viewRole === "country"}
       prepAuthor={(viewUser && viewUser.name) || effMe || ""}
@@ -4709,8 +4709,13 @@ function PrepFooter({ mode, prep, savePrepPatch, depts, country, isMobile }) {
 }
 
 // ─── REPORT VIEW ──────────────────────────────────────────────────────────────
-function ReportView({ country, year, surveyData, getApproved, setView, sbOverrides, sbMaster, runRespondents, me, isPCLead, leaderName, prepMode = false, prepAuthor = "" }) {
+function ReportView({ country, year, surveyData, getApproved, setView, sbOverrides, sbMaster, runRespondents, me, saveMe, isPCLead, leaderName, prepMode = false, prepAuthor = "" }) {
   const leaderFirst = leaderName ? String(leaderName).trim().split(/\s+/)[0] : null;
+  // Per-department sub-view: the report page itself, or that department's
+  // Meeting Notes (the same two-column page P&C uses — server-side visibility
+  // rules keep private notes private). Available to every report viewer,
+  // including country leaders and the country dashboard.
+  const [deptView, setDeptView] = useState("report");
 
   // ── Country Leader Prep (Priority 4) ──
   // For the country-leader role this report is a prep workflow layered on top of
@@ -4895,9 +4900,31 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
 
         {/* ── DEPT DETAIL PAGES ── */}
         <div id="dept-detail-section" />
+        {activeDept && (
+          <div className="no-print" style={{ display:"flex", gap:4, marginBottom:14, borderBottom:"1px solid #ECE2D2" }}>
+            {["report","notes"].map(t => (
+              <button key={t} onClick={() => setDeptView(t)}
+                style={{ fontSize:13, fontWeight:600, padding:"8px 16px", border:"none", cursor:"pointer",
+                  background:"transparent", color: deptView===t ? "#E0863C" : "#7A6F63",
+                  borderBottom: deptView===t ? "2px solid #E0863C" : "2px solid transparent" }}>
+                {t === "report" ? "Report" : "Meeting Notes"}
+              </button>
+            ))}
+          </div>
+        )}
         {activeDept ? (
+          deptView === "notes" ? (
+            // The same two-column Meeting Notes page P&C uses — report embedded,
+            // country-leader shared notes + answers, meeting log. Visibility is
+            // enforced server-side, so each role only ever receives what it may see.
+            <DeptMeetingNotesPage dept={activeDeptData} country={country} year={year}
+              me={me} saveMe={saveMe} isPCLead={isPCLead}
+              getApproved={getApproved} sbOverrides={sbOverrides} sbMaster={sbMaster}
+              leaderName={leaderName} />
+          ) : (
           // Single dept selected — show just that one
           <DeptReportPage dept={activeDeptData} getApproved={getApproved} country={country} year={year} sbOverrides={sbOverrides} sbMaster={sbMaster} me={me} isPCLead={isPCLead} prep={prepApi} />
+          )
         ) : (
           // No tab selected — show all for print
           <div>
