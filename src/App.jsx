@@ -5979,7 +5979,11 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
     <div style={{ minHeight:"100vh", background:"#F6F1E8", fontFamily:"'Inter',system-ui,sans-serif" }}>
       <div style={{ background:"#FFFFFF", borderBottom:"1px solid #ECE2D2", padding: isMobile ? "12px 16px" : "14px 24px", display:"flex", alignItems:"center", gap: isMobile ? 10 : 16, flexWrap:"wrap" }}>
         <button onClick={()=>setView("__back__")} style={{ ...navBtn, background:"transparent", border:"1px solid #ECE2D2" }}>← Back</button>
-        <div style={{ flex:1, fontFamily:FONT_DISPLAY, fontSize:18, color:"#2C2621", fontWeight:600 }}>{lockCountry ? `${lockCountry} — Country Leader Dashboard` : "Country Leader Pulse Report Dashboard"}</div>
+        {/* One title for everyone: viewing a country reads exactly as the
+            country's own leader sees it. */}
+        <div style={{ flex:1, fontFamily:FONT_DISPLAY, fontSize:18, color:"#2C2621", fontWeight:600 }}>
+          {effDashCountry !== "all" ? `${effDashCountry} Pulse Report Dashboard` : "Country Leader Pulse Report Dashboard"}
+        </div>
         {!lockCountry && (
           <select value={dashCountry} onChange={e=>setDashCountry(e.target.value)}
             style={{ background:"#F6F1E8", border:"1px solid #ECE2D2", borderRadius:6, color:"#2C2621", padding:"6px 12px", fontSize:13 }}>
@@ -6102,8 +6106,10 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
             <CountryTrends country={effDashCountry} runs={runsByCountry[effDashCountry] || []} deptsOrder={DEPTS_ORDER} baselineYear={2026} />
           </>
         )}
-      {/* Refinements manager — leaders only (cross-country wording edits) */}
-      {isLeader && (
+      {/* Refinements manager — leaders only, and only on the all-countries
+          view: a single country's page must read exactly as its own leader
+          sees it, with no extra admin furniture. */}
+      {isLeader && effDashCountry === "all" && (
       <div style={{ marginTop:32 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
           <div style={{ fontSize:13, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:2 }}>
