@@ -4661,7 +4661,11 @@ function PrepFooter({ mode, prep, savePrepPatch, depts, country, isMobile, tr = 
               {edit ? "Nothing yet — use the “+ Agenda” button next to a department's score to add it to your meeting list." : "No agenda items."}
             </div>
           )}
-          {agenda.map((a, i) => (
+          {agenda.map((a, i) => {
+            // Departments carry their status colour onto the agenda — the same
+            // Concern / Watch / Healthy language used throughout the report.
+            const st = a.deptKey ? ((depts.find(d => d.key === a.deptKey) || {}).status || null) : null;
+            return (
             <div key={a.id || i}
               draggable={edit}
               onDragStart={() => setDragIdx(i)}
@@ -4669,22 +4673,26 @@ function PrepFooter({ mode, prep, savePrepPatch, depts, country, isMobile, tr = 
               onDrop={() => { reorder(dragIdx, i); setDragIdx(null); }}
               onDragEnd={() => setDragIdx(null)}
               style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 12px", marginBottom: 6,
-                background: dragIdx === i ? "#FBEFE4" : "#FDFAF4", border: "1px solid #ECE2D2", borderRadius: 9,
+                background: dragIdx === i ? "#FBEFE4" : (st ? sb(st) : "#FDFAF4"),
+                border: `1px solid ${st ? sbd(st) : "#ECE2D2"}`, borderRadius: 9,
                 cursor: edit ? "grab" : "default" }}>
               {edit && <span style={{ color: "#A89C8D", fontSize: 14, lineHeight: "20px", flexShrink: 0 }}>≡</span>}
-              <span style={{ background: "#E0863C", color: "white", borderRadius: "50%", width: 20, height: 20,
+              <span style={{ background: st ? sc(st) : "#E0863C", color: "white", borderRadius: "50%", width: 20, height: 20,
                 display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{i + 1}</span>
-              <span style={{ flex: 1, fontSize: 13, color: "#2C2621", lineHeight: 1.5 }}>
+              <span style={{ flex: 1, fontSize: 13, fontWeight: st ? 600 : 400, color: "#2C2621", lineHeight: 1.5 }}>
                 {a.label}
-                {a.deptKey && deptLabel(a.deptKey) !== a.label && <span style={{ color: "#A89C8D", fontSize: 11 }}> · {deptLabel(a.deptKey)}</span>}
+                {a.deptKey && deptLabel(a.deptKey) !== a.label && <span style={{ color: "#A89C8D", fontSize: 11, fontWeight: 400 }}> · {deptLabel(a.deptKey)}</span>}
               </span>
+              {st && <span style={{ fontSize: 10, fontWeight: 700, color: sc(st), background: "#fff",
+                border: `1px solid ${sbd(st)}`, borderRadius: 4, padding: "2px 7px", flexShrink: 0, marginTop: 1 }}>{st}</span>}
               {edit && (
                 <button onClick={() => savePrepPatch({ agenda: agenda.filter(x => x !== a).map((x, xi) => ({ ...x, order: xi })) })}
                   title="Remove from agenda"
                   style={{ fontSize: 12, color: "#BE6650", background: "none", border: "none", cursor: "pointer", padding: "0 4px" }}>✕</button>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Reactions summary — P&C view only (the leader edits these inside each department) */}
