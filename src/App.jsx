@@ -2175,7 +2175,8 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
   const openDeptDetail = ({ country: c, deptKey, deptLabel }) =>
     setDetail({ country: c, year: latestByCountry[c]?.year, deptKey, deptLabel });
   const dirReviewRef = useRef(null);   // file input for importing a director review
-  const [showUpload, setShowUpload] = useState(allRuns.length === 0);   // the Import panel
+  const [showUpload, setShowUpload] = useState(false);   // the Import panel — closed until asked for (System → Import)
+  const [sysMenu, setSysMenu] = useState(false);         // the System dropdown in the banner
   const [showPreview, setShowPreview] = useState(false);                // the "See what others see" panel
   const [orgIssues, setOrgIssues] = useState(null);   // null = loading; array of question rows across the org
   const issuesLoadedRef = useRef("");
@@ -2312,20 +2313,37 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
               other sections now that the chooser screen is gone for leaders. */}
           <button onClick={() => setView("home")} style={{ ...navBtn, fontSize:12, padding:"6px 12px", background:"#E0863C", color:"#fff", border:"1px solid transparent" }}>Department Leader Review</button>
           <button onClick={() => setView("dashboard")} style={{ ...navBtn, fontSize:12, padding:"6px 12px" }}>Country dashboards</button>
-          {authUser && authUser.role === "leader" && (
-            <button onClick={() => setView("users")} style={{ ...navBtn, fontSize:12, padding:"6px 12px" }}>Manage people</button>
-          )}
-          {isAdmin && (
-            <button onClick={() => setView("leaders")} style={{ ...navBtn, fontSize:12, padding:"6px 12px" }}>Country leaders</button>
-          )}
-          {isAdmin && (
-            <button onClick={() => setView("videos")} style={{ ...navBtn, fontSize:12, padding:"6px 12px" }}>Manage videos</button>
-          )}
-          {isAdmin && (
-            <button onClick={() => { setShowUpload(v => !v); setShowPreview(false); }}
-              style={{ ...navBtn, fontSize:12, padding:"6px 12px", background: showUpload ? "#FBEFE4" : undefined, borderColor: showUpload ? "#E0A56F" : undefined, color: showUpload ? "#B96524" : undefined }}>
-              Import
-            </button>
+          {/* System — the admin plumbing lives under one quiet menu */}
+          {(isAdmin || (authUser && authUser.role === "leader")) && (
+            <div style={{ position:"relative" }}>
+              <button onClick={() => setSysMenu(v => !v)}
+                style={{ ...navBtn, fontSize:12, padding:"6px 12px",
+                  background: sysMenu ? "#FBEFE4" : undefined, borderColor: sysMenu ? "#E0A56F" : undefined,
+                  color: sysMenu ? "#B96524" : undefined }}>
+                ⚙ System ▾
+              </button>
+              {sysMenu && (<>
+                <div onClick={() => setSysMenu(false)} style={{ position:"fixed", inset:0, zIndex:190 }} />
+                <div style={{ position:"absolute", top:"115%", left:0, zIndex:200, background:"#fff",
+                  border:"1px solid #ECE2D2", borderRadius:10, boxShadow:"0 10px 30px rgba(44,38,33,.18)",
+                  minWidth:190, overflow:"hidden", padding:"4px 0" }}>
+                  {[
+                    (authUser && authUser.role === "leader") && ["Manage people", () => setView("users")],
+                    isAdmin && ["Country leaders", () => setView("leaders")],
+                    isAdmin && ["Manage videos", () => setView("videos")],
+                    isAdmin && [showUpload ? "Close import" : "Import", () => { setShowUpload(v => !v); setShowPreview(false); }],
+                  ].filter(Boolean).map(([label, go]) => (
+                    <button key={label} onClick={() => { setSysMenu(false); go(); }}
+                      onMouseEnter={e => e.currentTarget.style.background = "#FDFAF4"}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                      style={{ display:"block", width:"100%", textAlign:"left", fontSize:12.5, fontWeight:600,
+                        color:"#2C2621", background:"transparent", border:"none", cursor:"pointer", padding:"9px 14px" }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </>)}
+            </div>
           )}
           {canPreview && (
             <button onClick={() => { setShowPreview(v => !v); setShowUpload(false); }}
