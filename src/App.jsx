@@ -1041,6 +1041,17 @@ export default function App() {
     return false; // country (view-only)
   };
 
+  // Role-based landing: someone with only one place to go goes straight there —
+  // directors land on People & Culture, country leaders land on their country's
+  // dashboard. The chooser screen is only for Mel & Chris (leaders), who
+  // genuinely have a choice to make. Runs whenever "sections" would show, so
+  // single-destination roles never see the middle page. Previews follow suit.
+  useEffect(() => {
+    if (view !== "sections" || !authed || !viewRole) return;
+    if (viewRole === "director") setViewRaw("home");
+    else if (viewRole === "country") setViewRaw("dashboard");
+  }, [view, authed, viewRole]);   // eslint-disable-line react-hooks/exhaustive-deps
+
   const [country, setCountry]     = useState("");
   const [year, setYear]           = useState(new Date().getFullYear().toString());
   const [surveyData, setSurveyData] = useState(null);
