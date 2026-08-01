@@ -3172,9 +3172,9 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
                     style={{ marginLeft: isMobile ? 0 : "auto", fontSize:13, fontWeight:700, cursor:"pointer",
                       borderRadius:8, padding:"8px 14px", minHeight:38,
                       color: dept.reviewDone ? "#5C9A6D" : "#fff",
-                      background: dept.reviewDone ? "#E9F1E9" : "#5C9A6D",
-                      border: `1px solid ${dept.reviewDone ? "#C3DCC8" : "#5C9A6D"}` }}>
-                    {dept.reviewDone ? "✓ Finished · Reopen" : "✓ Mark finished"}
+                      background: dept.reviewDone ? "#E9F1E9" : "#BE6650",
+                      border: `1px solid ${dept.reviewDone ? "#C3DCC8" : "#BE6650"}` }}>
+                    {dept.reviewDone ? "✓ Finished · Reopen" : "Click to mark finished"}
                   </button>
                 )}
               </div>
