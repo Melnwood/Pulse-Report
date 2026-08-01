@@ -1781,30 +1781,34 @@ function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin, authUser, onSig
   // With login on, show only the sections this role can use; otherwise show all.
   const cards = authRole ? allCards.filter(c => c.roles.includes(authRole)) : allCards;
   return (
-    <div style={{ minHeight:"100vh", background:"#F6F1E8", padding: isMobile ? "28px 16px" : "40px 24px" }}>
-      <div style={{ maxWidth:900, margin:"0 auto" }}>
-        <div style={{ display:"flex", alignItems:"baseline", gap:12, marginBottom:4, flexWrap:"wrap" }}>
-          <span style={{ fontFamily:FONT_DISPLAY, fontSize:26, fontWeight:600, color:"#2C2621", letterSpacing:-.2 }}>JV Pulse</span>
-          <span style={{ fontSize:14, color:"#7A6F63" }}>People & Culture</span>
-          <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:12 }}>
-            <button onClick={() => setShowHowTo(true)} style={{ ...navBtn, fontSize:12, padding:"6px 12px", display:"inline-flex", alignItems:"center", gap:6 }}>
-              <IconHelp/> How-to videos
+    <div style={{ minHeight:"100vh", background:"#F6F1E8" }}>
+      {/* Full-width white banner — the same treatment as every other page.
+          (No Back here: this is home.) */}
+      <div style={{ background:"#FFFFFF", borderBottom:"1px solid #ECE2D2", padding: isMobile ? "12px 16px" : "14px 24px",
+        display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+        <span style={{ fontFamily:FONT_DISPLAY, fontSize:22, fontWeight:600, color:"#2C2621", letterSpacing:-.2 }}>JV Pulse</span>
+        <span style={{ fontSize:14, color:"#7A6F63" }}>People & Culture</span>
+        <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:12 }}>
+          <button onClick={() => setShowHowTo(true)} style={{ ...navBtn, fontSize:12, padding:"6px 12px", display:"inline-flex", alignItems:"center", gap:6 }}>
+            <IconHelp/> How-to videos
+          </button>
+          {authUser && (
+            <span style={{ fontSize:12, color:"#7A6F63" }}>
+              {authUser.name} · <button onClick={onSignOut}
+                style={{ background:"none", border:"none", padding:0, cursor:"pointer", color:"#B96524", fontWeight:600, fontSize:12 }}>Sign out</button>
+            </span>
+          )}
+          {!authUser && (
+            <button onClick={toggleAdmin} title="Admin tools for Mel & Chris"
+              style={{ fontSize:12, color: isAdmin ? "#5C9A6D" : "#A89C8D",
+                background:"transparent", border:"none", cursor:"pointer" }}>
+              {isAdmin ? "🔓 admin" : "🔒"}
             </button>
-            {authUser && (
-              <span style={{ fontSize:12, color:"#7A6F63" }}>
-                {authUser.name} · <button onClick={onSignOut}
-                  style={{ background:"none", border:"none", padding:0, cursor:"pointer", color:"#B96524", fontWeight:600, fontSize:12 }}>Sign out</button>
-              </span>
-            )}
-            {!authUser && (
-              <button onClick={toggleAdmin} title="Admin tools for Mel & Chris"
-                style={{ fontSize:12, color: isAdmin ? "#5C9A6D" : "#A89C8D",
-                  background:"transparent", border:"none", cursor:"pointer" }}>
-                {isAdmin ? "🔓 admin" : "🔒"}
-              </button>
-            )}
-          </div>
+          )}
         </div>
+      </div>
+      <div style={{ padding: isMobile ? "28px 16px" : "36px 24px" }}>
+      <div style={{ maxWidth:900, margin:"0 auto" }}>
         <div style={{ fontSize:14, color:"#7A6F63", marginBottom:28 }}>Where would you like to go?</div>
 
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(240px, 1fr))", gap:16 }}>
@@ -1821,6 +1825,7 @@ function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin, authUser, onSig
             </button>
           ))}
         </div>
+      </div>
       </div>
       {showHowTo && <HowToVideosPanel onClose={() => setShowHowTo(false)} />}
     </div>
@@ -2233,9 +2238,11 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
   );
 
   return (
-    <div style={{ minHeight:"100vh", background:"#F6F1E8", padding: isMobile ? "24px 16px" : "40px 24px" }}>
-      <div style={{ maxWidth:900, margin:"0 auto" }}>
-        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:24, flexWrap:"wrap" }}>
+    <div style={{ minHeight:"100vh", background:"#F6F1E8" }}>
+      {/* Full-width white banner — the same treatment every page gets: Back in
+          the upper-left, the page name, tools and identity on the right. */}
+      <div style={{ background:"#FFFFFF", borderBottom:"1px solid #ECE2D2", padding: isMobile ? "12px 16px" : "14px 24px",
+        display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
           <button onClick={() => setView("__back__")}
             style={{ ...navBtn, background:"transparent", border:"1px solid #ECE2D2" }}>← Back</button>
           <span style={{ fontFamily:FONT_DISPLAY, fontSize:22, fontWeight:600, color:"#2C2621" }}>Leadership</span>
@@ -2272,7 +2279,10 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
               {isAdmin ? "🔓 admin on" : "🔒 admin off"}
             </button>
           )}
-        </div>
+      </div>
+
+      <div style={{ padding: isMobile ? "24px 16px" : "32px 24px" }}>
+      <div style={{ maxWidth:900, margin:"0 auto" }}>
 
         {canPreview && showPreview && <PreviewAsPanel allRuns={allRuns} setPreviewAs={setPreviewAs} setView={setView} />}
 
@@ -2556,6 +2566,7 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
           </div>
         )}
 
+      </div>
       </div>
 
       {detail && (
@@ -5823,7 +5834,7 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
     <div style={{ minHeight:"100vh", background:"#F6F1E8", fontFamily:"'Inter',system-ui,sans-serif" }}>
       <div style={{ background:"#FFFFFF", borderBottom:"1px solid #ECE2D2", padding: isMobile ? "12px 16px" : "14px 24px", display:"flex", alignItems:"center", gap: isMobile ? 10 : 16, flexWrap:"wrap" }}>
         <button onClick={()=>setView("__back__")} style={{ ...navBtn, background:"transparent", border:"1px solid #ECE2D2" }}>← Back</button>
-        <div style={{ flex:1, fontFamily:FONT_DISPLAY, fontSize:18, color:"#2C2621", fontWeight:600 }}>{lockCountry ? `${lockCountry} Dashboard` : "P&C Dashboard"}</div>
+        <div style={{ flex:1, fontFamily:FONT_DISPLAY, fontSize:18, color:"#2C2621", fontWeight:600 }}>{lockCountry ? `${lockCountry} — Country Leader Dashboard` : "Country Leader Pulse Report Dashboard"}</div>
         {!lockCountry && (
           <select value={dashCountry} onChange={e=>setDashCountry(e.target.value)}
             style={{ background:"#F6F1E8", border:"1px solid #ECE2D2", borderRadius:6, color:"#2C2621", padding:"6px 12px", fontSize:13 }}>
