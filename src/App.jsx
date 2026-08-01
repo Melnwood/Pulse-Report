@@ -4556,7 +4556,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, addItem, saveRefin
 // ─── COUNTRY LEADER PREP (Priority 4) ─────────────────────────────────────────
 // The five standing reflection questions — identical for every country.
 const REFLECT_QS = [
-  { key: "celebrate", label: "Celebrate",       prompt: "Where is your team healthiest right now — and what's protecting that health?" },
+  { key: "celebrate", label: "Celebrate",       prompt: "Based on your healthy departments, is there anything that you and your team are doing that helps create and sustain this health? If so, what is it?" },
   { key: "evaluate",  label: "Evaluate",        prompt: "Where are you most concerned — and does this report match what daily life actually looks like?" },
   { key: "honest",    label: "Be honest",       prompt: "What have you tried this year that hasn't moved the needle?" },
   { key: "help",      label: "Ask for help",    prompt: "What's the real leadership work in front of you this year — and what do you need from us?" },
