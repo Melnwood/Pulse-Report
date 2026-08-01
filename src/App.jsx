@@ -4830,7 +4830,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
               {leaderFirst ? (
                 <>
                   <div style={{ fontFamily:FONT_DISPLAY, fontSize:34, fontWeight:600, color:"#2C2621", marginBottom:4, letterSpacing:-.4 }}>
-                    {leaderFirst}, here's your {country} report
+                    {leaderFirst}, here's your {country} Pulse report
                   </div>
                   <div style={{ fontSize:15, color:"#7A6F63" }}>Staff Pulse · {year}{totalN ? ` · ${totalN} respondents` : ""} across {depts.length} departments</div>
                 </>
@@ -4883,6 +4883,14 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
         </div>
 
         {/* ── DEPT TABS ── */}
+        {/* Country leaders (prep mode) don't get the button row — they open a
+            department by clicking its row in the chart above, so keep the page
+            clean and just say so. Everyone else keeps the quick-jump buttons. */}
+        {prepMode ? (
+          <div className="no-print" style={{ fontSize:13, color:"#7A6F63", margin:"0 0 24px", textAlign:"center" }}>
+            Click any department in the chart above to open its report.
+          </div>
+        ) : (
         <div className="no-print" style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:24 }}>
           {orderedDepts.map(d=>(
             <button key={d.key} onClick={()=>setActiveDept(d.key===activeDept?null:d.key)}
@@ -4897,6 +4905,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
             </button>
           ))}
         </div>
+        )}
 
         {/* ── DEPT DETAIL PAGES ── */}
         <div id="dept-detail-section" />
