@@ -379,6 +379,21 @@ function borderlineOptions(q) {
   return null;
 }
 
+// Department-level borderline: when the department's AVERAGE sits within the
+// margin of a band line, the director may choose between the two adjacent
+// bands. Only offered when the automatic status came from the average itself —
+// the Concern-count and majority-flagged protections can't be overridden away.
+const DEPT_OVERRIDE_KEY = "§ Department";
+function deptBorderlineOptions(avg, auto) {
+  const s = parseFloat(avg);
+  if (!s || !auto) return null;
+  const avgBand = s >= 3.50 ? "Healthy" : s >= 2.50 ? "Watch" : "Concern";
+  if (auto !== avgBand) return null;   // a protection rule set this — not a judgment call
+  if (Math.abs(s - 3.50) <= BORDERLINE_MARGIN) return { options: ["Watch", "Healthy"] };
+  if (Math.abs(s - 2.50) <= BORDERLINE_MARGIN) return { options: ["Concern", "Watch"] };
+  return null;
+}
+
 // Master question lookup by survey column — the CODE is the source of truth for
 // each question's scale/burden/wording. Loaded runs render a snapshot frozen in
 // Airtable's "Survey Data JSON" at import time, so a code change (e.g. a scale
@@ -427,7 +442,16 @@ function applyStatusOverrides(sd, overrides, country, year) {
                      ov[`${country}:${year}:${key}:${normQ(q.en)}`];
       return { ...eff, autoStatus: auto, status: (chosen && chosen !== auto) ? chosen : auto };
     });
-    depts[key] = { ...d, questions, status: deptStatus(questions) };
+    // Department roll-up, then any DEPARTMENT-level borderline choice on top —
+    // honored only while the department is still genuinely on the bubble, so a
+    // stale override silently clears if the data or rules move on.
+    const deptAuto = deptStatus(questions);
+    const scores = questions.map(q => q.score).filter(Boolean);
+    const deptAvg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
+    const deptChosen = ov[`${country}:${year}:${key}:${normQ(DEPT_OVERRIDE_KEY)}`];
+    const bl = deptBorderlineOptions(deptAvg, deptAuto);
+    depts[key] = { ...d, questions, autoStatus: deptAuto,
+      status: (deptChosen && bl && bl.options.includes(deptChosen)) ? deptChosen : deptAuto };
   }
   return { ...sd, depts };
 }
@@ -3119,6 +3143,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
               <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12, flexWrap:"wrap" }}>
                 <span style={{ fontFamily:FONT_DISPLAY, fontSize:22, fontWeight:600, color:"#2C2621" }}>{dept.label}</span>
                 <span style={{ fontSize:12, fontWeight:700, color:sc(dept.status), background:sb(dept.status), border:`1px solid ${sbd(dept.status)}`, borderRadius:20, padding:"3px 10px" }}>{dept.status}</span>
+                <DeptBorderlineChooser dept={dept} canEdit={canEdit(dept.key)} saveStatusOverride={saveStatusOverride} />
                 <span style={{ fontSize:12.5, color:"#7A6F63", fontVariantNumeric:"tabular-nums" }}>{dept.avg} avg · n={dept.n}</span>
                 <span style={{ fontSize:12, color:"#A89C8D" }}>· {country} {year}</span>
                 {/* The director marks THEIR department done here; only editable by
@@ -4275,6 +4300,34 @@ function BorderlineChooser({ q, deptKey, canEdit, saveStatusOverride }) {
         return (
           <button key={band} disabled={!canEdit}
             onClick={() => canEdit && saveStatusOverride && saveStatusOverride(deptKey, q.en, band === q.autoStatus ? null : band)}
+            style={{ fontSize: 10.5, fontWeight: 700, cursor: canEdit ? "pointer" : "default", borderRadius: 5, padding: "3px 9px",
+              border: "1px solid " + (on ? sbd(band) : "#ECE2D2"), background: on ? sb(band) : "#fff", color: on ? sc(band) : "#7A6F63" }}>
+            {band}
+          </button>
+        );
+      })}
+      {overridden && <span style={{ fontSize: 10, color: "#9C8F82", fontStyle: "italic" }}>· you set this</span>}
+    </span>
+  );
+}
+
+// The department-level bubble: when the whole department's average sits near a
+// band line, offer the two adjacent bands next to its status pill in the review.
+function DeptBorderlineChooser({ dept, canEdit, saveStatusOverride }) {
+  const scores = (dept.questions || []).map(q => q.score).filter(Boolean);
+  const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
+  const auto = dept.autoStatus || dept.status;
+  const bl = deptBorderlineOptions(avg, auto);
+  if (!bl) return null;
+  const overridden = dept.status !== auto;
+  return (
+    <span className="no-print" style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+      <span style={{ fontSize: 9, fontWeight: 700, color: "#7A6F63", textTransform: "uppercase", letterSpacing: .4 }}>Borderline dept</span>
+      {bl.options.map(band => {
+        const on = dept.status === band;
+        return (
+          <button key={band} disabled={!canEdit}
+            onClick={() => canEdit && saveStatusOverride && saveStatusOverride(dept.key, DEPT_OVERRIDE_KEY, band === auto ? null : band)}
             style={{ fontSize: 10.5, fontWeight: 700, cursor: canEdit ? "pointer" : "default", borderRadius: 5, padding: "3px 9px",
               border: "1px solid " + (on ? sbd(band) : "#ECE2D2"), background: on ? sb(band) : "#fff", color: on ? sc(band) : "#7A6F63" }}>
             {band}
