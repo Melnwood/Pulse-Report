@@ -4110,11 +4110,14 @@ function BorderlineChooser({ q, deptKey, canEdit, saveStatusOverride }) {
 // A small "Director's Note" button that opens a popup to write a note about one
 // question or review item. The note autosaves as you type (no save button) into
 // the existing Question Notes store — one note per item, updated in place.
-function DirectorNoteButton({ country, year, deptKey, question, label, me, hasNote, onSaved, compact, btnLabel = "Director's Note" }) {
+// forcePublic: country leaders don't get a Private option — everything they
+// write on their report is shared with the People & Culture team, and the
+// dialog says so instead of offering the toggle.
+function DirectorNoteButton({ country, year, deptKey, question, label, me, hasNote, onSaved, compact, btnLabel = "Director's Note", forcePublic = false }) {
   const [open, setOpen] = useState(false);
   const [noteId, setNoteId] = useState(null);
   const [text, setText] = useState("");
-  const [vis, setVis] = useState("Private");
+  const [vis, setVis] = useState(forcePublic ? "Public" : "Private");
   const [saved, setSaved] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
   const [saveErr, setSaveErr] = useState(false);
@@ -4126,15 +4129,16 @@ function DirectorNoteButton({ country, year, deptKey, question, label, me, hasNo
       const all = await loadQuestionNotes(country, year, deptKey);   // this run's dept notes
       const mine = (all || []).find(n => n.question === question && n.author === me)
                 || (all || []).find(n => n.question === question);
-      if (mine) { setNoteId(mine.id); setText(mine.body || ""); setVis(mine.visibility || "Private"); }
-      else { setNoteId(null); setText(""); setVis("Private"); }
+      if (mine) { setNoteId(mine.id); setText(mine.body || ""); setVis(forcePublic ? "Public" : (mine.visibility || "Private")); }
+      else { setNoteId(null); setText(""); setVis(forcePublic ? "Public" : "Private"); }
     } catch { setNoteId(null); setText(""); }
   };
   const persist = async (t, v) => {
     if (!t.trim()) return;
     try {
-      if (!noteId) { const id = await addQuestionNote({ country, year, deptKey, question, author: me, body: t, visibility: v }); if (id) setNoteId(id); }
-      else { await updateQuestionNote(noteId, { body: t, visibility: v }); }
+      const effVis = forcePublic ? "Public" : v;
+      if (!noteId) { const id = await addQuestionNote({ country, year, deptKey, question, author: me, body: t, visibility: effVis }); if (id) setNoteId(id); }
+      else { await updateQuestionNote(noteId, { body: t, visibility: effVis }); }
       setSaved(true); setSavedAt(Date.now()); setSaveErr(false); onSaved && onSaved();
     } catch { setSaveErr(true); /* keep what's typed */ }
   };
@@ -4161,6 +4165,12 @@ function DirectorNoteButton({ country, year, deptKey, question, label, me, hasNo
             <textarea autoFocus value={text} onChange={e => onType(e.target.value)} placeholder="Type your note here — it saves automatically."
               style={{ width: "100%", minHeight: 120, border: "1px solid #F0DFCE", borderRadius: 8, padding: "10px 12px", fontSize: 13.5, fontFamily: "inherit", color: "#2C2621", lineHeight: 1.55, resize: "vertical", boxSizing: "border-box" }} />
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+              {forcePublic ? (
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: "#5C9A6D", background: "#E9F1E9",
+                  border: "1px solid #C7E0CB", borderRadius: 6, padding: "6px 11px" }}>
+                  All of your notes are shared with the People &amp; Culture team
+                </span>
+              ) : (
               <div style={{ display: "flex", gap: 4 }}>
                 {["Private", "Public"].map(v => (
                   <button key={v} onClick={() => setVisibility(v)} style={{ fontSize: 11.5, fontWeight: 600, borderRadius: 6, padding: "6px 11px", cursor: "pointer",
@@ -4168,6 +4178,7 @@ function DirectorNoteButton({ country, year, deptKey, question, label, me, hasNo
                     {v === "Private" ? "Private to me" : "Share with team"}</button>
                 ))}
               </div>
+              )}
               <span style={{ fontSize: 11, fontWeight: 600 }}>
                 {saveErr ? <span style={{ color: "#BE6650" }}>⚠ Not saved — check connection</span>
                  : savedAt ? <span style={{ color: "#5C9A6D" }}>✓ Saved at {new Date(savedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
@@ -5398,7 +5409,7 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
                 })()}
                 {/* Interactive bits must not toggle the row — preventDefault stops the <details> toggle only. */}
                 <span className="no-print" style={{ display:"block", marginTop:6 }} onClick={e => e.preventDefault()}>
-                  <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={q.en} label={q.en} me={me} hasNote={!!noted[q.en]} onSaved={reloadNoted} compact btnLabel="My note" />
+                  <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={q.en} label={q.en} me={me} hasNote={!!noted[q.en]} onSaved={reloadNoted} compact btnLabel="My note" forcePublic={!!prep} />
                 </span>
               </span>
               {!isMobile && (
