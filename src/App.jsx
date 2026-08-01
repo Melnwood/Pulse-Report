@@ -2306,9 +2306,8 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
           the upper-left, the page name, tools and identity on the right. */}
       <div style={{ background:"#FFFFFF", borderBottom:"1px solid #ECE2D2", padding: isMobile ? "12px 16px" : "14px 24px",
         display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-          <button onClick={() => setView("__back__")}
-            style={{ ...navBtn, background:"transparent", border:"1px solid #ECE2D2" }}>← Back</button>
-          <span style={{ fontFamily:FONT_DISPLAY, fontSize:22, fontWeight:600, color:"#2C2621" }}>Leadership</span>
+          {/* No Back here — this is Mel & Chris's home page now. */}
+          <span style={{ fontFamily:FONT_DISPLAY, fontSize:22, fontWeight:600, color:"#2C2621" }}>People &amp; Culture Leadership</span>
           {/* Mel & Chris land here — these two buttons are their doors into the
               other sections now that the chooser screen is gone for leaders. */}
           <button onClick={() => setView("home")} style={{ ...navBtn, fontSize:12, padding:"6px 12px", background:"#E0863C", color:"#fff", border:"1px solid transparent" }}>Department Leader Review</button>
