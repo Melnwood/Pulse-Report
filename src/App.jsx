@@ -4867,12 +4867,8 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
   const totalN = (surveyData?.raw?.length || null) ?? runRespondents
     ?? (depts.length ? depts.reduce((a,d)=>Math.max(a, Number(d.n)||0), 0) : null);
 
-  // Tab ordering: every department on its own, sorted by status then its own score.
-  const orderedDepts = [...depts].sort((a,b) => {
-    const sa = STATUS_ORDER[a.status] ?? 3, sb = STATUS_ORDER[b.status] ?? 3;
-    if (sa !== sb) return sa - sb;
-    return (parseFloat(a.avg)||0) - (parseFloat(b.avg)||0);
-  });
+  // Clicking a Concern / Watch / Healthy box filters the chart to just that group.
+  const [statusFilter, setStatusFilter] = useState(null);
 
   const activeDeptData = activeDept ? depts.find(d=>d.key===activeDept) : null;
 
@@ -5016,10 +5012,16 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
             </div>
           </div>
 
-          {/* Status group summary — up top, so the read on the country comes first */}
+          {/* Status group summary — up top, so the read on the country comes
+              first. Clicking a box filters the chart below to just that group;
+              clicking it again shows everything. */}
           <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap:12, marginBottom:32 }}>
             {[["Concern","#F6E5DE","#BE6650",concerns],["Watch","#F7EEDC","#C08636",watches],["Healthy","#E9F1E9","#5C9A6D",healthys]].map(([label,bg,color,group])=>(
-              <div key={label} style={{ background:bg, borderRadius:10, padding:"14px 16px" }}>
+              <div key={label} onClick={()=>setStatusFilter(f => f === label ? null : label)}
+                title={statusFilter === label ? "Show all departments" : `Show only ${label} departments below`}
+                style={{ background:bg, borderRadius:10, padding:"14px 16px", cursor:"pointer",
+                  border: statusFilter === label ? `2px solid ${color}` : "2px solid transparent",
+                  opacity: statusFilter && statusFilter !== label ? 0.55 : 1, transition:"all 0.15s" }}>
                 <div style={{ fontSize:11, fontWeight:700, color, textTransform:"uppercase", letterSpacing:1.5, marginBottom:8 }}>{label} · {group.length}</div>
                 {group.map(d=>(
                   <div key={d.key} style={{ fontSize:12, color:"#2C2621", padding:"3px 0", borderBottom:"1px solid rgba(0,0,0,0.05)" }}>{d.label}</div>
@@ -5029,12 +5031,20 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
             ))}
           </div>
 
-          {/* Score bar chart — all departments */}
+          {/* Score bar chart — all departments (or just the clicked status group) */}
           <div>
             <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>
               {tr("Department Scores")} <span style={{ fontWeight:600, textTransform:"none", letterSpacing:0, color:"#A89C8D" }}>{tr("(Click on a department to see more details.)")}</span>
+              {statusFilter && (
+                <button className="no-print" onClick={()=>setStatusFilter(null)}
+                  style={{ marginLeft:10, fontSize:11, fontWeight:700, cursor:"pointer", borderRadius:12,
+                    padding:"2px 10px", color:"#5A4A3B", background:"#FDFAF4", border:"1px solid #E2D3C2",
+                    textTransform:"none", letterSpacing:0 }}>
+                  {statusFilter} only · ✕ show all
+                </button>
+              )}
             </div>
-            {summaryDepts.map(d => (
+            {summaryDepts.filter(d => !statusFilter || d.status === statusFilter).map(d => (
               <div key={d.key} onClick={()=>openDept(d.key)}
                 style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 12px", marginBottom:4,
                   borderRadius:8, cursor:"pointer", flexWrap: isMobile ? "wrap" : "nowrap",
@@ -5054,26 +5064,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
 
         </div>
 
-        {/* ── DEPT TABS ── */}
-        {/* Country leaders (prep mode) don't get the button row — they open a
-            department by clicking its row in the chart, which says so right in
-            its heading. Everyone else keeps the quick-jump buttons. */}
-        {!prepMode && (
-        <div className="no-print" style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:24 }}>
-          {orderedDepts.map(d=>(
-            <button key={d.key} onClick={()=>setActiveDept(d.key===activeDept?null:d.key)}
-              style={{ padding:"8px 14px", borderRadius:8, fontSize:12, fontWeight:600,
-                cursor:"pointer",
-                border:`1px solid ${sbd(d.status)}`,
-                background: activeDept===d.key ? sc(d.status) : sb(d.status),
-                color: activeDept===d.key ? "white" : sc(d.status),
-                display:"flex", alignItems:"center", gap:6 }}>
-              <span style={{ width:8, height:8, borderRadius:"50%", background: activeDept===d.key ? "white" : sc(d.status), flexShrink:0 }} />
-              {d.label}
-            </button>
-          ))}
-        </div>
-        )}
+        {/* No department button row for anyone — the chart is the way in. */}
 
         {/* ── DEPT DETAIL PAGES ── */}
         {/* No Meeting Notes tab here — the report is just the report. The team's
