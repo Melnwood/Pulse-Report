@@ -1769,7 +1769,6 @@ export default function App() {
 // and Leadership (for Mel & Chris — sees everything, overall dashboard).
 function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin, authUser, onSignOut, authRole }) {
   const isMobile = useIsMobile();
-  const [showHowTo, setShowHowTo] = useState(false);
   const allCards = [
     { key: "country", title: "Country dashboards", to: "dashboard", roles: ["leader", "country"],
       blurb: "Each country's latest pulse report and how it's trending over time." },
@@ -1789,9 +1788,8 @@ function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin, authUser, onSig
         <span style={{ fontFamily:FONT_DISPLAY, fontSize:22, fontWeight:600, color:"#2C2621", letterSpacing:-.2 }}>JV Pulse</span>
         <span style={{ fontSize:14, color:"#7A6F63" }}>People & Culture</span>
         <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:12 }}>
-          <button onClick={() => setShowHowTo(true)} style={{ ...navBtn, fontSize:12, padding:"6px 12px", display:"inline-flex", alignItems:"center", gap:6 }}>
-            <IconHelp/> How-to videos
-          </button>
+          {/* No How-to videos here — those live in the People & Culture
+              (director) screens only, not on the shared home. */}
           {authUser && (
             <span style={{ fontSize:12, color:"#7A6F63" }}>
               {authUser.name} · <button onClick={onSignOut}
@@ -1827,7 +1825,6 @@ function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin, authUser, onSig
         </div>
       </div>
       </div>
-      {showHowTo && <HowToVideosPanel onClose={() => setShowHowTo(false)} />}
     </div>
   );
 }
