@@ -4956,6 +4956,8 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
   prepRef.current = prep;
   // The leader's prep opens as a window over the report (from the header button).
   const [prepOpen, setPrepOpen] = useState(false);
+  // The Concern & Watch questions open the same way — a window over the report.
+  const [flaggedOpen, setFlaggedOpen] = useState(false);
   // The API DeptReportPage uses to render the prep layer on each department.
   const prepApi = (prepMode && prep) ? {
     author: prepAuthor,
@@ -5161,7 +5163,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
                   )}
                   {flaggedCount > 0 && (
                     <button
-                      onClick={() => { const el = document.getElementById("flagged-section"); if (el) el.scrollIntoView({ behavior:"smooth", block:"start" }); }}
+                      onClick={() => setFlaggedOpen(true)}
                       style={{ fontSize:13.5, fontWeight:700, cursor:"pointer", borderRadius:20, padding:"9px 18px",
                         color:"#BE6650", background:"#F6E5DE", border:"1px solid #E2B3A8" }}>
                       ⚠ {tr("Concern & Watch questions")} · {flaggedCount}
@@ -5240,11 +5242,8 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
 
         </div>
 
-        {/* ── CONCERN & WATCH — every flagged question, across all departments.
-            A mostly-healthy country still gets its talking points surfaced. ── */}
-        <FlaggedQuestionsPanel depts={depts} onOpenDept={openDept} tr={tr} isMobile={isMobile} />
-
-        {/* No department button row for anyone — the chart is the way in. */}
+        {/* No department button row for anyone — the chart is the way in. The
+            Concern & Watch questions open as a window from the header button. */}
 
         {/* ── DEPT DETAIL PAGES ── */}
         {/* No Meeting Notes tab here — the report is just the report. The team's
@@ -5285,6 +5284,23 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
             boxShadow:"0 4px 14px rgba(44,38,33,0.35)" }}>
           ✕ {tr("Close department")}
         </button>
+      )}
+
+      {/* Concern & Watch questions — a window floating over the report, same
+          pattern as the prep window. Jumping to a department closes it first. */}
+      {flaggedOpen && (
+        <div className="no-print" onClick={() => setFlaggedOpen(false)}
+          style={{ position:"fixed", inset:0, background:"rgba(44,38,33,0.45)", zIndex:60,
+            overflowY:"auto", padding: isMobile ? "14px 10px 40px" : "40px 20px 60px" }}>
+          <div onClick={e => e.stopPropagation()} style={{ maxWidth:860, margin:"0 auto", position:"relative" }}>
+            <button onClick={() => setFlaggedOpen(false)} title="Close"
+              style={{ position:"absolute", top:10, right:10, zIndex:2, width:34, height:34, borderRadius:"50%",
+                background:"#fff", border:"1px solid #ECE2D2", cursor:"pointer", fontSize:15, color:"#7A6F63",
+                boxShadow:"0 2px 8px rgba(44,38,33,0.15)", lineHeight:1 }}>✕</button>
+            <FlaggedQuestionsPanel depts={depts} tr={tr} isMobile={isMobile}
+              onOpenDept={(k) => { setFlaggedOpen(false); openDept(k); }} />
+          </div>
+        </div>
       )}
 
       {/* Country leader prep — a window floating over the report */}
