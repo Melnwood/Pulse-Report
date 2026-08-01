@@ -3716,9 +3716,9 @@ function DeptNotesTab({ dept, country, year, me, saveMe, isPCLead, sel = {} }) {
 // ─── MEETING NOTES PAGE ───────────────────────────────────────────────────────
 // A native-<details> collapsible section (everything on the meeting-notes page
 // starts collapsed; the caret rotates when open).
-function MnSection({ title, count, dot, children }) {
+function MnSection({ title, count, dot, children, defaultOpen = false }) {
   return (
-    <details className="pulse-mn" style={{ background:"#FFFFFF", border:"1px solid #ECE2D2",
+    <details open={defaultOpen || undefined} className="pulse-mn" style={{ background:"#FFFFFF", border:"1px solid #ECE2D2",
       borderRadius:12, overflow:"hidden", marginBottom:14,
       boxShadow:"0 1px 2px rgba(58,38,22,.06), 0 6px 22px -8px rgba(58,38,22,.10)" }}>
       <summary style={{ display:"flex", alignItems:"center", gap:9, padding:"12px 14px",
@@ -3757,6 +3757,18 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
     try { setQNotes(await loadQuestionNotes(country, year, dept.key)); } catch { setQNotes([]); }
   };
   useEffect(() => { setDNotes(null); setQNotes(null); reload(); /* eslint-disable-next-line */ }, [country, year, dept.key]);
+
+  // The country leader's meeting agenda (from their prep) — the walk-through
+  // list for the meeting. The server only serves Prep to P&C and the country's
+  // own leader, so anyone else simply doesn't see this section.
+  const [agenda, setAgenda] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    loadPrep(country, year)
+      .then(p => { if (alive) setAgenda([...(p.agenda || [])].sort((a, b) => (a.order || 0) - (b.order || 0))); })
+      .catch(() => { if (alive) setAgenda([]); });
+    return () => { alive = false; };
+  }, [country, year]);
 
   const hasBody = n => (n.body || "").trim();
   const isAnswer = n => String(n.question || "").startsWith(LEADER_ANSWER_PREFIX);
@@ -3836,6 +3848,31 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
 
         {/* ── RIGHT COLUMN ────────────────────────────────────────────── */}
         <div>
+          {/* Meeting agenda — the country leader's walk-through list, open by
+              default so the room always sees where they are. */}
+          {agenda.length > 0 && (
+            <MnSection title="Meeting agenda" dot="#E0863C" count={`${agenda.length}`} defaultOpen>
+              <div style={{ fontSize:11.5, color:"#7A6F63", marginBottom:8 }}>
+                What {leaderName || "the country leader"} wants to walk through — most important first.
+              </div>
+              {agenda.map((a, i) => {
+                const here = a.deptKey === dept.key;
+                return (
+                  <div key={a.id || i} style={{ display:"flex", gap:8, alignItems:"flex-start", padding:"6px 8px",
+                    borderRadius:8, marginBottom:4,
+                    background: here ? "#FBEFE4" : "transparent",
+                    border: here ? "1px solid #E0A56F" : "1px solid transparent" }}>
+                    <span style={{ background:"#E0863C", color:"white", borderRadius:"50%", width:18, height:18,
+                      display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:700, flexShrink:0 }}>{i + 1}</span>
+                    <span style={{ flex:1, fontSize:12.5, color:"#2C2621", fontWeight: here ? 700 : 500, lineHeight:1.45 }}>
+                      {a.label}{here && <span style={{ color:"#B96524", fontSize:10.5, fontWeight:700 }}> · this department</span>}
+                    </span>
+                  </div>
+                );
+              })}
+            </MnSection>
+          )}
+
           {/* 4+5. Meeting notes — director's notes (when there are any) sit at
               the top of the same window the team types in, so the context and
               the composer live together. */}
