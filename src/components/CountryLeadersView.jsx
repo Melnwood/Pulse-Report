@@ -112,7 +112,7 @@ export default function CountryLeadersView({ setView, countries = [], onChanged 
           </div>
         )}
         <div style={{ fontSize: 12, color: "#A89C8D", marginTop: 14, lineHeight: 1.5 }}>
-          Need finer control (roles, directors, deactivating accounts)? Use <b>Manage people</b> in the Leadership section.
+          Need finer control (roles, department leaders, deactivating accounts)? Use <b>Manage people</b> in the Leadership section.
         </div>
       </div>
     </div>

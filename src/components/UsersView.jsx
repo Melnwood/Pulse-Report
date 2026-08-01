@@ -3,7 +3,7 @@ import { listUsers, saveUser, deleteUser, resetPassword } from "../authClient";
 import { card, navBtn, lbl, inp, useIsMobile } from "../theme";
 
 const ROLES = [
-  { value: "director", label: "Director — edits their department" },
+  { value: "director", label: "Department leader — edits their department" },
   { value: "country",  label: "Country leader — views their country" },
   { value: "leader",   label: "P&C leader — full access" },
 ];

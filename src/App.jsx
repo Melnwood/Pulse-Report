@@ -1864,8 +1864,8 @@ function PreviewAsPanel({ allRuns, setPreviewAs, setView }) {
   const startDirector = () => {
     if (!depts.length) return;
     const names = depts.map(k => (DEPARTMENTS.find(x => x.key === k)?.label) || k);
-    const label = names.length === 1 ? `${names[0]} director`
-      : `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]} director`;
+    const label = names.length === 1 ? `${names[0]} department leader`
+      : `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]} department leader`;
     setPreviewAs({ role: "director", department: depts.join(","), label });
     setView("sections");
   };
@@ -1887,7 +1887,7 @@ function PreviewAsPanel({ allRuns, setPreviewAs, setView }) {
       </div>
       <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
         {modeBtn("country", "View as a country leader")}
-        {modeBtn("director", "View as a P&C director")}
+        {modeBtn("director", "View as a P&C department leader")}
       </div>
 
       {mode === "country" && (
@@ -1905,7 +1905,7 @@ function PreviewAsPanel({ allRuns, setPreviewAs, setView }) {
       {mode === "director" && (
         <div style={{ marginTop:14 }}>
           <div style={{ fontSize:12, color:"#7A6F63", marginBottom:8 }}>
-            Pick one or more departments (directors can cover several — e.g. Counseling &amp; Marriages):
+            Pick one or more departments (department leaders can cover several — e.g. Counseling &amp; Marriages):
           </div>
           <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:12 }}>
             {DEPARTMENTS.map(d => {
@@ -2300,7 +2300,7 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
         {allRuns && allRuns.length > 0 && (
           <div style={{ ...card, padding:0, overflow:"hidden", marginBottom:24 }}>
             <div style={{ display:"flex", alignItems:"baseline", gap:8, padding:"11px 14px 7px" }}>
-              <span style={{ fontSize:12, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5 }}>Director review progress</span>
+              <span style={{ fontSize:12, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5 }}>Department leader review progress</span>
               <span style={{ fontSize:11, color:"#A89C8D" }}>· click a country to open its review</span>
             </div>
             {[...latestRuns]
@@ -2348,7 +2348,7 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
               style={{ marginLeft:"auto", background:"none", border:"none", cursor:"pointer", fontSize:18, color:"#7A6F63", lineHeight:1 }}>✕</button>
           </div>
           <div style={{ fontSize:12.5, color:"#7A6F63", marginBottom:18, lineHeight:1.5 }}>
-            Bring data into the platform. Two kinds today — a new survey run from QuestionPro, or a completed director review.
+            Bring data into the platform. Two kinds today — a new survey run from QuestionPro, or a completed department leader review.
           </div>
 
           {/* 1 — New survey run from QuestionPro */}
@@ -2407,16 +2407,16 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
               country from the file and loads the review into that run's report. */}
           <div style={{ marginTop:18, paddingTop:16, borderTop:"1px solid #ECE2D2" }}>
             <div style={{ fontSize:12, fontWeight:700, color:"#9A6B26", textTransform:"uppercase", letterSpacing:1.2, marginBottom:8 }}>
-              Completed director review <span style={{ color:"#A89C8D", fontWeight:500, textTransform:"none", letterSpacing:0 }}>· Excel</span>
+              Completed department leader review <span style={{ color:"#A89C8D", fontWeight:500, textTransform:"none", letterSpacing:0 }}>· Excel</span>
             </div>
             <div style={{ fontSize:12, color:"#7A6F63", lineHeight:1.5, marginBottom:10 }}>
-              Loads the strengths, growth areas, leadership questions, and quotes from a director's review Excel into the matching country's report. We read the country from the file.
+              Loads the strengths, growth areas, leadership questions, and quotes from a department leader's review Excel into the matching country's report. We read the country from the file.
             </div>
             <input ref={dirReviewRef} type="file" accept=".xlsx" style={{ display:"none" }}
               onChange={e => { const f = e.target.files?.[0]; if (f && onImportDirectorReview) onImportDirectorReview(f); e.target.value = ""; }} />
             <button onClick={() => dirReviewRef.current?.click()}
               style={{ ...navBtn, display:"inline-flex", alignItems:"center", gap:6 }}>
-              <IconUpload/> Import director review (Excel)
+              <IconUpload/> Import department leader review (Excel)
             </button>
           </div>
         </div>
@@ -2696,7 +2696,7 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
           <div>
             <div style={{ fontSize:11, letterSpacing:3, color:"#E0863C", fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>Josiah Venture</div>
             <div style={{ fontFamily:FONT_DISPLAY, fontSize:24, fontWeight:600, color:"#2C2621" }}>
-              {myDepts ? "Director Review & Platform" : "People & Culture Platform"}
+              {myDepts ? "Department Leader Review & Platform" : "People & Culture Platform"}
             </div>
           </div>
         </div>
@@ -2929,7 +2929,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
   // Apply a director-review Excel handed over from the Leadership section. The
   // parent has already opened this run, so country/year are correct here.
   const runImport = async (file) => {
-    setImportMsg({ status:"working", lines:["Reading director review…"] });
+    setImportMsg({ status:"working", lines:["Reading department leader review…"] });
     try {
       const { selections: imported, report, interpretations } = await parseDirectorReview(file, DEPARTMENTS);
       if (!Object.keys(imported).length) {
@@ -2953,8 +2953,8 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
           return updated;
         });
       }
-      const extra = sbCount ? [`Applied ${sbCount} Survey Basics interpretation edit${sbCount===1?"":"s"} from the director.`] : [];
-      setImportMsg({ status:"done", lines:["Imported director review:", ...report, ...extra] });
+      const extra = sbCount ? [`Applied ${sbCount} Survey Basics interpretation edit${sbCount===1?"":"s"} from the department leader.`] : [];
+      setImportMsg({ status:"done", lines:["Imported department leader review:", ...report, ...extra] });
     } catch (err) {
       setImportMsg({ status:"error", lines:["Import failed: " + err.message] });
     }
@@ -2992,7 +2992,7 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
       <div style={{ background:"#FFFFFF", borderBottom:"1px solid #ECE2D2", padding: isMobile ? "12px 14px" : "14px 24px", display:"flex", alignItems:"center", gap: isMobile ? 8 : 16, flexShrink:0, zIndex:100, flexWrap:"wrap" }}>
         <button onClick={()=>setView("__back__")} style={{ ...navBtn, background:"transparent", border:"1px solid #ECE2D2" }}>← Back</button>
         <div style={{ flex:1, minWidth:0 }}>
-          <div style={{ fontFamily:FONT_DISPLAY, fontSize:16, fontWeight:600, color:"#2C2621", lineHeight:1.15 }}>Director Review</div>
+          <div style={{ fontFamily:FONT_DISPLAY, fontSize:16, fontWeight:600, color:"#2C2621", lineHeight:1.15 }}>Department Leader Review</div>
           <div style={{ fontSize:12, fontWeight:700, color:"#E0863C" }}>
             {country} {year}
             {cloudLoading && <span style={{ color:"#7A6F63", marginLeft:8, fontWeight:500, fontStyle:"italic" }}>☁ syncing…</span>}
@@ -3728,10 +3728,10 @@ function DeptNotesTab({ dept, country, year, me, saveMe, isPCLead, sel = {} }) {
       )}
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 18, alignItems: "start" }}>
       <div>
-        <div style={h3}>Director&apos;s notes</div>
-        <div style={subline}>Every note added with the Director&apos;s Note button in the review, in one place.</div>
+        <div style={h3}>Department leader&apos;s notes</div>
+        <div style={subline}>Every note added with the Department Leader&apos;s Note button in the review, in one place.</div>
         {qNotes === null ? <div style={{ fontSize: 12, color: "#7A6F63" }}>Loading&hellip;</div> :
-          visible.length === 0 ? <div style={{ fontSize: 12.5, color: "#A89C8D", fontStyle: "italic" }}>No director&apos;s notes yet. Add them with the Director&apos;s Note button on the Review tab.</div> :
+          visible.length === 0 ? <div style={{ fontSize: 12.5, color: "#A89C8D", fontStyle: "italic" }}>No department leader&apos;s notes yet. Add them with the Department Leader&apos;s Note button on the Review tab.</div> :
           visible.map(n => (
             <div key={n.id} style={noteCard}>
               <div style={{ fontSize: 11, color: "#7A6F63", marginBottom: 5, lineHeight: 1.4 }}>{aboutLabel(n.question)}</div>
@@ -3921,12 +3921,12 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
               the top of the same window the team types in, so the context and
               the composer live together. */}
           <MnSection title="Meeting notes" dot="#5C9A6D"
-            count={loading ? "…" : (dirNotes.length ? `${dirNotes.length} director note${dirNotes.length === 1 ? "" : "s"}` : null)}>
+            count={loading ? "…" : (dirNotes.length ? `${dirNotes.length} department leader note${dirNotes.length === 1 ? "" : "s"}` : null)}>
             {loading ? <div style={{ fontSize:12, color:"#7A6F63", marginBottom:10 }}>Loading…</div> :
               dirNotes.length > 0 && (
                 <div style={{ marginBottom:14 }}>
                   <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:.5, marginBottom:8 }}>
-                    Director's notes
+                    Department leader's notes
                   </div>
                   <div style={{ maxHeight:270, overflowY:"auto" }}>
                     {dirNotes.map(n => (
@@ -4364,7 +4364,7 @@ function DeptBorderlineChooser({ dept, canEdit, saveStatusOverride }) {
 // forcePublic: country leaders don't get a Private option — everything they
 // write on their report is shared with the People & Culture team, and the
 // dialog says so instead of offering the toggle.
-function DirectorNoteButton({ country, year, deptKey, question, label, me, hasNote, onSaved, compact, btnLabel = "Director's Note", forcePublic = false }) {
+function DirectorNoteButton({ country, year, deptKey, question, label, me, hasNote, onSaved, compact, btnLabel = "Department Leader's Note", forcePublic = false }) {
   const [open, setOpen] = useState(false);
   const [noteId, setNoteId] = useState(null);
   const [text, setText] = useState("");
@@ -5983,7 +5983,7 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
         </div>
         {Object.keys(refinements).length === 0 ? (
           <div style={{ color:"#7A6F63", fontSize:13, fontStyle:"italic" }}>
-            No refinements saved yet. When directors edit wording in the Director Review, those edits are saved here and pre-filled in future country reports.
+            No refinements saved yet. When department leaders edit wording in the Department Leader Review, those edits are saved here and pre-filled in future country reports.
           </div>
         ) : (
           <div style={{ display:"grid", gap:8 }}>

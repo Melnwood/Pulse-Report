@@ -5,7 +5,7 @@ import { card, navBtn, lbl, inp, C } from "../theme";
 // Where a video shows. Value must match the Section choices in the Help Videos
 // table and the section keys the app renders against.
 const SECTIONS = [
-  { value: "How to use the app", label: "How to use the app — directors' How-to panel" },
+  { value: "How to use the app", label: "How to use the app — department leaders' How-to panel" },
   { value: "Overview",           label: "How scoring works — top (Overview)" },
   { value: "Two ways to measure",label: "How scoring works — under “Two ways to measure”" },
   { value: "Why it matters",     label: "How scoring works — under “Why it matters”" },
@@ -74,7 +74,7 @@ export default function VideosView({ setView }) {
                 <div style={{ fontSize: 12, color: C.muted, marginTop: 6, lineHeight: 1.5 }}>
                   This is how a video connects to a spot in the app. Pick one of the <b>“How scoring works”</b> options
                   and a <b>▶ Watch</b> button appears next to that section’s heading — clicking it pops the video open.
-                  Pick <b>“How to use the app”</b> to add it to the directors’ How-to panel.
+                  Pick <b>“How to use the app”</b> to add it to the department leaders’ How-to panel.
                 </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: 12 }}>
