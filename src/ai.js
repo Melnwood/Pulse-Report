@@ -151,7 +151,9 @@ Produce a short leadership brief as JSON only (no prose outside the JSON, no cod
   ]
 }
 
-Give 3–5 priorities, most important first. Prefer synthesis over enumeration: if the same issue recurs across countries, make that ONE priority and name the pattern. Only use deptKey values that appear in the DEPARTMENTS list below. Be specific to THIS data; do not invent anything.
+Give 3–4 priorities, most important first. Prefer synthesis over enumeration: if the same issue recurs across countries, make that ONE priority and name the pattern. Only use deptKey values that appear in the DEPARTMENTS list below. Be specific to THIS data; do not invent anything.
+
+BE BRIEF. Each "insight" is at most 2 short sentences (~40 words); each "nextStep" is ONE sentence. Your whole reply is cut off past ~700 words, so a long answer arrives broken — keep the entire JSON comfortably under that.
 
 Ground the story in what people actually said: where the DIRECTORS' NOTES or STAFF OPEN RESPONSES sharpen or explain a score, weave that in — name the human reality behind the number, and quote a short phrase sparingly (a few words). If a director is already acting on something, say so in the next step. Never invent quotes or attribute anything not in the material below.
 
@@ -173,16 +175,54 @@ ${noteLines.join("\n") || "- (none yet)"}
 STAFF OPEN RESPONSES (in staff's own words, translated; may be empty):
 ${respLines.join("\n") || "- (none)"}`;
 
-  // 1024 max_tokens: enough for 3–5 JSON priorities, small enough to finish
+  // 1024 max_tokens: enough for 3–4 JSON priorities, small enough to finish
   // inside the function timeout.
   const raw = await callClaude(prompt, 1024);
-  let parsed;
-  try {
-    const jsonText = raw.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
-    parsed = JSON.parse(jsonText.slice(jsonText.indexOf("{"), jsonText.lastIndexOf("}") + 1));
-  } catch {
-    // Fall back to showing the raw text rather than failing outright.
-    return { empty: false, headline: "", priorities: [], text: raw };
+  const parsed = parseBriefJSON(raw);
+  if (!parsed || (!parsed.headline && !(parsed.priorities || []).length)) {
+    // Never show raw JSON to the reader — a garbled answer gets a plain retry note.
+    return { empty: false, headline: "", priorities: [],
+      text: "The AI's answer came back garbled this time. Press Synthesize again — a fresh run usually comes out clean." };
   }
   return { empty: false, headline: parsed.headline || "", priorities: Array.isArray(parsed.priorities) ? parsed.priorities : [] };
+}
+
+// Parse the brief's JSON, surviving a truncated reply. If the answer was cut
+// off by the token cap mid-way, salvage the headline and every COMPLETE
+// priority object rather than dumping raw JSON at the reader.
+function parseBriefJSON(raw) {
+  const jsonText = String(raw || "").replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+  const start = jsonText.indexOf("{");
+  if (start < 0) return null;
+  const body = jsonText.slice(start);
+  try { return JSON.parse(body.slice(0, body.lastIndexOf("}") + 1)); } catch {}
+  // Truncated: pull the headline, then walk the priorities array and keep each
+  // fully-closed { … } object (string-aware, so braces inside quotes don't count).
+  let headline = "";
+  const hm = body.match(/"headline"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  if (hm) { try { headline = JSON.parse(`"${hm[1]}"`); } catch { headline = hm[1]; } }
+  const priorities = [];
+  const arrStart = body.indexOf("[");
+  if (arrStart >= 0) {
+    let depth = 0, objStart = -1, inStr = false, esc = false;
+    for (let i = arrStart + 1; i < body.length; i++) {
+      const c = body[i];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (c === "\\") esc = true;
+        else if (c === '"') inStr = false;
+        continue;
+      }
+      if (c === '"') inStr = true;
+      else if (c === "{") { if (depth === 0) objStart = i; depth++; }
+      else if (c === "}") {
+        depth--;
+        if (depth === 0 && objStart >= 0) {
+          try { priorities.push(JSON.parse(body.slice(objStart, i + 1))); } catch {}
+          objStart = -1;
+        }
+      } else if (c === "]" && depth === 0) break;
+    }
+  }
+  return (headline || priorities.length) ? { headline, priorities } : null;
 }
