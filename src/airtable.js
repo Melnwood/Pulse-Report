@@ -507,6 +507,9 @@ export async function loadQuestionNotes(country, year, deptKey, question) {
       author: r.fields["Author"] || "",
       created: r.fields["Created"] || null,
       visibility: r.fields["Visibility"] || "Private",
+      // The "Notes" column holds the AI English translation when the note was
+      // written in another language (filled in by the app after save, best-effort).
+      translation: r.fields["Notes"] || "",
     }))
     .sort((a, b) => new Date(b.created || 0) - new Date(a.created || 0));
 }
@@ -518,10 +521,11 @@ export async function setQuestionNoteVisibility(noteId, visibility) {
 
 // Update a question/section note's body (and optionally visibility) in place —
 // lets a single note autosave as the author types instead of creating new rows.
-export async function updateQuestionNote(noteId, { body, visibility }) {
+export async function updateQuestionNote(noteId, { body, visibility, translation }) {
   const fields = {};
   if (body !== undefined) fields["Body"] = body;
   if (visibility !== undefined) fields["Visibility"] = visibility === "Public" ? "Public" : "Private";
+  if (translation !== undefined) fields["Notes"] = translation || "";
   await call({ action: "update", table: "questionNotes", records: [{ id: noteId, fields }] });
 }
 

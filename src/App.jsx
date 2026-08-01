@@ -11,7 +11,7 @@ import { authStatus, tokenValid, getUser, logout, listCountryLeaders } from "./a
 import CountryLeadersView from "./components/CountryLeadersView";
 import SURVEY_BASICS from "./surveyBasics.json";
 import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, deleteDepartmentNote, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, updateQuestionNote, deleteQuestionNote, loadMeasures, loadSurveyBasicsMaster, saveSurveyBasicsMaster, loadHelpVideos, loadPrep, savePrep } from "./airtable";
-import { synthesizeLeadership } from "./ai";
+import { synthesizeLeadership, languageForCountry, translateBatch, translateToEnglish, nativeLanguageLabel } from "./ai";
 import MeasurePanel from "./components/MeasurePanel";
 import NotesDigest from "./components/NotesDigest";
 import CountryTrends from "./components/CountryTrends";
@@ -3668,6 +3668,8 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
                         {String(n.question).slice(LEADER_ANSWER_PREFIX.length)}
                       </div>
                       <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{n.body}</div>
+                      {n.translation && <div style={{ marginTop:6, fontSize:12, color:"#7A6F63", borderLeft:"2px solid #E2D3C2", paddingLeft:8, lineHeight:1.5, whiteSpace:"pre-wrap" }}>
+                        <span style={{ fontSize:9, fontWeight:700, textTransform:"uppercase", letterSpacing:.5, marginRight:6 }}>English (AI)</span>{n.translation}</div>}
                       <div style={{ fontSize:11, color:"#A89C8D", marginTop:6 }}>{n.author || leaderName || "Country leader"}{n.created ? " · " + fmt(n.created) : ""}</div>
                     </div>
                   ))}
@@ -3677,6 +3679,8 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
                 <div key={n.id} style={noteCard}>
                   {n.question && <div style={{ fontSize:11, color:"#7A6F63", marginBottom:5, lineHeight:1.4 }}>{aboutLabel(n.question)}</div>}
                   <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{n.body}</div>
+                  {n.translation && <div style={{ marginTop:6, fontSize:12, color:"#7A6F63", borderLeft:"2px solid #E2D3C2", paddingLeft:8, lineHeight:1.5, whiteSpace:"pre-wrap" }}>
+                    <span style={{ fontSize:9, fontWeight:700, textTransform:"uppercase", letterSpacing:.5, marginRight:6 }}>English (AI)</span>{n.translation}</div>}
                   <div style={{ fontSize:11, color:"#A89C8D", marginTop:6 }}>{n.author || "Unknown"}{n.created ? " · " + fmt(n.created) : ""}</div>
                 </div>
               )) : leaderAnswers.length === 0 && (
@@ -3706,6 +3710,8 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
                       <div key={n.id} style={noteCard}>
                         <div style={{ fontSize:11, color:"#7A6F63", marginBottom:5, lineHeight:1.4 }}>{aboutLabel(n.question)}</div>
                         <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{n.body}</div>
+                        {n.translation && <div style={{ marginTop:6, fontSize:12, color:"#7A6F63", borderLeft:"2px solid #E2D3C2", paddingLeft:8, lineHeight:1.5, whiteSpace:"pre-wrap" }}>
+                          <span style={{ fontSize:9, fontWeight:700, textTransform:"uppercase", letterSpacing:.5, marginRight:6 }}>English (AI)</span>{n.translation}</div>}
                         <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:7 }}>
                           <span style={{ fontSize:9, fontWeight:700, borderRadius:4, padding:"2px 7px", border:"1px solid",
                             ...(n.visibility === "Public" ? { color:"#5C9A6D", background:"#E9F1E9", borderColor:"#C7E0CB" } : { color:"#7A6F63", background:"#F1EAE1", borderColor:"#E4D8C8" }) }}>
@@ -4557,11 +4563,35 @@ const REFLECT_QS = [
   { key: "improve",   label: "Help us improve", prompt: "How was the survey experience for your team this cycle — and is there anything we could change to make it clearer, easier, or more valuable next time?" },
 ];
 
+// ── Report language flip ──
+// The disclaimer shown whenever the report is being read in translation, and
+// the fixed UI strings the flip translates (headings + prep prompts). The
+// report's CONTENT strings are gathered per department at flip time.
+const TR_DISCLAIMER = "This is an automatic AI translation and may contain mistakes — the English report is the original.";
+const TR_UI_STRINGS = () => [
+  TR_DISCLAIMER,
+  "What's working", "Where attention is needed", "Question scores",
+  "Questions for leadership", "What staff said",
+  "Have you seen this in your team?", "Yes, this matches", "Partly", "This doesn't match",
+  "+ Agenda", "✓ On agenda",
+  "Department Scores", "(Click on a department to see more details.)",
+  "Prepare for your Pulse meeting ↓", "✓ You've finished your part — thank you!",
+  "Prepare for your pulse meeting", "Meeting agenda — most important first", " (drag to reorder)", "Reflect",
+  "Your notes on what's working — saves when you click away, and goes to People & Culture with your prep.",
+  "Your notes on where attention is needed — saves when you click away, and goes to People & Culture with your prep.",
+  "Your answer for the team — saves when you click away, and appears in this department's Meeting Notes.",
+  "Write your answer — it saves when you click away.",
+  "✓ I've finished my part of the Pulse report",
+  "Required before your pulse meeting — this sends your agenda, notes, question answers, and reflections to People & Culture.",
+  "Work through each department above — say whether you've seen it in your team, jot your notes under What's working and Where attention is needed, answer the leadership questions, and add the departments you want to discuss to the agenda. Then finish the reflections below and click the finish button.",
+  ...REFLECT_QS.flatMap(q => [q.label, q.prompt]),
+];
+
 // The prep standing sections at the bottom of the country report: the meeting
 // agenda (drag to reorder, most important first), the five reflections, and the
 // required "Mark prep ready" gate. edit = the country leader; view = P&C reading
 // the same prep once it exists.
-function PrepFooter({ mode, prep, savePrepPatch, depts, country, isMobile }) {
+function PrepFooter({ mode, prep, savePrepPatch, depts, country, isMobile, tr = (s) => s }) {
   const edit = mode === "edit";
   const agenda = [...(prep.agenda || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
   const [dragIdx, setDragIdx] = useState(null);
@@ -4575,7 +4605,25 @@ function PrepFooter({ mode, prep, savePrepPatch, depts, country, isMobile }) {
   };
   const reacted = depts.filter(d => ((prep.reactions || {})[d.key] || {}).choice).length;
   const reflDone = REFLECT_QS.filter(q => ((edit ? refl : (prep.reflections || {}))[q.key] || "").trim()).length;
-  const saveRefl = () => savePrepPatch({ reflections: refl });
+  // Save the reflections (merged over what's stored, so the English copies below
+  // survive), then keep a best-effort English copy of each non-English answer —
+  // stored as "<key>En" in the same blob — so P&C reads them without a dictionary.
+  const saveRefl = () => {
+    const old = prep.reflections || {};
+    savePrepPatch({ reflections: { ...old, ...refl } });
+    REFLECT_QS.forEach(qd => {
+      const txt = String(refl[qd.key] || "").trim();
+      const unchanged = txt === String(old[qd.key] || "").trim();
+      if (txt && looksNonEnglish(txt)) {
+        if (unchanged && (old[qd.key + "En"] || "").trim()) return;   // already translated
+        translateToEnglish(txt).then(en => {
+          if (en) savePrepPatch({ reflections: { ...(prep.reflections || {}), ...refl, [qd.key + "En"]: en } });
+        }).catch(() => {});
+      } else if ((old[qd.key + "En"] || "").trim()) {
+        savePrepPatch({ reflections: { ...(prep.reflections || {}), ...refl, [qd.key + "En"]: "" } });
+      }
+    });
+  };
   const deptLabel = (k) => (depts.find(d => d.key === k) || {}).label || k;
 
   const secTitle = { fontSize: 11, fontWeight: 700, color: "#7A6F63", textTransform: "uppercase", letterSpacing: 2, marginBottom: 12 };
@@ -4591,7 +4639,7 @@ function PrepFooter({ mode, prep, savePrepPatch, depts, country, isMobile }) {
         boxShadow: "0 2px 8px rgba(124,111,224,0.08)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
           <div style={{ fontFamily: FONT_DISPLAY, fontSize: 24, fontWeight: 600, color: "#2C2621" }}>
-            {edit ? "Prepare for your pulse meeting" : `${country} leader prep`}
+            {edit ? tr("Prepare for your pulse meeting") : `${country} leader prep`}
           </div>
           <span style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap" }}>
             {chip(reacted >= depts.length && depts.length > 0, `${reacted}/${depts.length} departments`)}
@@ -4601,13 +4649,13 @@ function PrepFooter({ mode, prep, savePrepPatch, depts, country, isMobile }) {
         </div>
         <div style={{ fontSize: 13, color: "#7A6F63", lineHeight: 1.55, marginBottom: 22 }}>
           {edit
-            ? "Work through each department above — say whether you've seen it in your team, jot your notes under What's working and Where attention is needed, answer the leadership questions, and add the departments you want to discuss to the agenda. Then finish the reflections below and click the finish button."
+            ? tr("Work through each department above — say whether you've seen it in your team, jot your notes under What's working and Where attention is needed, answer the leadership questions, and add the departments you want to discuss to the agenda. Then finish the reflections below and click the finish button.")
             : "What the country leader prepared ahead of the pulse meeting."}
         </div>
 
         {/* Meeting agenda */}
         <div style={{ marginBottom: 26 }}>
-          <div style={secTitle}>Meeting agenda — most important first{edit && agenda.length > 1 ? " (drag to reorder)" : ""}</div>
+          <div style={secTitle}>{tr("Meeting agenda — most important first")}{edit && agenda.length > 1 ? tr(" (drag to reorder)") : ""}</div>
           {agenda.length === 0 && (
             <div style={{ fontSize: 12.5, color: "#A89C8D", fontStyle: "italic" }}>
               {edit ? "Nothing yet — use the “+ Agenda” button next to a department's score to add it to your meeting list." : "No agenda items."}
@@ -4650,8 +4698,12 @@ function PrepFooter({ mode, prep, savePrepPatch, depts, country, isMobile }) {
                 {r.note && <div style={{ fontSize: 12.5, color: "#5A4A3B", marginTop: 4, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{r.note}</div>}
                 {r.noteWorking && <div style={{ fontSize: 12.5, color: "#5A4A3B", marginTop: 4, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
                   <span style={{ fontWeight: 700, color: "#5C9A6D" }}>What's working: </span>{r.noteWorking}</div>}
+                {r.noteWorkingEn && <div style={{ fontSize: 12, color: "#7A6F63", marginTop: 2, lineHeight: 1.5, whiteSpace: "pre-wrap", borderLeft: "2px solid #E2D3C2", paddingLeft: 8 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5, marginRight: 6 }}>English (AI)</span>{r.noteWorkingEn}</div>}
                 {r.noteAttention && <div style={{ fontSize: 12.5, color: "#5A4A3B", marginTop: 4, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
                   <span style={{ fontWeight: 700, color: "#C08636" }}>Where attention is needed: </span>{r.noteAttention}</div>}
+                {r.noteAttentionEn && <div style={{ fontSize: 12, color: "#7A6F63", marginTop: 2, lineHeight: 1.5, whiteSpace: "pre-wrap", borderLeft: "2px solid #E2D3C2", paddingLeft: 8 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5, marginRight: 6 }}>English (AI)</span>{r.noteAttentionEn}</div>}
               </div>
             ))}
           </div>
@@ -4659,25 +4711,34 @@ function PrepFooter({ mode, prep, savePrepPatch, depts, country, isMobile }) {
 
         {/* Reflect — five standing questions */}
         <div style={{ marginBottom: 26 }}>
-          <div style={secTitle}>Reflect</div>
+          <div style={secTitle}>{tr("Reflect")}</div>
           {REFLECT_QS.map(qd => (
             <div key={qd.key} style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#B96524", marginBottom: 2 }}>{qd.label}</div>
-              <div style={{ fontSize: 12.5, color: "#5A4A3B", lineHeight: 1.5, marginBottom: 6 }}>{qd.prompt}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#B96524", marginBottom: 2 }}>{tr(qd.label)}</div>
+              <div style={{ fontSize: 12.5, color: "#5A4A3B", lineHeight: 1.5, marginBottom: 6 }}>{tr(qd.prompt)}</div>
               {edit ? (
                 <textarea rows={2} value={refl[qd.key] || ""}
                   onChange={e => setRefl(prev => ({ ...prev, [qd.key]: e.target.value }))}
                   onBlur={saveRefl}
-                  placeholder="Write your answer — it saves when you click away."
+                  placeholder={tr("Write your answer — it saves when you click away.")}
                   style={{ width: "100%", boxSizing: "border-box", fontSize: 13, padding: 9,
                     border: "1px solid #E2D3C2", borderRadius: 8, resize: "vertical", fontFamily: "inherit" }} />
               ) : (
-                <div style={{ fontSize: 13, color: (prep.reflections || {})[qd.key] ? "#2C2621" : "#A89C8D",
-                  fontStyle: (prep.reflections || {})[qd.key] ? "normal" : "italic",
-                  background: "#FDFAF4", border: "1px solid #ECE2D2", borderRadius: 8, padding: "8px 11px",
-                  whiteSpace: "pre-wrap", lineHeight: 1.55 }}>
-                  {(prep.reflections || {})[qd.key] || "No answer yet."}
-                </div>
+                <>
+                  <div style={{ fontSize: 13, color: (prep.reflections || {})[qd.key] ? "#2C2621" : "#A89C8D",
+                    fontStyle: (prep.reflections || {})[qd.key] ? "normal" : "italic",
+                    background: "#FDFAF4", border: "1px solid #ECE2D2", borderRadius: 8, padding: "8px 11px",
+                    whiteSpace: "pre-wrap", lineHeight: 1.55 }}>
+                    {(prep.reflections || {})[qd.key] || "No answer yet."}
+                  </div>
+                  {((prep.reflections || {})[qd.key + "En"] || "").trim() && (
+                    <div style={{ marginTop: 4, fontSize: 12, color: "#7A6F63", borderLeft: "2px solid #E2D3C2",
+                      paddingLeft: 8, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5, marginRight: 6 }}>English (AI)</span>
+                      {(prep.reflections || {})[qd.key + "En"]}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           ))}
@@ -4699,10 +4760,10 @@ function PrepFooter({ mode, prep, savePrepPatch, depts, country, isMobile }) {
             <>
               <button onClick={() => { saveRefl(); savePrepPatch({ ready: true }); }}
                 style={{ ...navBtn, background: "#5C9A6D", color: "white", fontSize: 14, padding: "10px 18px" }}>
-                ✓ I've finished my part of the Pulse report
+                {tr("✓ I've finished my part of the Pulse report")}
               </button>
               <span style={{ fontSize: 12, color: "#7A6F63", lineHeight: 1.5 }}>
-                Required before your pulse meeting — this sends your agenda, notes, question answers, and reflections to People &amp; Culture.
+                {tr("Required before your pulse meeting — this sends your agenda, notes, question answers, and reflections to People & Culture.")}
               </span>
             </>
           ) : (
@@ -4735,13 +4796,34 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
     setPrepState(p => ({ ...(p || {}), ...patch }));
     savePrep(country, year, patch, prepAuthor).catch(e => console.warn("Prep save failed:", e.message));
   };
+  // Freshest prep for async callbacks — translations land after state has moved on.
+  const prepRef = useRef(null);
+  prepRef.current = prep;
   // The API DeptReportPage uses to render the prep layer on each department.
   const prepApi = (prepMode && prep) ? {
     author: prepAuthor,
     reactionFor: (k) => (prep.reactions || {})[k] || null,
     // Merge a partial patch ({choice} | {noteWorking} | {noteAttention}) into the
-    // department's reaction record, so each control saves independently.
-    saveReaction: (k, patch) => savePrepPatch({ reactions: { ...(prep.reactions || {}), [k]: { ...((prep.reactions || {})[k] || {}), ...patch } } }),
+    // department's reaction record, so each control saves independently. Notes
+    // written in another language get a best-effort English copy ("<field>En")
+    // so P&C and the directors can read them; English text clears any stale copy.
+    saveReaction: (k, patch) => {
+      const cur = ((prepRef.current || {}).reactions) || {};
+      const rec = { ...(cur[k] || {}), ...patch };
+      const pending = [];
+      for (const f of ["noteWorking", "noteAttention"]) {
+        if (patch[f] === undefined) continue;
+        const txt = String(patch[f] || "").trim();
+        if (txt && looksNonEnglish(txt)) pending.push([f, txt]);
+        else rec[f + "En"] = "";
+      }
+      savePrepPatch({ reactions: { ...cur, [k]: rec } });
+      pending.forEach(([f, txt]) => translateToEnglish(txt).then(en => {
+        if (!en) return;
+        const c2 = ((prepRef.current || {}).reactions) || {};
+        savePrepPatch({ reactions: { ...c2, [k]: { ...(c2[k] || {}), [f + "En"]: en } } });
+      }).catch(() => {}));
+    },
     agendaHas: (label) => (prep.agenda || []).some(a => a.label === label),
     agendaToggle: (label, deptKey) => {
       const list = prep.agenda || [];
@@ -4792,6 +4874,55 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
 
   const activeDeptData = activeDept ? depts.find(d=>d.key===activeDept) : null;
 
+  // ── REPORT LANGUAGE FLIP ──────────────────────────────────────────────────
+  // One button turns the report into the country's language — AI-translated and
+  // clearly labelled as such. Content is translated lazily (the open department
+  // plus the fixed UI strings) and cached in localStorage, so each string is
+  // only ever translated once per language.
+  const reportLang = languageForCountry(country);
+  const [langOn, setLangOn] = useState(false);
+  const [trBusy, setTrBusy] = useState(false);
+  const [trMap, setTrMap] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(`pulse:tr:${languageForCountry(country)}`) || "{}"); } catch { return {}; }
+  });
+  const tr = (s) => (langOn && s && trMap[s]) || s;
+  useEffect(() => {
+    if (!langOn || !reportLang) return;
+    const wanted = new Set(TR_UI_STRINGS());
+    const d = activeDept ? depts.find(x => x.key === activeDept) : null;
+    if (d) {
+      wanted.add(d.label);
+      for (const s of getApproved(d.key, "strengths")) wanted.add(s);
+      for (const s of getApproved(d.key, "growth")) wanted.add(s);
+      for (const s of getApproved(d.key, "leadershipQs")) wanted.add(s);
+      for (const qq of (d.questions || [])) wanted.add(qq.en);
+    }
+    const missing = [...wanted].filter(s => s && typeof s === "string" && !trMap[s]);
+    if (!missing.length) return;
+    let alive = true;
+    setTrBusy(true);
+    (async () => {
+      try {
+        const out = {};
+        for (let i = 0; i < missing.length; i += 35) {
+          const chunk = missing.slice(i, i + 35);
+          const trs = await translateBatch(chunk, reportLang);
+          if (!alive) return;
+          chunk.forEach((s, j) => { if (trs[j]) out[s] = trs[j]; });
+        }
+        if (!alive) return;
+        setTrMap(prev => {
+          const next = { ...prev, ...out };
+          try { localStorage.setItem(`pulse:tr:${reportLang}`, JSON.stringify(next)); } catch {}
+          return next;
+        });
+      } catch (e) { console.warn("Report translation failed:", e.message); }
+      finally { if (alive) setTrBusy(false); }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line
+  }, [langOn, activeDept, reportLang]);
+
   // Resolve a summary row key (which may be a combined "JVK"/"LC") to a real detail
   // department key — for pairs, open the worse half (lowest score). Then scroll to it.
   const openDept = (summaryKey) => {
@@ -4823,6 +4954,16 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
 
       <div style={{ maxWidth:960, margin:"0 auto", padding: isMobile ? "24px 16px" : "40px 24px" }}>
 
+        {/* AI-translation notice — always visible while the flip is on */}
+        {langOn && reportLang && (
+          <div className="no-print" style={{ background:"#F7EEDC", border:"1px solid #E8D5AE", borderRadius:10,
+            padding:"11px 14px", marginBottom:18, fontSize:12.5, color:"#5A4A3B", lineHeight:1.55 }}>
+            <b>🌐 {tr(TR_DISCLAIMER)}</b>
+            {trMap[TR_DISCLAIMER] && <span style={{ display:"block", marginTop:3, opacity:.8 }}>{TR_DISCLAIMER}</span>}
+            {trBusy && <span style={{ display:"block", marginTop:3, fontWeight:600 }}>Translating…</span>}
+          </div>
+        )}
+
         {/* ── SUMMARY PAGE ── */}
         <div style={{ background:"white", borderRadius:16, padding: isMobile ? 18 : 40, marginBottom:32, border:"1px solid #ECE2D2", boxShadow:"0 2px 8px rgba(124,111,224,0.08)" }}>
 
@@ -4836,22 +4977,35 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
                     {leaderFirst}, here's your {country} Pulse report
                   </div>
                   <div style={{ fontSize:15, color:"#7A6F63" }}>Staff Pulse · {year}{totalN ? ` · ${totalN} respondents` : ""} across {depts.length} departments</div>
-                  {prepMode && prep && (
-                    <button className="no-print"
-                      onClick={() => { const el = document.getElementById("prep-section"); if (el) el.scrollIntoView({ behavior:"smooth", block:"start" }); }}
-                      style={{ marginTop:12, fontSize:13.5, fontWeight:700, cursor:"pointer", borderRadius:20, padding:"9px 18px",
-                        color: prep.ready ? "#5C9A6D" : "white",
-                        background: prep.ready ? "#E9F1E9" : "#E0863C",
-                        border: `1px solid ${prep.ready ? "#C7E0CB" : "#E0863C"}` }}>
-                      {prep.ready ? "✓ You've finished your part — thank you!" : "Prepare for your Pulse meeting ↓"}
-                    </button>
-                  )}
                 </>
               ) : (
                 <>
                   <div style={{ fontFamily:FONT_DISPLAY, fontSize:34, fontWeight:600, color:"#2C2621", marginBottom:4, letterSpacing:-.4 }}>{country} Staff Pulse Report</div>
                   <div style={{ fontSize:15, color:"#7A6F63" }}>{year}{totalN ? ` · ${totalN} respondents` : ""} across {depts.length} departments</div>
                 </>
+              )}
+              {((prepMode && prep) || reportLang) && (
+                <div className="no-print" style={{ display:"flex", gap:10, flexWrap:"wrap", marginTop:12 }}>
+                  {prepMode && prep && (
+                    <button
+                      onClick={() => { const el = document.getElementById("prep-section"); if (el) el.scrollIntoView({ behavior:"smooth", block:"start" }); }}
+                      style={{ fontSize:13.5, fontWeight:700, cursor:"pointer", borderRadius:20, padding:"9px 18px",
+                        color: prep.ready ? "#5C9A6D" : "white",
+                        background: prep.ready ? "#E9F1E9" : "#E0863C",
+                        border: `1px solid ${prep.ready ? "#C7E0CB" : "#E0863C"}` }}>
+                      {prep.ready ? tr("✓ You've finished your part — thank you!") : tr("Prepare for your Pulse meeting ↓")}
+                    </button>
+                  )}
+                  {reportLang && (
+                    <button onClick={() => setLangOn(v => !v)}
+                      style={{ fontSize:13.5, fontWeight:700, cursor:"pointer", borderRadius:20, padding:"9px 18px",
+                        color: langOn ? "white" : "#5A4A3B",
+                        background: langOn ? "#B96524" : "#FDFAF4",
+                        border: `1px solid ${langOn ? "#B96524" : "#E2D3C2"}` }}>
+                      {langOn ? "🌐 English" : `🌐 ${nativeLanguageLabel(reportLang)}`}
+                    </button>
+                  )}
+                </div>
               )}
             </div>
             <div style={{ textAlign:"right" }}>
@@ -4876,7 +5030,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
           {/* Score bar chart — all departments */}
           <div>
             <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>
-              Department Scores <span style={{ fontWeight:600, textTransform:"none", letterSpacing:0, color:"#A89C8D" }}>(Click on a department to see more details.)</span>
+              {tr("Department Scores")} <span style={{ fontWeight:600, textTransform:"none", letterSpacing:0, color:"#A89C8D" }}>{tr("(Click on a department to see more details.)")}</span>
             </div>
             {summaryDepts.map(d => (
               <div key={d.key} onClick={()=>openDept(d.key)}
@@ -4925,7 +5079,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
         <div id="dept-detail-section" />
         {activeDept ? (
           // Single dept selected — show just that one
-          <DeptReportPage dept={activeDeptData} getApproved={getApproved} country={country} year={year} sbOverrides={sbOverrides} sbMaster={sbMaster} me={me} isPCLead={isPCLead} prep={prepApi} />
+          <DeptReportPage dept={activeDeptData} getApproved={getApproved} country={country} year={year} sbOverrides={sbOverrides} sbMaster={sbMaster} me={me} isPCLead={isPCLead} prep={prepApi} tr={tr} />
         ) : (
           // No tab selected — show all for print
           <div>
@@ -4933,7 +5087,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
               Select a department above to focus, or download PDF to get the full report.
             </div>
             <div className="print-only">
-              {depts.map(dept => <DeptReportPage key={dept.key} dept={dept} getApproved={getApproved} country={country} year={year} sbOverrides={sbOverrides} sbMaster={sbMaster} me={me} isPCLead={isPCLead} prep={prepApi} />)}
+              {depts.map(dept => <DeptReportPage key={dept.key} dept={dept} getApproved={getApproved} country={country} year={year} sbOverrides={sbOverrides} sbMaster={sbMaster} me={me} isPCLead={isPCLead} prep={prepApi} tr={tr} />)}
             </div>
           </div>
         )}
@@ -4941,7 +5095,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
         {/* ── COUNTRY LEADER PREP — agenda, reflections, ready gate (bottom) ── */}
         {prepEnabled && prep && (prepMode || prep._recordId) && (
           <PrepFooter mode={prepMode ? "edit" : "view"} prep={prep} savePrepPatch={savePrepPatch}
-            depts={depts} country={country} isMobile={isMobile} />
+            depts={depts} country={country} isMobile={isMobile} tr={tr} />
         )}
       </div>
 
@@ -4963,7 +5117,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
   );
 }
 
-function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaster, me, isPCLead, startCollapsed = false, prep = null }) {
+function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaster, me, isPCLead, startCollapsed = false, prep = null, tr = (s) => s }) {
   const isMobile = useIsMobile();
   // Which questions/areas the viewer has already noted (so the button shows a ✓).
   const [noted, setNoted] = useState({});
@@ -5003,7 +5157,7 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
       const m = {};
       (all || []).forEach(n => {
         if (String(n.question || "").startsWith("LQA: ")) {
-          m[String(n.question).slice(5)] = { id: n.id, body: n.body || "" };
+          m[String(n.question).slice(5)] = { id: n.id, body: n.body || "", translation: n.translation || "" };
         }
       });
       setLqa(m);
@@ -5023,6 +5177,17 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
         cur.id = await addQuestionNote({ country, year, deptKey: dept.key, question: "LQA: " + qText,
           author: (prep && prep.author) || "Country leader", title: body.slice(0, 80), body, visibility: "Public" });
       }
+      // Best-effort English copy for the team + P&C when the answer isn't in
+      // English (stored in the note's "Notes" column; never blocks the save).
+      if (cur.id) {
+        if (body && looksNonEnglish(body)) {
+          const noteId = cur.id;
+          translateToEnglish(body).then(en => { if (en) updateQuestionNote(noteId, { translation: en }).catch(() => {}); });
+        } else if (cur.translation) {
+          cur.translation = "";
+          updateQuestionNote(cur.id, { translation: "" }).catch(() => {});
+        }
+      }
       setLqa(p => ({ ...p, [qText]: { ...cur, saving: false, savedAt: new Date().toISOString() } }));
     } catch (e) {
       setLqa(p => ({ ...p, [qText]: { ...cur, saving: false, err: e.message } }));
@@ -5037,7 +5202,7 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
         style={{ marginLeft: 8, flexShrink: 0, fontSize: 11, fontWeight: 600, cursor: "pointer",
           color: on ? "#5C9A6D" : "#B96524", background: on ? "#E9F1E9" : "#FBEFE4",
           border: `1px solid ${on ? "#C7E0CB" : "#E0A56F"}`, borderRadius: 5, padding: "2px 8px", whiteSpace: "nowrap" }}>
-        {on ? "✓ On agenda" : "+ Agenda"}
+        {on ? tr("✓ On agenda") : tr("+ Agenda")}
       </button>
     );
   };
@@ -5059,7 +5224,7 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
       <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:12,
         marginBottom:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontFamily:FONT_DISPLAY, fontSize:24, fontWeight:600, color:"#2C2621", marginBottom:2 }}>{dept.label}</div>
+          <div style={{ fontFamily:FONT_DISPLAY, fontSize:24, fontWeight:600, color:"#2C2621", marginBottom:2 }}>{tr(dept.label)}</div>
           <div style={{ fontSize:13, color:"#7A6F63" }}>n = {dept.n} respondents</div>
           {!prep && (
             <div className="no-print" style={{ marginTop:8 }}>
@@ -5070,7 +5235,7 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
           {prep && (
             <div className="no-print" style={{ marginTop:10 }}>
               <div style={{ fontSize:13, fontWeight:700, color:"#2C2621", marginBottom:7 }}>
-                Have you seen this in your team?
+                {tr("Have you seen this in your team?")}
               </div>
               <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
                 {["Yes, this matches", "Partly", "This doesn't match"].map(c => (
@@ -5079,7 +5244,7 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
                       color: reactChoice === c ? "#fff" : "#5A4A3B",
                       background: reactChoice === c ? "#E0863C" : "#FDFAF4",
                       border: `1px solid ${reactChoice === c ? "#E0863C" : "#E2D3C2"}` }}>
-                    {c}
+                    {tr(c)}
                   </button>
                 ))}
                 {reactChoice && <span style={{ fontSize:11, color:"#5C9A6D", fontWeight:600 }}>✓ Saved</span>}
@@ -5106,11 +5271,11 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
       <div style={{ background:"#FFFFFF", border:"1px solid #ECE2D2", borderRadius:12, overflow:"hidden", boxShadow: C.shadow }}>
 
       {strengths.length > 0 && (
-        <Disclosure title="What's working" count={`${strengths.length}`} dot="#5C9A6D" defaultOpen={!startCollapsed}>
+        <Disclosure title={tr("What's working")} count={`${strengths.length}`} dot="#5C9A6D" defaultOpen={!startCollapsed}>
           {strengths.map((s,i) => (
             <div key={i} style={{ display:"flex", gap:10, marginBottom:8, alignItems:"flex-start" }}>
               <span style={{ color:"#5C9A6D", fontWeight:700, fontSize:14, marginTop:1, flexShrink:0 }}>✓</span>
-              <span style={{ fontSize:13, color:"#2C2621", lineHeight:1.6, flex:1 }}>{s}</span>
+              <span style={{ fontSize:13, color:"#2C2621", lineHeight:1.6, flex:1 }}>{tr(s)}</span>
             </div>
           ))}
           {/* Country leader prep: notes belong right under what they're about. */}
@@ -5119,7 +5284,7 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
               <textarea rows={2} value={noteWorking}
                 onChange={e => setNoteWorking(e.target.value)}
                 onBlur={() => prep.saveReaction(dept.key, { noteWorking })}
-                placeholder="Your notes on what's working — saves when you click away, and goes to People & Culture with your prep."
+                placeholder={tr("Your notes on what's working — saves when you click away, and goes to People & Culture with your prep.")}
                 style={{ width:"100%", boxSizing:"border-box", fontSize:13, padding:9,
                   border:"1px solid #E2D3C2", borderRadius:8, resize:"vertical", fontFamily:"inherit" }} />
             </div>
@@ -5128,11 +5293,11 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
       )}
 
       {growth.length > 0 && (
-        <Disclosure title="Where attention is needed" count={`${growth.length}`} dot={statusColor} defaultOpen={!startCollapsed}>
+        <Disclosure title={tr("Where attention is needed")} count={`${growth.length}`} dot={statusColor} defaultOpen={!startCollapsed}>
           {growth.map((g,i) => (
             <div key={i} style={{ display:"flex", gap:10, marginBottom:8, alignItems:"flex-start" }}>
               <span style={{ color:statusColor, fontWeight:700, fontSize:14, marginTop:1, flexShrink:0 }}>→</span>
-              <span style={{ fontSize:13, color:"#2C2621", lineHeight:1.6, flex:1 }}>{g}</span>
+              <span style={{ fontSize:13, color:"#2C2621", lineHeight:1.6, flex:1 }}>{tr(g)}</span>
             </div>
           ))}
           {prep && (
@@ -5140,7 +5305,7 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
               <textarea rows={2} value={noteAttention}
                 onChange={e => setNoteAttention(e.target.value)}
                 onBlur={() => prep.saveReaction(dept.key, { noteAttention })}
-                placeholder="Your notes on where attention is needed — saves when you click away, and goes to People & Culture with your prep."
+                placeholder={tr("Your notes on where attention is needed — saves when you click away, and goes to People & Culture with your prep.")}
                 style={{ width:"100%", boxSizing:"border-box", fontSize:13, padding:9,
                   border:"1px solid #E2D3C2", borderRadius:8, resize:"vertical", fontFamily:"inherit" }} />
             </div>
@@ -5151,7 +5316,7 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
       {/* Question scores — each row a collapsed <details>; expanding shows that
           question's heatmap inline (the same shared renderer the Director's
           Review uses, burden flip included). One report component everywhere. */}
-      <Disclosure title="Question scores" count={`${(dept.questions||[]).length} questions`} dot="#E0863C" defaultOpen={!startCollapsed} flush>
+      <Disclosure title={tr("Question scores")} count={`${(dept.questions||[]).length} questions`} dot="#E0863C" defaultOpen={!startCollapsed} flush>
         <style>{`
           details.pulse-qrow > summary { list-style: none; }
           details.pulse-qrow > summary::-webkit-details-marker { display: none; }
@@ -5178,7 +5343,7 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
               gap:0, alignItems:"start", padding:"8px 10px", fontSize:12 }}>
               <span style={{ fontWeight:700, color:sc(q.status), paddingTop:1 }}>{q.score?.toFixed(2)}</span>
               <span style={{ color:"#2C2621", lineHeight:1.5, paddingRight:10 }}>
-                {q.en}{q.burden ? <span style={{ color:"#7A6F63", fontSize:10 }}> [Burden]</span> : ""}
+                {tr(q.en)}{q.burden ? <span style={{ color:"#7A6F63", fontSize:10 }}> [Burden]</span> : ""}
                 {isMobile && (
                   <span style={{ marginLeft:6, fontSize:10, fontWeight:700, color:sc(q.status), background:sb(q.status),
                     border:`1px solid ${sbd(q.status)}`, borderRadius:4, padding:"1px 5px", whiteSpace:"nowrap" }}>{q.status}</span>
@@ -5233,14 +5398,14 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
 
       {/* Leadership Questions */}
       {leadershipQs.length > 0 && (
-        <Disclosure title="Questions for leadership" count={`${leadershipQs.length}`} dot="#B96524" defaultOpen={!startCollapsed}>
+        <Disclosure title={tr("Questions for leadership")} count={`${leadershipQs.length}`} dot="#B96524" defaultOpen={!startCollapsed}>
           {leadershipQs.map((q,i) => (
             <div key={i} style={{ marginBottom: prep ? 16 : 10 }}>
               <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
                 <span style={{ background:"#E0863C", color:"white", borderRadius:"50%", width:20, height:20,
                   display:"flex", alignItems:"center", justifyContent:"center",
                   fontSize:11, fontWeight:700, flexShrink:0, marginTop:1 }}>{i+1}</span>
-                <span style={{ fontSize:13, color:"#2C2621", lineHeight:1.6, flex:1 }}>{q}</span>
+                <span style={{ fontSize:13, color:"#2C2621", lineHeight:1.6, flex:1 }}>{tr(q)}</span>
               </div>
               {/* Country leader prep: an answer box after EACH leadership question.
                   Saved as a PUBLIC question note ("LQA: …") so the team reads it in
@@ -5250,7 +5415,7 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
                   <textarea rows={2} value={(lqa[q] && lqa[q].body) || ""}
                     onChange={e => setLqa(p => ({ ...p, [q]: { ...(p[q] || {}), body: e.target.value } }))}
                     onBlur={() => saveAnswer(q)}
-                    placeholder="Your answer for the team — saves when you click away, and appears in this department's Meeting Notes."
+                    placeholder={tr("Your answer for the team — saves when you click away, and appears in this department's Meeting Notes.")}
                     style={{ width:"100%", boxSizing:"border-box", fontSize:13, padding:9,
                       border:"1px solid #E2D3C2", borderRadius:8, resize:"vertical", fontFamily:"inherit" }} />
                   <div style={{ fontSize:11, marginTop:3, color: (lqa[q] && lqa[q].err) ? "#BE6650" : "#A89C8D" }}>
@@ -5268,7 +5433,7 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
 
       {/* Staff Quotes */}
       {quotes.length > 0 && (
-        <Disclosure title="What staff said" count={`${quotes.length}`} dot="#5A4A3B" defaultOpen={!startCollapsed}>
+        <Disclosure title={tr("What staff said")} count={`${quotes.length}`} dot="#5A4A3B" defaultOpen={!startCollapsed}>
           {dept.openQLabel && (
             <div style={{ fontSize:12, color:"#7A6F63", fontStyle:"italic", marginBottom:12 }}>
               In response to: "{dept.openQLabel}"

@@ -19,6 +19,62 @@ export async function callClaude(prompt, maxTokens = 1200) {
   return text.trim();
 }
 
+// ─── TRANSLATION ─────────────────────────────────────────────────────────────
+// The language each JV country works in — used for the report's language flip
+// and for turning leader-written notes into English for P&C and the directors.
+// Countries not listed (or English-speaking) simply don't get the flip button.
+const LANG_BY_COUNTRY = {
+  poland: "Polish", czech: "Czech", czechia: "Czech", "czech republic": "Czech",
+  slovakia: "Slovak", hungary: "Hungarian", slovenia: "Slovene",
+  croatia: "Croatian", serbia: "Serbian", bulgaria: "Bulgarian",
+  romania: "Romanian", moldova: "Romanian", ukraine: "Ukrainian",
+  estonia: "Estonian", latvia: "Latvian", lithuania: "Lithuanian",
+  albania: "Albanian", "north macedonia": "Macedonian", macedonia: "Macedonian",
+  germany: "German", austria: "German", spain: "Spanish", portugal: "Portuguese",
+};
+export function languageForCountry(country) {
+  return LANG_BY_COUNTRY[String(country || "").trim().toLowerCase()] || null;
+}
+
+// The flip button shows the language in its own tongue — that's the reader it's for.
+const NATIVE_LABEL = {
+  Polish: "Po polsku", Czech: "Česky", Slovak: "Po slovensky", Hungarian: "Magyarul",
+  Slovene: "Slovensko", Croatian: "Hrvatski", Serbian: "Srpski", Bulgarian: "Български",
+  Romanian: "Română", Ukrainian: "Українською", Estonian: "Eesti keeles",
+  Latvian: "Latviski", Lithuanian: "Lietuviškai", Albanian: "Shqip",
+  Macedonian: "Македонски", German: "Deutsch", Spanish: "Español", Portuguese: "Português",
+};
+export function nativeLanguageLabel(language) { return NATIVE_LABEL[language] || language; }
+
+// Translate a batch of report/UI strings into `language`. Returns an array the
+// same length and order as the input; any string the model misses falls back to
+// the English original. Callers chunk to ~35 strings per call.
+export async function translateBatch(strings, language) {
+  const prompt =
+`Translate each string in the JSON array below from English into ${language}. They are labels and content from a staff-care survey report for Josiah Venture, a Christian missions organisation — use a warm, natural, professional tone in ${language}. Keep any leading/trailing symbols (✓, +, ↓, parentheses, ellipses) in place. Do NOT translate proper nouns like "Josiah Venture", "JV Kids", or people's names.
+
+Return ONLY a JSON array of exactly ${strings.length} translated strings in the same order — no prose, no code fences.
+
+${JSON.stringify(strings)}`;
+  const raw = await callClaude(prompt, 3500);
+  const jsonText = raw.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+  const arr = JSON.parse(jsonText.slice(jsonText.indexOf("["), jsonText.lastIndexOf("]") + 1));
+  if (!Array.isArray(arr)) throw new Error("Translation response was not an array");
+  return strings.map((s, i) => (typeof arr[i] === "string" && arr[i].trim()) ? arr[i].trim() : s);
+}
+
+// Translate one leader-written text into English. Returns null on any failure —
+// callers treat the translation as best-effort and never block a save on it.
+export async function translateToEnglish(text) {
+  const t = String(text || "").trim();
+  if (!t) return null;
+  const prompt =
+`Translate the following into natural English. It was written by a ministry country leader about their team — keep the tone, meaning, and any names exactly as they are. Return ONLY the translation, no commentary.
+
+${t.slice(0, 2400)}`;
+  try { return await callClaude(prompt, 800); } catch { return null; }
+}
+
 // Summarize a department's follow-up notes + staff open responses into a concise
 // digest. Callers pass ONLY the material the current viewer is allowed to see
 // (visibility is applied before this is called — e.g. public-only for country
