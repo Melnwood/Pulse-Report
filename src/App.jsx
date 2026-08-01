@@ -1050,7 +1050,7 @@ export default function App() {
     if (view !== "sections" || !authed || !viewRole) return;
     if (viewRole === "director") setViewRaw("home");
     else if (viewRole === "country") setViewRaw("dashboard");
-  }, [view, authed, viewRole]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [view, authed, viewRole]);   // eslint-disable-line
 
   const [country, setCountry]     = useState("");
   const [year, setYear]           = useState(new Date().getFullYear().toString());
