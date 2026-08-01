@@ -2779,11 +2779,17 @@ function FlaggedQuestionsPanel({ depts, onOpenDept, openLabel = "Open department
   const nW = flagged.filter(q => q.status === "Watch").length;
   const [band, setBand] = useState(nC > 0 ? "Concern" : "Watch");
   if (!flagged.length) return null;
-  const rows = flagged.filter(q => q.status === band)
-    .sort((a, b) => (parseFloat(a.score) || 9) - (parseFloat(b.score) || 9));
+  // Grouped by department (in the same order the report lists them), each
+  // department's flagged questions together, worst score first within a group.
+  const groups = [];
+  for (const d of depts) {
+    const qs = flagged.filter(q => q.deptKey === d.key && q.status === band)
+      .sort((a, b) => (parseFloat(a.score) || 9) - (parseFloat(b.score) || 9));
+    if (qs.length) groups.push({ deptKey: d.key, deptLabel: d.label, deptStatus: d.status, qs });
+  }
 
   return (
-    <div style={{ background:"white", borderRadius:16, padding: isMobile ? 16 : 24, marginBottom:32,
+    <div id="flagged-section" style={{ background:"white", borderRadius:16, padding: isMobile ? 16 : 24, marginBottom:32,
       border:"1px solid #ECE2D2", boxShadow:"0 2px 8px rgba(124,111,224,0.08)" }}>
       <style>{`
         details.pulse-fqrow > summary { list-style: none; cursor: pointer; }
@@ -2810,44 +2816,54 @@ function FlaggedQuestionsPanel({ depts, onOpenDept, openLabel = "Open department
       <div style={{ fontSize:12.5, color:"#7A6F63", lineHeight:1.5, marginBottom:14 }}>
         {tr("Every question at this level, across every department — including the healthy ones.")}
       </div>
-      {rows.length === 0 ? (
+      {groups.length === 0 ? (
         <div style={{ fontSize:13, color:"#5C9A6D", fontWeight:600 }}>
           {band === "Concern" ? "No Concern questions — nothing at the most serious level." : "No Watch questions."}
         </div>
-      ) : rows.map((q, i) => (
-        <details key={`${q.deptKey}-${q.col ?? i}`} className="pulse-fqrow"
-          style={{ borderTop: i === 0 ? "none" : "1px solid #F6F1E8" }}>
-          <summary style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"10px 4px" }}>
-            <span style={{ fontWeight:800, color:sc(q.status), fontSize:15, width:44, flexShrink:0,
-              fontVariantNumeric:"tabular-nums", paddingTop:1 }}>{q.score}</span>
-            <span style={{ flex:1, minWidth:0 }}>
-              <span style={{ display:"block", fontSize:11, fontWeight:700, color:"#7A6F63", marginBottom:2 }}>{tr(q.deptLabel)}</span>
-              <span style={{ display:"block", fontSize:13, color:"#2C2621", lineHeight:1.5 }}>
-                {tr(q.en)}{q.burden ? <span style={{ color:"#7A6F63", fontSize:10 }}> [Burden]</span> : ""}
-              </span>
+      ) : groups.map(g => (
+        <div key={g.deptKey} style={{ marginBottom:14 }}>
+          {/* Department header — all of a department's flagged questions live together */}
+          <div style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px",
+            background:sb(g.deptStatus), border:`1px solid ${sbd(g.deptStatus)}`, borderRadius:8 }}>
+            <span style={{ width:8, height:8, borderRadius:"50%", background:sc(g.deptStatus), flexShrink:0 }} />
+            <span style={{ fontSize:12.5, fontWeight:700, color:"#2C2621" }}>{tr(g.deptLabel)}</span>
+            <span style={{ marginLeft:"auto", fontSize:11, color:"#7A6F63", fontVariantNumeric:"tabular-nums" }}>
+              {g.qs.length} {g.qs.length === 1 ? "question" : "questions"}
             </span>
-            {!isMobile && (
-              <span style={{ fontSize:10, fontWeight:700, color:"#7A6F63", background:"#FBEFE4",
-                borderRadius:4, padding:"2px 6px", flexShrink:0, marginTop:3 }}>{String(q.scale || "").toUpperCase()}</span>
-            )}
-            <span style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:11, fontWeight:600, flexShrink:0, marginTop:1,
-              color:"#E0863C", background:"#F7E7D5", border:"0.5px solid #E0A56F", borderRadius:5, padding:"3px 9px" }}>
-              <svg className="pulse-fqrow-caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#B96524"
-                strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
-              Heatmap
-            </span>
-          </summary>
-          <div style={{ padding:"2px 4px 12px 54px", maxWidth:560 }}>
-            <QuestionHeatmap q={q} />
-            {onOpenDept && (
-              <button onClick={() => onOpenDept(q.deptKey)}
-                style={{ marginTop:8, fontSize:12, fontWeight:700, cursor:"pointer", borderRadius:7,
-                  padding:"7px 13px", color:"#B96524", background:"#FBEFE4", border:"1px solid #E0A56F" }}>
-                {tr(openLabel)}
-              </button>
-            )}
           </div>
-        </details>
+          {g.qs.map((q, i) => (
+            <details key={`${q.col ?? i}`} className="pulse-fqrow"
+              style={{ borderTop: i === 0 ? "none" : "1px solid #F6F1E8" }}>
+              <summary style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"10px 4px" }}>
+                <span style={{ fontWeight:800, color:sc(q.status), fontSize:15, width:44, flexShrink:0,
+                  fontVariantNumeric:"tabular-nums", paddingTop:1 }}>{q.score}</span>
+                <span style={{ flex:1, minWidth:0, fontSize:13, color:"#2C2621", lineHeight:1.5, paddingTop:1 }}>
+                  {tr(q.en)}{q.burden ? <span style={{ color:"#7A6F63", fontSize:10 }}> [Burden]</span> : ""}
+                </span>
+                {!isMobile && (
+                  <span style={{ fontSize:10, fontWeight:700, color:"#7A6F63", background:"#FBEFE4",
+                    borderRadius:4, padding:"2px 6px", flexShrink:0, marginTop:3 }}>{String(q.scale || "").toUpperCase()}</span>
+                )}
+                <span style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:11, fontWeight:600, flexShrink:0, marginTop:1,
+                  color:"#E0863C", background:"#F7E7D5", border:"0.5px solid #E0A56F", borderRadius:5, padding:"3px 9px" }}>
+                  <svg className="pulse-fqrow-caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#B96524"
+                    strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                  Heatmap
+                </span>
+              </summary>
+              <div style={{ padding:"2px 4px 12px 54px", maxWidth:560 }}>
+                <QuestionHeatmap q={q} />
+                {onOpenDept && (
+                  <button onClick={() => onOpenDept(q.deptKey)}
+                    style={{ marginTop:8, fontSize:12, fontWeight:700, cursor:"pointer", borderRadius:7,
+                      padding:"7px 13px", color:"#B96524", background:"#FBEFE4", border:"1px solid #E0A56F" }}>
+                    {tr(openLabel)}
+                  </button>
+                )}
+              </div>
+            </details>
+          ))}
+        </div>
       ))}
     </div>
   );
@@ -5008,6 +5024,9 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
 
   // Clicking a Concern / Watch / Healthy box filters the chart to just that group.
   const [statusFilter, setStatusFilter] = useState(null);
+  // For the header's Concern & Watch jump button.
+  const flaggedCount = depts.reduce((a, d) =>
+    a + (d.questions || []).filter(q => q.status === "Concern" || q.status === "Watch").length, 0);
 
   const activeDeptData = activeDept ? depts.find(d=>d.key===activeDept) : null;
 
@@ -5128,7 +5147,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
                   <div style={{ fontSize:15, color:"#7A6F63" }}>{year}{totalN ? ` · ${totalN} respondents` : ""} across {depts.length} departments</div>
                 </>
               )}
-              {((prepMode && prep) || reportLang) && (
+              {((prepMode && prep) || flaggedCount > 0) && (
                 <div className="no-print" style={{ display:"flex", gap:10, flexWrap:"wrap", marginTop:12 }}>
                   {prepMode && prep && (
                     <button
@@ -5140,13 +5159,12 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
                       {prep.ready ? tr("✓ You've finished your part — thank you!") : tr("Prepare for your Pulse meeting")}
                     </button>
                   )}
-                  {reportLang && (
-                    <button onClick={() => setLangOn(v => !v)}
+                  {flaggedCount > 0 && (
+                    <button
+                      onClick={() => { const el = document.getElementById("flagged-section"); if (el) el.scrollIntoView({ behavior:"smooth", block:"start" }); }}
                       style={{ fontSize:13.5, fontWeight:700, cursor:"pointer", borderRadius:20, padding:"9px 18px",
-                        color: langOn ? "white" : "#5A4A3B",
-                        background: langOn ? "#B96524" : "#FDFAF4",
-                        border: `1px solid ${langOn ? "#B96524" : "#E2D3C2"}` }}>
-                      {langOn ? "🌐 English" : `🌐 ${nativeLanguageLabel(reportLang)}`}
+                        color:"#BE6650", background:"#F6E5DE", border:"1px solid #E2B3A8" }}>
+                      ⚠ {tr("Concern & Watch questions")} · {flaggedCount}
                     </button>
                   )}
                 </div>
@@ -5155,6 +5173,18 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
             <div style={{ textAlign:"right" }}>
               <div style={{ fontSize:42, fontWeight:800, color:sc(overallAvg>=3.5?"Healthy":overallAvg>=2.5?"Watch":"Concern") }}>{overallAvg}</div>
               <div style={{ fontSize:11, color:"#7A6F63", marginTop:2 }}>Overall avg</div>
+              {/* Language flip lives under the score, top-right */}
+              {reportLang && (
+                <div className="no-print" style={{ marginTop:10 }}>
+                  <button onClick={() => setLangOn(v => !v)}
+                    style={{ fontSize:12.5, fontWeight:700, cursor:"pointer", borderRadius:20, padding:"7px 14px",
+                      color: langOn ? "white" : "#5A4A3B",
+                      background: langOn ? "#B96524" : "#FDFAF4",
+                      border: `1px solid ${langOn ? "#B96524" : "#E2D3C2"}`, whiteSpace:"nowrap" }}>
+                    {langOn ? "🌐 English" : `🌐 ${nativeLanguageLabel(reportLang)}`}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
