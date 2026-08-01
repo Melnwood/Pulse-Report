@@ -59,7 +59,7 @@ export default function CountryLeadersView({ setView, countries = [], onChanged 
     <div style={{ minHeight: "100vh", background: "#F6F1E8", fontFamily: "'Inter',system-ui,sans-serif", padding: isMobile ? "20px 14px" : "28px 20px" }}>
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
-          <button onClick={() => setView("leadership")} style={{ ...navBtn, background: "transparent", border: "1px solid #ECE2D2" }}>← Back</button>
+          <button onClick={() => setView("__back__")} style={{ ...navBtn, background: "transparent", border: "1px solid #ECE2D2" }}>← Back</button>
           <div style={{ fontFamily: FONT_DISPLAY, fontSize: 22, fontWeight: 600, color: "#2C2621" }}>Country leaders</div>
         </div>
         <div style={{ fontSize: 13, color: "#7A6F63", lineHeight: 1.55, marginBottom: 18 }}>
