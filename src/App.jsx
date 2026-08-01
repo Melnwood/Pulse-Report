@@ -3690,32 +3690,34 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
 
         {/* ── RIGHT COLUMN ────────────────────────────────────────────── */}
         <div>
-          {/* 4. Director's notes — fixed-height scroll window */}
-          <MnSection title="Director's notes" dot="#B96524" count={loading ? "…" : `${dirNotes.length}`}>
-            <div style={{ maxHeight:270, overflowY:"auto" }}>
-              {loading ? <div style={{ fontSize:12, color:"#7A6F63" }}>Loading…</div> :
-                dirNotes.length === 0 ? (
-                  <div style={{ fontSize:12.5, color:"#A89C8D", fontStyle:"italic" }}>
-                    No director's notes yet. Add them with the Director's Note button on the Review tab.
+          {/* 4+5. Meeting notes — director's notes (when there are any) sit at
+              the top of the same window the team types in, so the context and
+              the composer live together. */}
+          <MnSection title="Meeting notes" dot="#5C9A6D"
+            count={loading ? "…" : (dirNotes.length ? `${dirNotes.length} director note${dirNotes.length === 1 ? "" : "s"}` : null)}>
+            {loading ? <div style={{ fontSize:12, color:"#7A6F63", marginBottom:10 }}>Loading…</div> :
+              dirNotes.length > 0 && (
+                <div style={{ marginBottom:14 }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:.5, marginBottom:8 }}>
+                    Director's notes
                   </div>
-                ) : dirNotes.map(n => (
-                  <div key={n.id} style={noteCard}>
-                    <div style={{ fontSize:11, color:"#7A6F63", marginBottom:5, lineHeight:1.4 }}>{aboutLabel(n.question)}</div>
-                    <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{n.body}</div>
-                    <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:7 }}>
-                      <span style={{ fontSize:9, fontWeight:700, borderRadius:4, padding:"2px 7px", border:"1px solid",
-                        ...(n.visibility === "Public" ? { color:"#5C9A6D", background:"#E9F1E9", borderColor:"#C7E0CB" } : { color:"#7A6F63", background:"#F1EAE1", borderColor:"#E4D8C8" }) }}>
-                        {n.visibility === "Public" ? "Shared" : "Private"}
-                      </span>
-                      <span style={{ fontSize:11, color:"#A89C8D" }}>{n.author}{n.created ? " · " + fmt(n.created) : ""}</span>
-                    </div>
+                  <div style={{ maxHeight:270, overflowY:"auto" }}>
+                    {dirNotes.map(n => (
+                      <div key={n.id} style={noteCard}>
+                        <div style={{ fontSize:11, color:"#7A6F63", marginBottom:5, lineHeight:1.4 }}>{aboutLabel(n.question)}</div>
+                        <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{n.body}</div>
+                        <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:7 }}>
+                          <span style={{ fontSize:9, fontWeight:700, borderRadius:4, padding:"2px 7px", border:"1px solid",
+                            ...(n.visibility === "Public" ? { color:"#5C9A6D", background:"#E9F1E9", borderColor:"#C7E0CB" } : { color:"#7A6F63", background:"#F1EAE1", borderColor:"#E4D8C8" }) }}>
+                            {n.visibility === "Public" ? "Shared" : "Private"}
+                          </span>
+                          <span style={{ fontSize:11, color:"#A89C8D" }}>{n.author}{n.created ? " · " + fmt(n.created) : ""}</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-            </div>
-          </MnSection>
-
-          {/* 5. Meeting notes — the existing composer + log */}
-          <MnSection title="Meeting notes" dot="#5C9A6D">
+                </div>
+              )}
             <NotesPanel country={country} year={year} deptKey={dept.key} deptLabel={dept.label}
               me={me} saveMe={saveMe} isPCLead={isPCLead} />
           </MnSection>
@@ -4584,7 +4586,7 @@ function PrepFooter({ mode, prep, savePrepPatch, depts, country, isMobile }) {
   );
 
   return (
-    <div className="no-print" style={{ marginTop: 8 }}>
+    <div id="prep-section" className="no-print" style={{ marginTop: 8 }}>
       <div style={{ background: "white", borderRadius: 16, padding: isMobile ? 18 : 32, border: "1px solid #ECE2D2",
         boxShadow: "0 2px 8px rgba(124,111,224,0.08)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
@@ -4599,7 +4601,7 @@ function PrepFooter({ mode, prep, savePrepPatch, depts, country, isMobile }) {
         </div>
         <div style={{ fontSize: 13, color: "#7A6F63", lineHeight: 1.55, marginBottom: 22 }}>
           {edit
-            ? "Work through each department above — react to what you're seeing, answer the leadership questions, and add anything worth discussing to the agenda. Then finish the reflections below and mark your prep ready."
+            ? "Work through each department above — say whether you've seen it in your team, jot your notes under What's working and Where attention is needed, answer the leadership questions, and add the departments you want to discuss to the agenda. Then finish the reflections below and click the finish button."
             : "What the country leader prepared ahead of the pulse meeting."}
         </div>
 
@@ -4608,7 +4610,7 @@ function PrepFooter({ mode, prep, savePrepPatch, depts, country, isMobile }) {
           <div style={secTitle}>Meeting agenda — most important first{edit && agenda.length > 1 ? " (drag to reorder)" : ""}</div>
           {agenda.length === 0 && (
             <div style={{ fontSize: 12.5, color: "#A89C8D", fontStyle: "italic" }}>
-              {edit ? "Nothing yet — use the “+ Agenda” buttons on report items to build your meeting list." : "No agenda items."}
+              {edit ? "Nothing yet — use the “+ Agenda” button next to a department's score to add it to your meeting list." : "No agenda items."}
             </div>
           )}
           {agenda.map((a, i) => (
@@ -4626,7 +4628,7 @@ function PrepFooter({ mode, prep, savePrepPatch, depts, country, isMobile }) {
                 display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{i + 1}</span>
               <span style={{ flex: 1, fontSize: 13, color: "#2C2621", lineHeight: 1.5 }}>
                 {a.label}
-                {a.deptKey && <span style={{ color: "#A89C8D", fontSize: 11 }}> · {deptLabel(a.deptKey)}</span>}
+                {a.deptKey && deptLabel(a.deptKey) !== a.label && <span style={{ color: "#A89C8D", fontSize: 11 }}> · {deptLabel(a.deptKey)}</span>}
               </span>
               {edit && (
                 <button onClick={() => savePrepPatch({ agenda: agenda.filter(x => x !== a).map((x, xi) => ({ ...x, order: xi })) })}
@@ -4646,6 +4648,10 @@ function PrepFooter({ mode, prep, savePrepPatch, depts, country, isMobile }) {
                 <span style={{ fontSize: 12.5, fontWeight: 700, color: "#2C2621" }}>{deptLabel(k)}</span>
                 <span style={{ fontSize: 12, color: "#B96524", marginLeft: 8, fontWeight: 600 }}>{r.choice}</span>
                 {r.note && <div style={{ fontSize: 12.5, color: "#5A4A3B", marginTop: 4, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{r.note}</div>}
+                {r.noteWorking && <div style={{ fontSize: 12.5, color: "#5A4A3B", marginTop: 4, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+                  <span style={{ fontWeight: 700, color: "#5C9A6D" }}>What's working: </span>{r.noteWorking}</div>}
+                {r.noteAttention && <div style={{ fontSize: 12.5, color: "#5A4A3B", marginTop: 4, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+                  <span style={{ fontWeight: 700, color: "#C08636" }}>Where attention is needed: </span>{r.noteAttention}</div>}
               </div>
             ))}
           </div>
@@ -4693,10 +4699,10 @@ function PrepFooter({ mode, prep, savePrepPatch, depts, country, isMobile }) {
             <>
               <button onClick={() => { saveRefl(); savePrepPatch({ ready: true }); }}
                 style={{ ...navBtn, background: "#5C9A6D", color: "white", fontSize: 14, padding: "10px 18px" }}>
-                ✓ Mark prep ready
+                ✓ I've finished my part of the Pulse report
               </button>
               <span style={{ fontSize: 12, color: "#7A6F63", lineHeight: 1.5 }}>
-                Required before your pulse meeting — this sends your agenda, question answers, and reflections to People &amp; Culture.
+                Required before your pulse meeting — this sends your agenda, notes, question answers, and reflections to People &amp; Culture.
               </span>
             </>
           ) : (
@@ -4711,11 +4717,6 @@ function PrepFooter({ mode, prep, savePrepPatch, depts, country, isMobile }) {
 // ─── REPORT VIEW ──────────────────────────────────────────────────────────────
 function ReportView({ country, year, surveyData, getApproved, setView, sbOverrides, sbMaster, runRespondents, me, saveMe, isPCLead, leaderName, prepMode = false, prepAuthor = "" }) {
   const leaderFirst = leaderName ? String(leaderName).trim().split(/\s+/)[0] : null;
-  // Per-department sub-view: the report page itself, or that department's
-  // Meeting Notes (the same two-column page P&C uses — server-side visibility
-  // rules keep private notes private). Available to every report viewer,
-  // including country leaders and the country dashboard.
-  const [deptView, setDeptView] = useState("report");
 
   // ── Country Leader Prep (Priority 4) ──
   // For the country-leader role this report is a prep workflow layered on top of
@@ -4738,7 +4739,9 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
   const prepApi = (prepMode && prep) ? {
     author: prepAuthor,
     reactionFor: (k) => (prep.reactions || {})[k] || null,
-    saveReaction: (k, choice, note) => savePrepPatch({ reactions: { ...(prep.reactions || {}), [k]: { choice, note } } }),
+    // Merge a partial patch ({choice} | {noteWorking} | {noteAttention}) into the
+    // department's reaction record, so each control saves independently.
+    saveReaction: (k, patch) => savePrepPatch({ reactions: { ...(prep.reactions || {}), [k]: { ...((prep.reactions || {})[k] || {}), ...patch } } }),
     agendaHas: (label) => (prep.agenda || []).some(a => a.label === label),
     agendaToggle: (label, deptKey) => {
       const list = prep.agenda || [];
@@ -4833,6 +4836,16 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
                     {leaderFirst}, here's your {country} Pulse report
                   </div>
                   <div style={{ fontSize:15, color:"#7A6F63" }}>Staff Pulse · {year}{totalN ? ` · ${totalN} respondents` : ""} across {depts.length} departments</div>
+                  {prepMode && prep && (
+                    <button className="no-print"
+                      onClick={() => { const el = document.getElementById("prep-section"); if (el) el.scrollIntoView({ behavior:"smooth", block:"start" }); }}
+                      style={{ marginTop:12, fontSize:13.5, fontWeight:700, cursor:"pointer", borderRadius:20, padding:"9px 18px",
+                        color: prep.ready ? "#5C9A6D" : "white",
+                        background: prep.ready ? "#E9F1E9" : "#E0863C",
+                        border: `1px solid ${prep.ready ? "#C7E0CB" : "#E0863C"}` }}>
+                      {prep.ready ? "✓ You've finished your part — thank you!" : "Prepare for your Pulse meeting ↓"}
+                    </button>
+                  )}
                 </>
               ) : (
                 <>
@@ -4847,9 +4860,24 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
             </div>
           </div>
 
+          {/* Status group summary — up top, so the read on the country comes first */}
+          <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap:12, marginBottom:32 }}>
+            {[["Concern","#F6E5DE","#BE6650",concerns],["Watch","#F7EEDC","#C08636",watches],["Healthy","#E9F1E9","#5C9A6D",healthys]].map(([label,bg,color,group])=>(
+              <div key={label} style={{ background:bg, borderRadius:10, padding:"14px 16px" }}>
+                <div style={{ fontSize:11, fontWeight:700, color, textTransform:"uppercase", letterSpacing:1.5, marginBottom:8 }}>{label} · {group.length}</div>
+                {group.map(d=>(
+                  <div key={d.key} style={{ fontSize:12, color:"#2C2621", padding:"3px 0", borderBottom:"1px solid rgba(0,0,0,0.05)" }}>{d.label}</div>
+                ))}
+                {!group.length && <div style={{ fontSize:12, color, opacity:0.5 }}>None</div>}
+              </div>
+            ))}
+          </div>
+
           {/* Score bar chart — all departments */}
-          <div style={{ marginBottom:32 }}>
-            <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>Department Scores</div>
+          <div>
+            <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:2, marginBottom:16 }}>
+              Department Scores <span style={{ fontWeight:600, textTransform:"none", letterSpacing:0, color:"#A89C8D" }}>(Click on a department to see more details.)</span>
+            </div>
             {summaryDepts.map(d => (
               <div key={d.key} onClick={()=>openDept(d.key)}
                 style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 12px", marginBottom:4,
@@ -4868,29 +4896,13 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
             ))}
           </div>
 
-          {/* Status group summary */}
-          <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap:12 }}>
-            {[["Concern","#F6E5DE","#BE6650",concerns],["Watch","#F7EEDC","#C08636",watches],["Healthy","#E9F1E9","#5C9A6D",healthys]].map(([label,bg,color,group])=>(
-              <div key={label} style={{ background:bg, borderRadius:10, padding:"14px 16px" }}>
-                <div style={{ fontSize:11, fontWeight:700, color, textTransform:"uppercase", letterSpacing:1.5, marginBottom:8 }}>{label} · {group.length}</div>
-                {group.map(d=>(
-                  <div key={d.key} style={{ fontSize:12, color:"#2C2621", padding:"3px 0", borderBottom:"1px solid rgba(0,0,0,0.05)" }}>{d.label}</div>
-                ))}
-                {!group.length && <div style={{ fontSize:12, color, opacity:0.5 }}>None</div>}
-              </div>
-            ))}
-          </div>
         </div>
 
         {/* ── DEPT TABS ── */}
         {/* Country leaders (prep mode) don't get the button row — they open a
-            department by clicking its row in the chart above, so keep the page
-            clean and just say so. Everyone else keeps the quick-jump buttons. */}
-        {prepMode ? (
-          <div className="no-print" style={{ fontSize:13, color:"#7A6F63", margin:"0 0 24px", textAlign:"center" }}>
-            Click any department in the chart above to open its report.
-          </div>
-        ) : (
+            department by clicking its row in the chart, which says so right in
+            its heading. Everyone else keeps the quick-jump buttons. */}
+        {!prepMode && (
         <div className="no-print" style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:24 }}>
           {orderedDepts.map(d=>(
             <button key={d.key} onClick={()=>setActiveDept(d.key===activeDept?null:d.key)}
@@ -4908,32 +4920,12 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
         )}
 
         {/* ── DEPT DETAIL PAGES ── */}
+        {/* No Meeting Notes tab here — the report is just the report. The team's
+            meeting-notes page lives in the Director's Review section. */}
         <div id="dept-detail-section" />
-        {activeDept && (
-          <div className="no-print" style={{ display:"flex", gap:4, marginBottom:14, borderBottom:"1px solid #ECE2D2" }}>
-            {["report","notes"].map(t => (
-              <button key={t} onClick={() => setDeptView(t)}
-                style={{ fontSize:13, fontWeight:600, padding:"8px 16px", border:"none", cursor:"pointer",
-                  background:"transparent", color: deptView===t ? "#E0863C" : "#7A6F63",
-                  borderBottom: deptView===t ? "2px solid #E0863C" : "2px solid transparent" }}>
-                {t === "report" ? "Report" : "Meeting Notes"}
-              </button>
-            ))}
-          </div>
-        )}
         {activeDept ? (
-          deptView === "notes" ? (
-            // The same two-column Meeting Notes page P&C uses — report embedded,
-            // country-leader shared notes + answers, meeting log. Visibility is
-            // enforced server-side, so each role only ever receives what it may see.
-            <DeptMeetingNotesPage dept={activeDeptData} country={country} year={year}
-              me={me} saveMe={saveMe} isPCLead={isPCLead}
-              getApproved={getApproved} sbOverrides={sbOverrides} sbMaster={sbMaster}
-              leaderName={leaderName} />
-          ) : (
           // Single dept selected — show just that one
           <DeptReportPage dept={activeDeptData} getApproved={getApproved} country={country} year={year} sbOverrides={sbOverrides} sbMaster={sbMaster} me={me} isPCLead={isPCLead} prep={prepApi} />
-          )
         ) : (
           // No tab selected — show all for print
           <div>
@@ -4986,13 +4978,18 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
   useEffect(() => { reloadNoted(); /* eslint-disable-next-line */ }, [country, year, dept && dept.key, me]);
 
   // ── Country Leader Prep layer (only when `prep` is passed) ──
-  // Reaction ("Does this match what you're seeing?") — one per department.
+  // Reaction ("Have you seen this in your team?") — one per department, up by
+  // the department name. The leader's notes live under the What's working and
+  // Where attention is needed sections; each control saves independently.
   const r0 = prep && dept ? prep.reactionFor(dept.key) : null;
   const [reactChoice, setReactChoice] = useState(r0 ? r0.choice : null);
-  const [reactNote, setReactNote] = useState(r0 ? (r0.note || "") : "");
+  const [noteWorking, setNoteWorking] = useState(r0 ? (r0.noteWorking || "") : "");
+  const [noteAttention, setNoteAttention] = useState(r0 ? (r0.noteAttention || "") : "");
   useEffect(() => {
     const r = prep && dept ? prep.reactionFor(dept.key) : null;
-    setReactChoice(r ? r.choice : null); setReactNote(r ? (r.note || "") : "");
+    setReactChoice(r ? r.choice : null);
+    setNoteWorking(r ? (r.noteWorking || "") : "");
+    setNoteAttention(r ? (r.noteAttention || "") : "");
     // eslint-disable-next-line
   }, [dept && dept.key, !!prep]);
   // Leadership-question answers — stored as PUBLIC question notes "LQA: <q>" so
@@ -5064,9 +5061,31 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
         <div>
           <div style={{ fontFamily:FONT_DISPLAY, fontSize:24, fontWeight:600, color:"#2C2621", marginBottom:2 }}>{dept.label}</div>
           <div style={{ fontSize:13, color:"#7A6F63" }}>n = {dept.n} respondents</div>
-          <div className="no-print" style={{ marginTop:8 }}>
-            <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={"§ Area"} label={"Your notes on " + dept.label} me={me} hasNote={!!noted["§ Area"]} onSaved={reloadNoted} btnLabel="Notes on this area" />
-          </div>
+          {!prep && (
+            <div className="no-print" style={{ marginTop:8 }}>
+              <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={"§ Area"} label={"Your notes on " + dept.label} me={me} hasNote={!!noted["§ Area"]} onSaved={reloadNoted} btnLabel="Notes on this area" />
+            </div>
+          )}
+          {/* Country leader prep: the reaction lives right up here by the name. */}
+          {prep && (
+            <div className="no-print" style={{ marginTop:10 }}>
+              <div style={{ fontSize:13, fontWeight:700, color:"#2C2621", marginBottom:7 }}>
+                Have you seen this in your team?
+              </div>
+              <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+                {["Yes, this matches", "Partly", "This doesn't match"].map(c => (
+                  <button key={c} onClick={() => { setReactChoice(c); prep.saveReaction(dept.key, { choice: c }); }}
+                    style={{ fontSize:12, fontWeight:600, cursor:"pointer", borderRadius:20, padding:"6px 12px",
+                      color: reactChoice === c ? "#fff" : "#5A4A3B",
+                      background: reactChoice === c ? "#E0863C" : "#FDFAF4",
+                      border: `1px solid ${reactChoice === c ? "#E0863C" : "#E2D3C2"}` }}>
+                    {c}
+                  </button>
+                ))}
+                {reactChoice && <span style={{ fontSize:11, color:"#5C9A6D", fontWeight:600 }}>✓ Saved</span>}
+              </div>
+            </div>
+          )}
         </div>
         <div style={{ textAlign:"right" }}>
           <div style={{ fontSize:34, fontWeight:800, color:statusColor, lineHeight:1, fontVariantNumeric:"tabular-nums" }}>{dept.avg}</div>
@@ -5074,6 +5093,12 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
             border:`1px solid ${statusBd}`, borderRadius:20, padding:"3px 10px", display:"inline-block", marginTop:6 }}>
             {dept.status}
           </span>
+          {/* Country leader prep: departments are the agenda items — one button, next to the score. */}
+          {prep && (
+            <div style={{ marginTop:8 }}>
+              <AgendaBtn label={dept.label} />
+            </div>
+          )}
         </div>
       </div>
 
@@ -5086,9 +5111,19 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
             <div key={i} style={{ display:"flex", gap:10, marginBottom:8, alignItems:"flex-start" }}>
               <span style={{ color:"#5C9A6D", fontWeight:700, fontSize:14, marginTop:1, flexShrink:0 }}>✓</span>
               <span style={{ fontSize:13, color:"#2C2621", lineHeight:1.6, flex:1 }}>{s}</span>
-              <AgendaBtn label={s} />
             </div>
           ))}
+          {/* Country leader prep: notes belong right under what they're about. */}
+          {prep && (
+            <div className="no-print" style={{ marginTop:10 }}>
+              <textarea rows={2} value={noteWorking}
+                onChange={e => setNoteWorking(e.target.value)}
+                onBlur={() => prep.saveReaction(dept.key, { noteWorking })}
+                placeholder="Your notes on what's working — saves when you click away, and goes to People & Culture with your prep."
+                style={{ width:"100%", boxSizing:"border-box", fontSize:13, padding:9,
+                  border:"1px solid #E2D3C2", borderRadius:8, resize:"vertical", fontFamily:"inherit" }} />
+            </div>
+          )}
         </Disclosure>
       )}
 
@@ -5098,9 +5133,18 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
             <div key={i} style={{ display:"flex", gap:10, marginBottom:8, alignItems:"flex-start" }}>
               <span style={{ color:statusColor, fontWeight:700, fontSize:14, marginTop:1, flexShrink:0 }}>→</span>
               <span style={{ fontSize:13, color:"#2C2621", lineHeight:1.6, flex:1 }}>{g}</span>
-              <AgendaBtn label={g} />
             </div>
           ))}
+          {prep && (
+            <div className="no-print" style={{ marginTop:10 }}>
+              <textarea rows={2} value={noteAttention}
+                onChange={e => setNoteAttention(e.target.value)}
+                onBlur={() => prep.saveReaction(dept.key, { noteAttention })}
+                placeholder="Your notes on where attention is needed — saves when you click away, and goes to People & Culture with your prep."
+                style={{ width:"100%", boxSizing:"border-box", fontSize:13, padding:9,
+                  border:"1px solid #E2D3C2", borderRadius:8, resize:"vertical", fontFamily:"inherit" }} />
+            </div>
+          )}
         </Disclosure>
       )}
 
@@ -5158,7 +5202,6 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
                 {/* Interactive bits must not toggle the row — preventDefault stops the <details> toggle only. */}
                 <span className="no-print" style={{ display:"block", marginTop:6 }} onClick={e => e.preventDefault()}>
                   <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={q.en} label={q.en} me={me} hasNote={!!noted[q.en]} onSaved={reloadNoted} compact btnLabel="My note" />
-                  <AgendaBtn label={q.en} />
                 </span>
               </span>
               {!isMobile && (
@@ -5198,7 +5241,6 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
                   display:"flex", alignItems:"center", justifyContent:"center",
                   fontSize:11, fontWeight:700, flexShrink:0, marginTop:1 }}>{i+1}</span>
                 <span style={{ fontSize:13, color:"#2C2621", lineHeight:1.6, flex:1 }}>{q}</span>
-                <AgendaBtn label={q} />
               </div>
               {/* Country leader prep: an answer box after EACH leadership question.
                   Saved as a PUBLIC question note ("LQA: …") so the team reads it in
@@ -5264,33 +5306,6 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
       )}
       </div>
 
-      {/* ── Country Leader Prep: department reaction ── */}
-      {prep && (
-        <div className="no-print" style={{ marginTop:12, background:"#FFFFFF", border:"1px solid #ECE2D2",
-          borderRadius:12, padding:"14px 16px", boxShadow: C.shadow }}>
-          <div style={{ fontSize:13.5, fontWeight:700, color:"#2C2621", marginBottom:10 }}>
-            Does this match what you're seeing in {dept.label}?
-          </div>
-          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:10 }}>
-            {["Yes, this matches", "Partly", "This doesn't match"].map(c => (
-              <button key={c} onClick={() => { setReactChoice(c); prep.saveReaction(dept.key, c, reactNote); }}
-                style={{ fontSize:12.5, fontWeight:600, cursor:"pointer", borderRadius:20, padding:"7px 14px",
-                  color: reactChoice === c ? "#fff" : "#5A4A3B",
-                  background: reactChoice === c ? "#E0863C" : "#FDFAF4",
-                  border: `1px solid ${reactChoice === c ? "#E0863C" : "#E2D3C2"}` }}>
-                {c}
-              </button>
-            ))}
-            {reactChoice && <span style={{ alignSelf:"center", fontSize:11, color:"#5C9A6D", fontWeight:600 }}>✓ Saved</span>}
-          </div>
-          <textarea rows={2} value={reactNote}
-            onChange={e => setReactNote(e.target.value)}
-            onBlur={() => reactChoice && prep.saveReaction(dept.key, reactChoice, reactNote)}
-            placeholder="A short note on why (optional) — goes to People & Culture with your prep."
-            style={{ width:"100%", boxSizing:"border-box", fontSize:13, padding:9,
-              border:"1px solid #E2D3C2", borderRadius:8, resize:"vertical", fontFamily:"inherit" }} />
-        </div>
-      )}
     </div>
   );
 }
