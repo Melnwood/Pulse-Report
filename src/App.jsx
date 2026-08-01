@@ -2766,6 +2766,93 @@ function HomeView({ country, setCountry, year, setYear, fileRef, handleFile,
 }
 
 // ─── REVIEW VIEW ──────────────────────────────────────────────────────────────
+// Every Concern / Watch question across ALL departments in one list — so a
+// mostly-healthy country (all-green departments, like Hungary) still surfaces
+// the specific questions worth a conversation. Toggle between the two bands,
+// expand a row for its heatmap, and jump straight into the department.
+// Used by both the Pulse Report and the Director Review.
+function FlaggedQuestionsPanel({ depts, onOpenDept, openLabel = "Open department →", tr = (s) => s, isMobile }) {
+  const flagged = [];
+  for (const d of depts) for (const q of (d.questions || []))
+    if (q.status === "Concern" || q.status === "Watch") flagged.push({ ...q, deptKey: d.key, deptLabel: d.label });
+  const nC = flagged.filter(q => q.status === "Concern").length;
+  const nW = flagged.filter(q => q.status === "Watch").length;
+  const [band, setBand] = useState(nC > 0 ? "Concern" : "Watch");
+  if (!flagged.length) return null;
+  const rows = flagged.filter(q => q.status === band)
+    .sort((a, b) => (parseFloat(a.score) || 9) - (parseFloat(b.score) || 9));
+
+  return (
+    <div style={{ background:"white", borderRadius:16, padding: isMobile ? 16 : 24, marginBottom:32,
+      border:"1px solid #ECE2D2", boxShadow:"0 2px 8px rgba(124,111,224,0.08)" }}>
+      <style>{`
+        details.pulse-fqrow > summary { list-style: none; cursor: pointer; }
+        details.pulse-fqrow > summary::-webkit-details-marker { display: none; }
+        details.pulse-fqrow > summary .pulse-fqrow-caret { transition: transform .15s; }
+        details.pulse-fqrow[open] > summary .pulse-fqrow-caret { transform: rotate(90deg); }
+      `}</style>
+      <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:4 }}>
+        <span style={{ fontFamily:FONT_DISPLAY, fontSize:19, fontWeight:600, color:"#2C2621" }}>
+          {tr("Concern & Watch questions")}
+        </span>
+        <span style={{ marginLeft:"auto", display:"flex", gap:6 }}>
+          {[["Concern", nC], ["Watch", nW]].map(([s, n]) => (
+            <button key={s} onClick={() => setBand(s)}
+              style={{ fontSize:12, fontWeight:700, cursor:"pointer", borderRadius:20, padding:"6px 14px",
+                color: band === s ? "white" : sc(s),
+                background: band === s ? sc(s) : sb(s),
+                border:`1px solid ${band === s ? sc(s) : sbd(s)}` }}>
+              {s} · {n}
+            </button>
+          ))}
+        </span>
+      </div>
+      <div style={{ fontSize:12.5, color:"#7A6F63", lineHeight:1.5, marginBottom:14 }}>
+        {tr("Every question at this level, across every department — including the healthy ones.")}
+      </div>
+      {rows.length === 0 ? (
+        <div style={{ fontSize:13, color:"#5C9A6D", fontWeight:600 }}>
+          {band === "Concern" ? "No Concern questions — nothing at the most serious level." : "No Watch questions."}
+        </div>
+      ) : rows.map((q, i) => (
+        <details key={`${q.deptKey}-${q.col ?? i}`} className="pulse-fqrow"
+          style={{ borderTop: i === 0 ? "none" : "1px solid #F6F1E8" }}>
+          <summary style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"10px 4px" }}>
+            <span style={{ fontWeight:800, color:sc(q.status), fontSize:15, width:44, flexShrink:0,
+              fontVariantNumeric:"tabular-nums", paddingTop:1 }}>{q.score}</span>
+            <span style={{ flex:1, minWidth:0 }}>
+              <span style={{ display:"block", fontSize:11, fontWeight:700, color:"#7A6F63", marginBottom:2 }}>{tr(q.deptLabel)}</span>
+              <span style={{ display:"block", fontSize:13, color:"#2C2621", lineHeight:1.5 }}>
+                {tr(q.en)}{q.burden ? <span style={{ color:"#7A6F63", fontSize:10 }}> [Burden]</span> : ""}
+              </span>
+            </span>
+            {!isMobile && (
+              <span style={{ fontSize:10, fontWeight:700, color:"#7A6F63", background:"#FBEFE4",
+                borderRadius:4, padding:"2px 6px", flexShrink:0, marginTop:3 }}>{String(q.scale || "").toUpperCase()}</span>
+            )}
+            <span style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:11, fontWeight:600, flexShrink:0, marginTop:1,
+              color:"#E0863C", background:"#F7E7D5", border:"0.5px solid #E0A56F", borderRadius:5, padding:"3px 9px" }}>
+              <svg className="pulse-fqrow-caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#B96524"
+                strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+              Heatmap
+            </span>
+          </summary>
+          <div style={{ padding:"2px 4px 12px 54px", maxWidth:560 }}>
+            <QuestionHeatmap q={q} />
+            {onOpenDept && (
+              <button onClick={() => onOpenDept(q.deptKey)}
+                style={{ marginTop:8, fontSize:12, fontWeight:700, cursor:"pointer", borderRadius:7,
+                  padding:"7px 13px", color:"#B96524", background:"#FBEFE4", border:"1px solid #E0A56F" }}>
+                {tr(openLabel)}
+              </button>
+            )}
+          </div>
+        </details>
+      ))}
+    </div>
+  );
+}
+
 function ReviewView({ country, year, surveyData, selections, toggleItem, setRewrite, addItem, saveSelections, saved, saveRefinement, refinements, setView, setSelections, isAdmin, toggleAdmin, sbOverrides, saveSbOverride, setSbOverrides, statusOverrides, saveStatusOverride, sbMaster, saveSbMaster, cloudLoading, syncStatus, lastSavedAt, me, saveMe, isPCLead, openToDept, setOpenToDept, toggleDeptFinished, canEditDept, authRole, authUser, onSignOut, authDepts, pendingImport, clearPendingImport, leaderName }) {
   const canEdit = (d) => (canEditDept ? canEditDept(d) : true);
   const isMobile = useIsMobile();
@@ -2912,6 +2999,26 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
       <div style={{ display:"flex", flex:1, overflow: isMobile ? "visible" : "hidden" }}>
         {/* Sidebar — hidden on mobile; a full-width department dropdown (below) replaces it */}
         <div style={{ display: isMobile ? "none" : "block", width:220, background:"#FFFFFF", borderRight:"1px solid #ECE2D2", overflowY:"auto", flexShrink:0 }}>
+          {/* All flagged questions in one place — before the department list, so a
+              mostly-green country's talking points are still one click away. */}
+          {(() => {
+            const n = depts.reduce((a, d) => a + (d.questions || []).filter(q => q.status === "Concern" || q.status === "Watch").length, 0);
+            return n > 0 && (
+              <button onClick={() => setActiveDept("__flagged__")}
+                style={{ display:"block", width:"100%", textAlign:"left", padding:"12px 16px",
+                  background: activeDept === "__flagged__" ? "#F6F1E8" : "transparent",
+                  border:"none", borderBottom:"1px solid #ECE2D2",
+                  borderLeft: activeDept === "__flagged__" ? "3px solid #BE6650" : "3px solid transparent",
+                  cursor:"pointer" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <span style={{ fontSize:12 }}>⚠</span>
+                  <span style={{ color: activeDept === "__flagged__" ? "#2C2621" : "#7A6F63", fontSize:13,
+                    fontWeight: activeDept === "__flagged__" ? 600 : 400 }}>Concern &amp; Watch</span>
+                </div>
+                <div style={{ color:"#7A6F63", fontSize:11, marginLeft:20, marginTop:2 }}>{n} questions across all departments</div>
+              </button>
+            );
+          })()}
           {depts.map(d => (
             <button key={d.key} onClick={()=>setActiveDept(d.key)}
               style={{
@@ -2975,10 +3082,16 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
               style={{ width:"100%", marginBottom:16, padding:"12px 14px", fontSize:15,
                 fontWeight:600, color:"#2C2621", background:"#FFFFFF",
                 border:"1px solid #F7EEDC", borderRadius:10, appearance:"menulist" }}>
+              <option value="__flagged__">⚠ Concern &amp; Watch questions</option>
               {depts.map(d => (
                 <option key={d.key} value={d.key}>{d.label} — {d.status} · {d.avg} avg</option>
               ))}
             </select>
+          )}
+          {/* The flagged-questions page — same panel the Pulse Report uses */}
+          {activeDept === "__flagged__" && (
+            <FlaggedQuestionsPanel depts={depts} onOpenDept={(k) => setActiveDept(k)}
+              openLabel="Open review →" isMobile={isMobile} />
           )}
           {dept && (
             <div style={{ marginBottom:18, borderBottom:"1px solid #ECE2D2" }}>
@@ -4591,6 +4704,8 @@ const TR_UI_STRINGS = () => [
   "As you read over this department's survey information, do you feel like it matches what you're seeing or experiencing?", "Yes, this matches", "Partly", "This doesn't match",
   "+ Agenda", "✓ On agenda",
   "Department Scores", "(Click on a department to see more details.)",
+  "Concern & Watch questions", "Every question at this level, across every department — including the healthy ones.",
+  "Open department →",
   "Prepare for your Pulse meeting", "✓ You've finished your part — thank you!", "Close department",
   "Prepare for your pulse meeting", "Meeting agenda — most important first", " (drag to reorder)", "Reflect",
   "Your notes on what's working — saves when you click away, and goes to People & Culture with your prep.",
@@ -4911,6 +5026,13 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
   useEffect(() => {
     if (!langOn || !reportLang) return;
     const wanted = new Set(TR_UI_STRINGS());
+    // The Concern & Watch panel shows questions from every department, so those
+    // (plus all department labels) are translated up front.
+    for (const dd of depts) {
+      wanted.add(dd.label);
+      for (const qq of (dd.questions || []))
+        if (qq.status === "Concern" || qq.status === "Watch") wanted.add(qq.en);
+    }
     const d = activeDept ? depts.find(x => x.key === activeDept) : null;
     if (d) {
       wanted.add(d.label);
@@ -5087,6 +5209,10 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
           </div>
 
         </div>
+
+        {/* ── CONCERN & WATCH — every flagged question, across all departments.
+            A mostly-healthy country still gets its talking points surfaced. ── */}
+        <FlaggedQuestionsPanel depts={depts} onOpenDept={openDept} tr={tr} isMobile={isMobile} />
 
         {/* No department button row for anyone — the chart is the way in. */}
 
