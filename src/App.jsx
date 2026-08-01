@@ -323,12 +323,14 @@ function getStatus(vals, q) {
 }
 
 function deptStatus(questions) {
-  // A department is Concern if its average is below 2.50, OR if it has 4+ individual
-  // Concern-level questions (matches the director's report: 3 concern Qs stays Watch,
-  // 4+ tips the whole department to Concern). Otherwise status follows the average.
+  // Concern-count override: a department flips to Concern when at least 40% of
+  // its scored questions are individually at Concern (rounded up — 4 of 9,
+  // 3 of 7, 2 of 5). A percentage rather than a hard count, so small
+  // departments like Language & Culture (4 questions) are protected by the
+  // same rule as big ones. Otherwise status follows the average.
   const statuses = questions.map(q => q.status).filter(Boolean);
   const concerns = statuses.filter(s => s === "Concern").length;
-  if (concerns >= 4) return "Concern";
+  if (statuses.length && concerns >= Math.ceil(statuses.length * 0.4)) return "Concern";
   const scores = questions.map(q=>q.score).filter(Boolean);
   const avg = scores.length ? scores.reduce((a,b)=>a+b,0)/scores.length : null;
   if (!avg) return null;
@@ -3315,7 +3317,7 @@ function ScoringHelpPanel({ onClose }) {
             desc:'Some questions are worded negatively — "I feel alone," "I feel overwhelmed." For these, agreeing is a bad sign. Responses are inverted before scoring so the math always reads correctly. The heatmap colours flip to match: red on the right (Strongly Agree = bad), green on the left.' },
           { num:"3", color:"#BE6650", bg:"#F6E5DE", bd:"#E2B3A8",
             title:"Concern-count override — the most important rule",
-            desc:"If 3 or more individual questions score Concern, the whole department is automatically flagged as Concern — regardless of its average. An average can hide real problems. Poland HR averaged 3.24 (normally Watch) but had 4 Concern questions, so it correctly shows Concern. This is the rule that protects against averages hiding what's actually happening." },
+            desc:"If 40% or more of a department's questions score Concern, the whole department is automatically flagged as Concern — regardless of its average. It's a percentage, not a fixed count, so small departments are covered by the same rule as big ones: that's 4 of HR's 9 questions, or 2 of JV Kids' 5. An average can hide real problems. Poland HR averaged 3.24 (normally Watch) but had 4 Concern questions, so it correctly shows Concern. This is the rule that protects against averages hiding what's actually happening." },
         ].map(f => (
           <div key={f.num} style={{ display:"flex", gap:12, marginBottom:12,
             background:f.bg, border:`1px solid ${f.bd}`, borderRadius:10, padding:14 }}>
