@@ -334,7 +334,12 @@ function deptStatus(questions) {
   const scores = questions.map(q=>q.score).filter(Boolean);
   const avg = scores.length ? scores.reduce((a,b)=>a+b,0)/scores.length : null;
   if (!avg) return null;
-  if (avg >= 3.50) return "Healthy";
+  // Majority-flagged guard: a department where MORE THAN HALF the questions are
+  // Watch or Concern can never show Healthy — a couple of strong scores can pull
+  // the average over 3.50 while most questions still need attention (Hungary
+  // Counseling: 7 of 9 flagged, average 3.502). It shows at least Watch.
+  const flagged = statuses.filter(s => s === "Concern" || s === "Watch").length;
+  if (avg >= 3.50) return (statuses.length && flagged > statuses.length / 2) ? "Watch" : "Healthy";
   if (avg >= 2.50) return "Watch";
   return "Concern";
 }
@@ -3437,7 +3442,7 @@ function ScoringHelpPanel({ onClose }) {
 
         {/* Three factors */}
         <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12, flexWrap:"wrap" }}>
-          <span style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5 }}>Three things that determine a department's status</span>
+          <span style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5 }}>Four things that determine a department's status</span>
           {watch("Department status")}
         </div>
         {[
@@ -3450,6 +3455,9 @@ function ScoringHelpPanel({ onClose }) {
           { num:"3", color:"#BE6650", bg:"#F6E5DE", bd:"#E2B3A8",
             title:"Concern-count override — the most important rule",
             desc:"If 40% or more of a department's questions score Concern, the whole department is automatically flagged as Concern — regardless of its average. It's a percentage, not a fixed count, so small departments are covered by the same rule as big ones: that's 4 of HR's 9 questions, or 2 of JV Kids' 5. An average can hide real problems. Poland HR averaged 3.24 (normally Watch) but had 4 Concern questions, so it correctly shows Concern. This is the rule that protects against averages hiding what's actually happening." },
+          { num:"4", color:"#C08636", bg:"#F7EEDC", bd:"#E3B85C",
+            title:"Majority-flagged guard — mostly-flagged can't look Healthy",
+            desc:"If more than half of a department's questions are Watch or Concern, the department can never show Healthy — it shows at least Watch. A couple of strong scores can pull the average just over 3.50 while most questions still need attention. Hungary Counseling is the example: 7 of its 9 questions were Watch or Concern, yet the average squeaked to 3.50 — this rule makes it correctly show Watch." },
         ].map(f => (
           <div key={f.num} style={{ display:"flex", gap:12, marginBottom:12,
             background:f.bg, border:`1px solid ${f.bd}`, borderRadius:10, padding:14 }}>
