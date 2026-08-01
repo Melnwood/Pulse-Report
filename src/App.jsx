@@ -4572,7 +4572,7 @@ const TR_UI_STRINGS = () => [
   TR_DISCLAIMER,
   "What's working", "Where attention is needed", "Question scores",
   "Questions for leadership", "What staff said",
-  "As you read over this department's survey information, do you feel like it matches what you're seeing?", "Yes, this matches", "Partly", "This doesn't match",
+  "As you read over this department's survey information, do you feel like it matches what you're seeing or experiencing?", "Yes, this matches", "Partly", "This doesn't match",
   "+ Agenda", "✓ On agenda",
   "Department Scores", "(Click on a department to see more details.)",
   "Prepare for your Pulse meeting", "✓ You've finished your part — thank you!", "Close department",
@@ -4583,7 +4583,7 @@ const TR_UI_STRINGS = () => [
   "Write your answer — it saves when you click away.",
   "✓ I've finished my part of the Pulse report",
   "Required before your pulse meeting — this sends your agenda, notes, question answers, and reflections to People & Culture.",
-  "Work through each department above — say whether the survey matches what you're seeing, jot your notes under What's working and Where attention is needed, answer the leadership questions, and add the departments you want to discuss to the agenda. Then finish the reflections below and click the finish button.",
+  "Work through each department above — say whether the survey matches what you're seeing or experiencing, jot your notes under What's working and Where attention is needed, answer the leadership questions, and add the departments you want to discuss to the agenda. Then finish the reflections below and click the finish button.",
   ...REFLECT_QS.flatMap(q => [q.label, q.prompt]),
 ];
 
@@ -4649,7 +4649,7 @@ function PrepFooter({ mode, prep, savePrepPatch, depts, country, isMobile, tr = 
         </div>
         <div style={{ fontSize: 13, color: "#7A6F63", lineHeight: 1.55, marginBottom: 22 }}>
           {edit
-            ? tr("Work through each department above — say whether the survey matches what you're seeing, jot your notes under What's working and Where attention is needed, answer the leadership questions, and add the departments you want to discuss to the agenda. Then finish the reflections below and click the finish button.")
+            ? tr("Work through each department above — say whether the survey matches what you're seeing or experiencing, jot your notes under What's working and Where attention is needed, answer the leadership questions, and add the departments you want to discuss to the agenda. Then finish the reflections below and click the finish button.")
             : "What the country leader prepared ahead of the pulse meeting."}
         </div>
 
@@ -5164,7 +5164,7 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
   useEffect(() => { reloadNoted(); /* eslint-disable-next-line */ }, [country, year, dept && dept.key, me]);
 
   // ── Country Leader Prep layer (only when `prep` is passed) ──
-  // Reaction ("As you read over this department's survey information, do you feel like it matches what you're seeing?") — one per department, up by
+  // Reaction ("As you read over this department's survey information, do you feel like it matches what you're seeing or experiencing?") — one per department, up by
   // the department name. The leader's notes live under the What's working and
   // Where attention is needed sections; each control saves independently.
   const r0 = prep && dept ? prep.reactionFor(dept.key) : null;
@@ -5267,7 +5267,7 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
           {prep && (
             <div className="no-print" style={{ marginTop:10 }}>
               <div style={{ fontSize:13, fontWeight:700, color:"#2C2621", marginBottom:7 }}>
-                {tr("As you read over this department's survey information, do you feel like it matches what you're seeing?")}
+                {tr("As you read over this department's survey information, do you feel like it matches what you're seeing or experiencing?")}
               </div>
               <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
                 {["Yes, this matches", "Partly", "This doesn't match"].map(c => (
