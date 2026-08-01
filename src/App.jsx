@@ -4575,7 +4575,7 @@ const TR_UI_STRINGS = () => [
   "Have you seen this in your team?", "Yes, this matches", "Partly", "This doesn't match",
   "+ Agenda", "✓ On agenda",
   "Department Scores", "(Click on a department to see more details.)",
-  "Prepare for your Pulse meeting ↓", "✓ You've finished your part — thank you!",
+  "Prepare for your Pulse meeting", "✓ You've finished your part — thank you!", "Close department",
   "Prepare for your pulse meeting", "Meeting agenda — most important first", " (drag to reorder)", "Reflect",
   "Your notes on what's working — saves when you click away, and goes to People & Culture with your prep.",
   "Your notes on where attention is needed — saves when you click away, and goes to People & Culture with your prep.",
@@ -4799,6 +4799,8 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
   // Freshest prep for async callbacks — translations land after state has moved on.
   const prepRef = useRef(null);
   prepRef.current = prep;
+  // The leader's prep opens as a window over the report (from the header button).
+  const [prepOpen, setPrepOpen] = useState(false);
   // The API DeptReportPage uses to render the prep layer on each department.
   const prepApi = (prepMode && prep) ? {
     author: prepAuthor,
@@ -4988,12 +4990,12 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
                 <div className="no-print" style={{ display:"flex", gap:10, flexWrap:"wrap", marginTop:12 }}>
                   {prepMode && prep && (
                     <button
-                      onClick={() => { const el = document.getElementById("prep-section"); if (el) el.scrollIntoView({ behavior:"smooth", block:"start" }); }}
+                      onClick={() => setPrepOpen(true)}
                       style={{ fontSize:13.5, fontWeight:700, cursor:"pointer", borderRadius:20, padding:"9px 18px",
                         color: prep.ready ? "#5C9A6D" : "white",
                         background: prep.ready ? "#E9F1E9" : "#E0863C",
                         border: `1px solid ${prep.ready ? "#C7E0CB" : "#E0863C"}` }}>
-                      {prep.ready ? tr("✓ You've finished your part — thank you!") : tr("Prepare for your Pulse meeting ↓")}
+                      {prep.ready ? tr("✓ You've finished your part — thank you!") : tr("Prepare for your Pulse meeting")}
                     </button>
                   )}
                   {reportLang && (
@@ -5093,11 +5095,42 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
         )}
 
         {/* ── COUNTRY LEADER PREP — agenda, reflections, ready gate (bottom) ── */}
-        {prepEnabled && prep && (prepMode || prep._recordId) && (
-          <PrepFooter mode={prepMode ? "edit" : "view"} prep={prep} savePrepPatch={savePrepPatch}
+        {/* P&C reads the leader's prep at the foot of the report. The leader
+            edits it in the pop-up window instead (opened from the header). */}
+        {prepEnabled && prep && !prepMode && prep._recordId && (
+          <PrepFooter mode="view" prep={prep} savePrepPatch={savePrepPatch}
             depts={depts} country={country} isMobile={isMobile} tr={tr} />
         )}
       </div>
+
+      {/* Floating close — an open department can be closed from anywhere on the
+          page, no scrolling back to the top. */}
+      {activeDept && (
+        <button className="no-print"
+          onClick={() => { setActiveDept(null); try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {} }}
+          style={{ position:"fixed", right: isMobile ? 14 : 24, bottom: isMobile ? 14 : 24, zIndex:40,
+            display:"flex", alignItems:"center", gap:7, padding:"11px 18px", borderRadius:24,
+            background:"#2C2621", color:"white", border:"none", cursor:"pointer", fontSize:13, fontWeight:700,
+            boxShadow:"0 4px 14px rgba(44,38,33,0.35)" }}>
+          ✕ {tr("Close department")}
+        </button>
+      )}
+
+      {/* Country leader prep — a window floating over the report */}
+      {prepMode && prep && prepOpen && (
+        <div className="no-print" onClick={() => setPrepOpen(false)}
+          style={{ position:"fixed", inset:0, background:"rgba(44,38,33,0.45)", zIndex:60,
+            overflowY:"auto", padding: isMobile ? "14px 10px 40px" : "40px 20px 60px" }}>
+          <div onClick={e => e.stopPropagation()} style={{ maxWidth:860, margin:"0 auto", position:"relative" }}>
+            <button onClick={() => setPrepOpen(false)} title="Close"
+              style={{ position:"absolute", top:16, right:10, zIndex:2, width:34, height:34, borderRadius:"50%",
+                background:"#fff", border:"1px solid #ECE2D2", cursor:"pointer", fontSize:15, color:"#7A6F63",
+                boxShadow:"0 2px 8px rgba(44,38,33,0.15)", lineHeight:1 }}>✕</button>
+            <PrepFooter mode="edit" prep={prep} savePrepPatch={savePrepPatch}
+              depts={depts} country={country} isMobile={isMobile} tr={tr} />
+          </div>
+        </div>
+      )}
 
       <style>{`
         @media print {
