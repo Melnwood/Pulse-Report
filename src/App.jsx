@@ -10,7 +10,7 @@ import VideosView from "./components/VideosView";
 import { authStatus, tokenValid, getUser, logout, listCountryLeaders } from "./authClient";
 import CountryLeadersView from "./components/CountryLeadersView";
 import SURVEY_BASICS from "./surveyBasics.json";
-import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, deleteDepartmentNote, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, updateQuestionNote, deleteQuestionNote, loadMeasures, loadSurveyBasicsMaster, saveSurveyBasicsMaster, loadHelpVideos, loadPrep, savePrep } from "./airtable";
+import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, deleteDepartmentNote, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, updateQuestionNote, deleteQuestionNote, loadMeasures, loadSurveyBasicsMaster, saveSurveyBasicsMaster, loadHelpVideos, loadPrep, savePrep, saveBrief, loadBriefs } from "./airtable";
 import { synthesizeLeadership, languageForCountry, translateBatch, translateToEnglish, nativeLanguageLabel } from "./ai";
 import MeasurePanel from "./components/MeasurePanel";
 import NotesDigest from "./components/NotesDigest";
@@ -1050,6 +1050,7 @@ export default function App() {
     if (view !== "sections" || !authed || !viewRole) return;
     if (viewRole === "director") setViewRaw("home");
     else if (viewRole === "country") setViewRaw("dashboard");
+    else if (viewRole === "leader") setViewRaw("leadership");
   }, [view, authed, viewRole]);   // eslint-disable-line
 
   const [country, setCountry]     = useState("");
@@ -1972,11 +1973,21 @@ function DeptDetailModal({ country, year, deptKey, deptLabel, me, isPCLead, onCl
 // The leadership brief — an on-demand AI synthesis of the whole-org rollup:
 // a headline plus a few prioritised "what's happening + next step" cards, each
 // clickable into that department's detail. Button-triggered (no auto AI cost).
-function LeadershipBriefPanel({ countriesData = [], issues = [], allCountries = [], onOpenDept }) {
+function LeadershipBriefPanel({ countriesData = [], issues = [], allCountries = [], onOpenDept, author = "" }) {
   const [busy, setBusy] = useState(false);
   const [brief, setBrief] = useState(null);
   const [err, setErr] = useState("");
   const [scope, setScope] = useState("all");   // "all" or a country name
+  // Every synthesis is kept (time-stamped, in Airtable) so past briefs can be
+  // reread and compared as the data grows. viewingSaved marks that the brief on
+  // screen came from the archive, not a fresh run.
+  const [history, setHistory] = useState(null);   // null = loading
+  const [viewingSaved, setViewingSaved] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    loadBriefs().then(list => { if (alive) setHistory(list); }).catch(() => { if (alive) setHistory([]); });
+    return () => { alive = false; };
+  }, []);
 
   // Build the rollup for the chosen scope. For a single country we compute that
   // country's own lowest questions and within-country recurrences, so a country
@@ -2033,15 +2044,29 @@ function LeadershipBriefPanel({ countriesData = [], issues = [], allCountries = 
   };
 
   const run = async () => {
-    setBusy(true); setErr("");
+    setBusy(true); setErr(""); setViewingSaved(null);
     try {
       const qual = await gatherQualitative(scope);
-      setBrief(await synthesizeLeadership({ ...rollupFor(scope), notes: qual.notes, openResponses: qual.openResponses }));
+      const b = await synthesizeLeadership({ ...rollupFor(scope), notes: qual.notes, openResponses: qual.openResponses });
+      setBrief(b);
+      // Archive every real result — time-stamped, so it can be reread later.
+      if (b && !b.empty && (b.priorities || []).length) {
+        const scopeName = scope === "all" ? "All countries" : scope;
+        saveBrief({ scope: scopeName, headline: b.headline || "", priorities: b.priorities, author })
+          .then(() => loadBriefs().then(setHistory).catch(() => {}))
+          .catch(e => console.warn("Brief archive save failed:", e.message));
+      }
     }
     catch (e) { setErr(e.message || "Couldn't synthesize right now."); }
     setBusy(false);
   };
-  const pickScope = (s) => { setScope(s); setBrief(null); setErr(""); };   // changing scope clears the stale brief
+  const pickScope = (s) => { setScope(s); setBrief(null); setErr(""); setViewingSaved(null); };   // changing scope clears the stale brief
+  const openSaved = (h) => {
+    setBrief({ empty: false, headline: h.headline, priorities: h.priorities });
+    setViewingSaved(h);
+    setErr("");
+  };
+  const fmtWhen = (iso) => { try { return new Date(iso).toLocaleString(undefined, { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" }); } catch { return ""; } };
   const priorities = (brief && brief.priorities) || [];
   const scopeChip = (val, label) => (
     <button key={val} onClick={() => pickScope(val)} style={{
@@ -2080,6 +2105,12 @@ function LeadershipBriefPanel({ countriesData = [], issues = [], allCountries = 
       )}
       {err && <div style={{ color:"#BE6650", fontSize:12, marginTop:10 }}>{err}</div>}
       {brief && brief.empty && <div style={{ fontSize:13, color:"#7A6F63", marginTop:12 }}>{brief.text}</div>}
+      {viewingSaved && (
+        <div style={{ marginTop:12, fontSize:12, fontWeight:600, color:"#9A6B26", background:"#F7EEDC",
+          border:"1px solid #E8D5AE", borderRadius:8, padding:"7px 11px", display:"inline-block" }}>
+          📁 Saved brief — {viewingSaved.scope}, {fmtWhen(viewingSaved.created)}{viewingSaved.author ? ` · ${viewingSaved.author}` : ""}. Press Synthesize for a fresh one.
+        </div>
+      )}
       {brief && !brief.empty && (
         <div style={{ marginTop:14 }}>
           {brief.headline && <div style={{ fontSize:14.5, color:"#2C2621", lineHeight:1.55, marginBottom:14 }}>{brief.headline}</div>}
@@ -2108,6 +2139,30 @@ function LeadershipBriefPanel({ countriesData = [], issues = [], allCountries = 
             })}
           </div>
         </div>
+      )}
+
+      {/* Past briefs — every synthesis, time-stamped. Click one to reread it. */}
+      {history && history.length > 0 && (
+        <details style={{ marginTop:14, borderTop:"1px solid #F4ECDD", paddingTop:10 }}>
+          <summary style={{ cursor:"pointer", fontSize:12, fontWeight:700, color:"#7A6F63",
+            textTransform:"uppercase", letterSpacing:1, listStyle:"none" }}>
+            📁 Past briefs · {history.length}
+          </summary>
+          <div style={{ marginTop:8 }}>
+            {history.slice(0, 20).map(h => (
+              <button key={h.id} onClick={() => openSaved(h)}
+                style={{ display:"flex", alignItems:"baseline", gap:10, width:"100%", textAlign:"left",
+                  background: viewingSaved && viewingSaved.id === h.id ? "#F7EEDF" : "transparent",
+                  border:"none", borderTop:"1px solid #F4ECDD", padding:"8px 6px", cursor:"pointer" }}>
+                <span style={{ fontSize:12, fontWeight:700, color:"#B96524", whiteSpace:"nowrap", flexShrink:0 }}>{fmtWhen(h.created)}</span>
+                <span style={{ fontSize:12, fontWeight:700, color:"#2C2621", whiteSpace:"nowrap", flexShrink:0 }}>{h.scope}</span>
+                <span style={{ fontSize:12, color:"#7A6F63", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                  {h.headline || `${h.priorities.length} priorities`}
+                </span>
+              </button>
+            ))}
+          </div>
+        </details>
       )}
     </div>
   );
@@ -2254,6 +2309,10 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
           <button onClick={() => setView("__back__")}
             style={{ ...navBtn, background:"transparent", border:"1px solid #ECE2D2" }}>← Back</button>
           <span style={{ fontFamily:FONT_DISPLAY, fontSize:22, fontWeight:600, color:"#2C2621" }}>Leadership</span>
+          {/* Mel & Chris land here — these two buttons are their doors into the
+              other sections now that the chooser screen is gone for leaders. */}
+          <button onClick={() => setView("home")} style={{ ...navBtn, fontSize:12, padding:"6px 12px", background:"#E0863C", color:"#fff", border:"1px solid transparent" }}>Department Leader Review</button>
+          <button onClick={() => setView("dashboard")} style={{ ...navBtn, fontSize:12, padding:"6px 12px" }}>Country dashboards</button>
           {authUser && authUser.role === "leader" && (
             <button onClick={() => setView("users")} style={{ ...navBtn, fontSize:12, padding:"6px 12px" }}>Manage people</button>
           )}
@@ -2441,7 +2500,85 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
         {/* Leadership brief — synthesis, right after the dashboard numbers */}
         {allDepts.length > 0 && (
           <LeadershipBriefPanel countriesData={briefCountries} issues={briefIssues}
-            allCountries={briefAllCountries} onOpenDept={openDeptDetail} />
+            allCountries={briefAllCountries} onOpenDept={openDeptDetail} author={authUser?.name || ""} />
+        )}
+
+        {/* ── The patterns at a glance — warm visuals for the two questions
+            leadership actually asks: which departments need attention across
+            countries, and which issues keep coming back. ── */}
+        {(deptPattern.length > 0 || recurring.length > 0) && (
+          <div style={{ ...card, marginBottom:24, padding: isMobile ? "16px" : "20px 22px" }}>
+            <div style={{ fontFamily:FONT_DISPLAY, fontSize:18, fontWeight:600, color:"#2C2621", marginBottom:2 }}>The patterns at a glance</div>
+            <div style={{ fontSize:12.5, color:"#7A6F63", marginBottom:18 }}>Where attention is needed across countries — and what keeps coming back.</div>
+            <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? 22 : 28 }}>
+
+              {/* Needs attention — by department, across countries */}
+              <div>
+                <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5, marginBottom:12 }}>
+                  Needs attention · by department
+                </div>
+                {deptPattern.slice(0, 9).map(e => {
+                  const total = e.Concern + e.Watch + e.Healthy || 1;
+                  const flaggedN = e.Concern + e.Watch;
+                  return (
+                    <div key={e.label} style={{ marginBottom:12 }}>
+                      <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:4 }}>
+                        <span style={{ fontSize:12.5, fontWeight:650, color:"#2C2621" }}>{e.label}</span>
+                        <span style={{ marginLeft:"auto", fontSize:11, fontWeight:700,
+                          color: flaggedN ? "#B96524" : "#5C9A6D", whiteSpace:"nowrap" }}>
+                          {flaggedN ? `${flaggedN} of ${total} ${total === 1 ? "country" : "countries"}` : "all healthy"}
+                        </span>
+                      </div>
+                      <div style={{ display:"flex", height:14, borderRadius:8, overflow:"hidden",
+                        background:"#FDFAF4", border:"1px solid #F4ECDD" }}>
+                        {e.Concern > 0 && <div style={{ width:`${e.Concern/total*100}%`, background:"#D98874" }} />}
+                        {e.Watch > 0 &&   <div style={{ width:`${e.Watch/total*100}%`, background:"#E4B061" }} />}
+                        {e.Healthy > 0 && <div style={{ width:`${e.Healthy/total*100}%`, background:"#9CC4A4" }} />}
+                      </div>
+                      {e.concernCountries.length > 0 && (
+                        <div style={{ fontSize:10.5, color:"#A89C8D", marginTop:3 }}>Concern in {e.concernCountries.join(", ")}</div>
+                      )}
+                    </div>
+                  );
+                })}
+                <div style={{ display:"flex", gap:14, marginTop:10 }}>
+                  {[["Concern","#D98874"],["Watch","#E4B061"],["Healthy","#9CC4A4"]].map(([l,c]) => (
+                    <span key={l} style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:10.5, color:"#7A6F63" }}>
+                      <span style={{ width:9, height:9, borderRadius:3, background:c, display:"inline-block" }} />{l}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Top issues — recurring across teams */}
+              <div>
+                <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5, marginBottom:12 }}>
+                  Keeps coming back · across teams
+                </div>
+                {recurring.length === 0 ? (
+                  <div style={{ fontSize:12.5, color:"#A89C8D", fontStyle:"italic" }}>
+                    No question is low in more than one team right now.
+                  </div>
+                ) : recurring.map((e, i) => (
+                  <div key={i} style={{ marginBottom:14, paddingBottom:12,
+                    borderBottom: i < recurring.length - 1 ? "1px solid #F4ECDD" : "none" }}>
+                    <div style={{ fontSize:12.5, color:"#2C2621", lineHeight:1.45, marginBottom:6 }}>{e.en}</div>
+                    <div style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap" }}>
+                      {(e.where || []).map((w, wi) => (
+                        <span key={wi} title={w}
+                          style={{ width:15, height:15, borderRadius:5, background:"#E4B061",
+                            border:"1px solid #D9A24E", display:"inline-block" }} />
+                      ))}
+                      <span style={{ fontSize:11.5, fontWeight:800, color:"#B96524", marginLeft:4,
+                        fontFamily:FONT_DISPLAY }}>{e.where.length} teams</span>
+                      <span style={{ fontSize:10.5, color:"#A89C8D" }}>· avg {e.avg.toFixed(2)}</span>
+                    </div>
+                    <div style={{ fontSize:10.5, color:"#A89C8D", marginTop:4, lineHeight:1.5 }}>{(e.where || []).join(" · ")}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         )}
 
         {/* ── Detail — collapsible, closed by default; open the one you want ── */}

@@ -25,6 +25,7 @@ const TABLES = {
   surveyBasics:  "Survey Basics",
   helpVideos:    "Help Videos",
   prep:          "Prep",
+  briefs:        "Briefs",   // leadership synthesis history — P&C leaders only
 };
 
 // Tables a COUNTRY LEADER may write to (scoped to their own country below):
@@ -172,6 +173,10 @@ exports.handler = async (event) => {
       // Prep (reflections + agenda) is for P&C leadership and the country's own
       // leader — never directors.
       if (table === "prep" && role === "director") {
+        return { statusCode: 200, headers, body: JSON.stringify({ records: [] }) };
+      }
+      // Leadership briefs are for P&C leadership only.
+      if (table === "briefs" && role && role !== "leader") {
         return { statusCode: 200, headers, body: JSON.stringify({ records: [] }) };
       }
       let all = await listAll(tableId, filterByFormula, params && params.pageSize, params && params.sort);

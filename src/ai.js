@@ -134,6 +134,9 @@ export async function synthesizeLeadership({ countries = [], lowestQuestions = [
 
   const prompt =
 `You are the strategic advisor to the People & Culture leaders (Mel & Chris) at Josiah Venture, a Christian youth-missions organisation working across several countries. They oversee staff care org-wide. Below is the current pulse rollup ${scope ? `for ${scope} (a single country)` : "across every country's latest survey"}. Your job is NOT to restate the numbers — it's to help them decide where to put their attention ${where} and WHAT to do.
+${scope ? "" : `
+THIS BRIEF IS ORG-WIDE. Every priority must be a PATTERN or THREAD that runs across multiple countries or the whole organisation — never one country's issue. Do NOT title or frame any priority around a single country (nothing like "X is broken in Poland"); if something matters in only one country, leave it for that country's own brief. Countries may appear only as short supporting evidence inside an insight ("lowest in Poland and Hungary"). Set "country" to "Org-wide" on every priority.
+`}
 
 Produce a short leadership brief as JSON only (no prose outside the JSON, no code fences), in exactly this shape:
 {

@@ -578,6 +578,37 @@ export async function savePrep(country, year, patch, author) {
   return created.records?.[0]?.id || null;
 }
 
+// ─── LEADERSHIP BRIEFS (synthesis history) ───────────────────────────────────
+// One row per AI synthesis run from the Leadership page, so Mel & Chris can go
+// back and compare briefs over time. The proxy serves this table to leaders only.
+export async function saveBrief({ scope, headline, priorities, author }) {
+  const created = new Date().toISOString();
+  const fields = {
+    "Name": `${scope} · ${created.slice(0, 16).replace("T", " ")}`,
+    "Scope": scope,
+    "Headline": headline || "",
+    "Priorities": JSON.stringify(priorities || []).slice(0, 95000),
+    "Author": author || "",
+    "Created": created,
+  };
+  const res = await call({ action: "create", table: "briefs", records: [{ fields }] });
+  return res.records?.[0]?.id || null;
+}
+
+export async function loadBriefs() {
+  const res = await call({ action: "list", table: "briefs" });
+  return (res.records || [])
+    .map(r => ({
+      id: r.id,
+      scope: r.fields["Scope"] || "",
+      headline: r.fields["Headline"] || "",
+      priorities: (() => { try { const v = JSON.parse(r.fields["Priorities"] || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } })(),
+      author: r.fields["Author"] || "",
+      created: r.fields["Created"] || null,
+    }))
+    .sort((a, b) => new Date(b.created || 0) - new Date(a.created || 0));
+}
+
 // ─── MEASURES (behavioural-change tracking) ──────────────────────────────────
 // One record per Country + Department + Question, threaded across runs. Stores a
 // baseline/target and behaviour, plus interventions[] {date,action} and
