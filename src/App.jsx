@@ -1695,7 +1695,8 @@ export default function App() {
       allRuns={allRuns} reloadRuns={reloadRuns} runsLoading={runsLoading} openRun={openRunShared}
       onImportDirectorReview={startDirectorReviewImport}
       canPreview={canPreview} setPreviewAs={setPreviewAs}
-      authUser={authUser} onSignOut={signOut} />
+      authUser={authUser} onSignOut={signOut}
+      countryLeaders={countryLeaders} />
   );
 
   if (view === "home") return wrap(
@@ -1747,7 +1748,11 @@ export default function App() {
       sbOverrides={sbOverrides} sbMaster={sbMaster}
       me={effMe} saveMe={saveMe} isPCLead={effIsPCLead}
       leaderName={leaderForCountry ? leaderForCountry.name : null}
-      prepMode={viewRole === "country"}
+      // The country report looks EXACTLY the same however you reach it: the
+      // country's own leader gets the prep layer, and so do Mel & Chris (P&C)
+      // — no separate "admin flavor" of the page. Department leaders still get
+      // the plain report (the server blocks them from prep anyway).
+      prepMode={viewRole === "country" || effIsPCLead}
       prepAuthor={(viewUser && viewUser.name) || effMe || ""}
     />
   );
@@ -2168,8 +2173,117 @@ function LeadershipBriefPanel({ countriesData = [], issues = [], allCountries = 
   );
 }
 
+// The agreed invitation wording for a country leader — one warm email that
+// gives them the address, explains first sign-in, and sets the heart of the
+// meeting. Placeholders are filled per country; the text is editable per send.
+const APP_URL = "https://jv-pulse.netlify.app";
+function inviteEmailFor(countryName, leader) {
+  const first = leader && leader.name ? String(leader.name).trim().split(/\s+/)[0] : "friend";
+  const email = (leader && leader.email) || "your JV email";
+  return {
+    subject: `Your ${countryName} Pulse Report is ready`,
+    body: `Hi ${first},
+
+Your team's Pulse Report for ${countryName} is ready — and it's worth some unhurried time. It gathers what your staff shared in this year's survey into one honest picture: where your team is healthy, where attention is needed, and the exact questions worth talking about together.
+
+Here's how to get in:
+
+1. Go to ${APP_URL}
+2. Sign in with this email address (${email}). The first time, it will ask you to choose your own password.
+3. You'll land straight on your ${countryName} page — click any department in the chart to go deeper.
+
+As you read, react to each department, answer the leadership questions, and add whatever you want us to talk through to your meeting agenda. When you're done, press "I've finished my part of the Pulse report" so we know you're ready.
+
+This isn't about scores — it's about your people, and we're really looking forward to walking through it with you.
+
+With you,
+Mel & Chris`,
+  };
+}
+
+// Pick a country, get the agreed email pre-addressed and pre-written — tweak if
+// needed, then open it in your mail app or copy it out.
+function InviteLeaderModal({ countries = [], leaders = {}, onClose, onManageLeaders }) {
+  const [sel, setSel] = useState(countries[0] || "");
+  const leader = leaders[String(sel).toLowerCase()] || null;
+  const tmpl = inviteEmailFor(sel, leader);
+  const [subject, setSubject] = useState(tmpl.subject);
+  const [body, setBody] = useState(tmpl.body);
+  const [copied, setCopied] = useState(false);
+  const pick = (c) => {
+    setSel(c); setCopied(false);
+    const l = leaders[String(c).toLowerCase()] || null;
+    const t = inviteEmailFor(c, l);
+    setSubject(t.subject); setBody(t.body);
+  };
+  const mailto = leader && leader.email
+    ? `mailto:${encodeURIComponent(leader.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    : null;
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(`To: ${leader ? `${leader.name} <${leader.email}>` : ""}\nSubject: ${subject}\n\n${body}`);
+      setCopied(true); setTimeout(() => setCopied(false), 2500);
+    } catch {}
+  };
+  const inpStyle = { width:"100%", boxSizing:"border-box", fontSize:13, padding:"9px 11px",
+    border:"1px solid #E2D3C2", borderRadius:8, fontFamily:"inherit" };
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(44,38,33,0.45)", zIndex:1000,
+      overflowY:"auto", padding:"40px 16px 60px" }}>
+      <div onClick={e => e.stopPropagation()} style={{ maxWidth:640, margin:"0 auto", background:"#fff",
+        borderRadius:14, padding:"20px 22px", boxShadow:"0 24px 60px rgba(44,38,33,.35)" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+          <span style={{ fontFamily:FONT_DISPLAY, fontSize:19, fontWeight:600, color:"#2C2621" }}>Email a country leader</span>
+          <button onClick={onClose} style={{ marginLeft:"auto", background:"none", border:"none", cursor:"pointer",
+            fontSize:19, color:"#7A6F63", lineHeight:1 }}>✕</button>
+        </div>
+        <div style={{ fontSize:12.5, color:"#7A6F63", lineHeight:1.5, marginBottom:14 }}>
+          The agreed invitation — pre-addressed, with the sign-in steps and their country page. Tweak it if you like, then open it in your mail app.
+        </div>
+        <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap", marginBottom:12 }}>
+          <select value={sel} onChange={e => pick(e.target.value)}
+            style={{ ...inpStyle, width:"auto", minWidth:160, background:"#FDFAF4" }}>
+            {countries.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          {leader && leader.email ? (
+            <span style={{ fontSize:12.5, color:"#2C2621" }}>
+              To: <b>{leader.name}</b> <span style={{ color:"#7A6F63" }}>&lt;{leader.email}&gt;</span>
+            </span>
+          ) : (
+            <span style={{ fontSize:12.5, color:"#BE6650" }}>
+              No leader on file for {sel} — {onManageLeaders
+                ? <button onClick={onManageLeaders} style={{ background:"none", border:"none", padding:0, cursor:"pointer",
+                    color:"#B96524", fontWeight:700, fontSize:12.5, textDecoration:"underline" }}>add them in Country leaders</button>
+                : "add them in System → Country leaders"} first.
+            </span>
+          )}
+        </div>
+        <div style={{ marginBottom:10 }}>
+          <label style={{ display:"block", fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1, marginBottom:4 }}>Subject</label>
+          <input style={inpStyle} value={subject} onChange={e => setSubject(e.target.value)} />
+        </div>
+        <div style={{ marginBottom:14 }}>
+          <label style={{ display:"block", fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1, marginBottom:4 }}>Message</label>
+          <textarea rows={14} style={{ ...inpStyle, resize:"vertical", lineHeight:1.55 }}
+            value={body} onChange={e => setBody(e.target.value)} />
+        </div>
+        <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
+          {mailto ? (
+            <a href={mailto} style={{ ...navBtn, background:"#E0863C", color:"#fff", border:"1px solid transparent",
+              fontWeight:700, textDecoration:"none", display:"inline-block" }}>✉ Open in your email app</a>
+          ) : (
+            <span style={{ ...navBtn, background:"#ECE2D2", color:"#7A6F63", cursor:"default" }}>✉ Open in your email app</span>
+          )}
+          <button onClick={copy} style={{ ...navBtn }}>{copied ? "✓ Copied" : "Copy email text"}</button>
+          <span style={{ fontSize:11.5, color:"#A89C8D" }}>Nothing sends until you press Send in your mail app.</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFile,
-  generating, genProgress, isAdmin, toggleAdmin, setView, allRuns = [], reloadRuns, runsLoading, openRun, onImportDirectorReview, canPreview, setPreviewAs, authUser, onSignOut }) {
+  generating, genProgress, isAdmin, toggleAdmin, setView, allRuns = [], reloadRuns, runsLoading, openRun, onImportDirectorReview, canPreview, setPreviewAs, authUser, onSignOut, countryLeaders = {} }) {
   const isMobile = useIsMobile();
   const [detail, setDetail] = useState(null);   // { country, year, deptKey, deptLabel } for the drill-in modal
   const openDeptDetail = ({ country: c, deptKey, deptLabel }) =>
@@ -2177,6 +2291,7 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
   const dirReviewRef = useRef(null);   // file input for importing a director review
   const [showUpload, setShowUpload] = useState(false);   // the Import panel — closed until asked for (System → Import)
   const [sysMenu, setSysMenu] = useState(false);         // the System dropdown in the banner
+  const [inviteOpen, setInviteOpen] = useState(false);   // the pre-written country-leader email
   const [showPreview, setShowPreview] = useState(false);                // the "See what others see" panel
   const [orgIssues, setOrgIssues] = useState(null);   // null = loading; array of question rows across the org
   const issuesLoadedRef = useRef("");
@@ -2328,6 +2443,7 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
                   border:"1px solid #ECE2D2", borderRadius:10, boxShadow:"0 10px 30px rgba(44,38,33,.18)",
                   minWidth:190, overflow:"hidden", padding:"4px 0" }}>
                   {[
+                    isAdmin && ["✉ Email a country leader", () => setInviteOpen(true)],
                     (authUser && authUser.role === "leader") && ["Manage people", () => setView("users")],
                     isAdmin && ["Country leaders", () => setView("leaders")],
                     isAdmin && ["Manage videos", () => setView("videos")],
@@ -2735,6 +2851,13 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
         <DeptDetailModal country={detail.country} year={detail.year} deptKey={detail.deptKey}
           deptLabel={detail.deptLabel} me={authUser?.name || ""} isPCLead={isAdmin}
           onClose={() => setDetail(null)} />
+      )}
+      {inviteOpen && (
+        <InviteLeaderModal
+          countries={[...new Set([...briefAllCountries, ...Object.values(countryLeaders).map(l => l.country).filter(Boolean)])].sort()}
+          leaders={countryLeaders}
+          onClose={() => setInviteOpen(false)}
+          onManageLeaders={() => { setInviteOpen(false); setView("leaders"); }} />
       )}
     </div>
   );
