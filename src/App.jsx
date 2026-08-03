@@ -2766,7 +2766,7 @@ As you read, react to each department by clicking into the available note boxes,
 This isn't about scores — it's about your people, and we're really looking forward to walking through it with you.
 
 With you,
-Mel & Chris`,
+Mel & Chris for the People & Culture team`,
   };
 }
 
