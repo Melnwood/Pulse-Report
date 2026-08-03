@@ -10,7 +10,7 @@ import VideosView from "./components/VideosView";
 import { authStatus, tokenValid, getUser, logout, listCountryLeaders } from "./authClient";
 import CountryLeadersView from "./components/CountryLeadersView";
 import SURVEY_BASICS from "./surveyBasics.json";
-import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, deleteDepartmentNote, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, updateQuestionNote, deleteQuestionNote, loadMeasures, loadSurveyBasicsMaster, saveSurveyBasicsMaster, loadHelpVideos, loadPrep, savePrep, saveBrief, loadBriefs } from "./airtable";
+import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, deleteDepartmentNote, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, updateQuestionNote, deleteQuestionNote, loadMeasures, loadSurveyBasicsMaster, saveSurveyBasicsMaster, loadHelpVideos, loadPrep, savePrep, saveBrief, loadBriefs, baseYear, periodSeq, periodCmp } from "./airtable";
 import { synthesizeLeadership, languageForCountry, translateBatch, translateToEnglish, nativeLanguageLabel } from "./ai";
 import MeasurePanel from "./components/MeasurePanel";
 import NotesDigest from "./components/NotesDigest";
@@ -1401,10 +1401,11 @@ export default function App() {
     return () => { if (syncTimer.current) clearTimeout(syncTimer.current); };
   }, [selections, country, year, surveyData]);
 
-  const saveRun = async (data) => {
+  const saveRun = async (data, yearOv) => {
+    const yr = yearOv ?? year;
     const run = {
-      id: `${country}-${year}-${Date.now()}`,
-      country, year,
+      id: `${country}-${yr}-${Date.now()}`,
+      country, year: yr,
       // Run-level unique respondents = number of survey rows (one per person).
       // Never derive this by summing per-department n's — staff who serve on
       // more than one team answer for each, so a sum double-counts them.
@@ -1415,14 +1416,30 @@ export default function App() {
       })),
       savedAt: new Date().toISOString(),
     };
-    const runs = [...allRuns.filter(r => !(r.country===country && r.year===year)), run];
+    const runs = [...allRuns.filter(r => !(r.country===country && String(r.year)===String(yr))), run];
     setAllRuns(runs);
     try { localStorage.setItem("pulse:runs", JSON.stringify(runs)); } catch(e) {}
-    try { localStorage.setItem(`pulse:data:${country}:${year}`, JSON.stringify(data)); } catch(e) {}
+    try { localStorage.setItem(`pulse:data:${country}:${yr}`, JSON.stringify(data)); } catch(e) {}
   };
 
   const handleFile = async (file) => {
     if (!country || !year) { alert("Enter country and year first."); return; }
+    // A pulse report already on file for this country + period? Offer to ADD a
+    // new one (keeps both — it becomes e.g. "2026·2") instead of overwriting.
+    // Teams can pulse once a year or several times; every report keeps its own
+    // identity, notes, prep, and point on the trends.
+    let effYear = year;
+    const sameYear = allRuns.filter(r => r.country === country && baseYear(r.year) === baseYear(year));
+    if (sameYear.some(r => String(r.year) === String(year))) {
+      const addNew = window.confirm(
+        `${country} already has a ${year} Pulse Report.\n\n` +
+        `OK — add this as a NEW pulse report (keeps both; this one becomes "${baseYear(year)}\u00b7${Math.max(...sameYear.map(r => periodSeq(r.year))) + 1}").\n` +
+        `Cancel — replace the existing ${year} report.`);
+      if (addNew) {
+        effYear = `${baseYear(year)}\u00b7${Math.max(...sameYear.map(r => periodSeq(r.year))) + 1}`;
+        setYear(effYear);
+      }
+    }
     setGenerating(true);
     setGenProgress({ step: "Parsing survey file…" });
     try {
@@ -1467,7 +1484,7 @@ export default function App() {
         };
       }
       setSelections(sels);
-      await saveRun(data);
+      await saveRun(data, effYear);
       setView("review");
     } catch(e) {
       alert("Error parsing file: " + e.message);
@@ -1638,7 +1655,7 @@ export default function App() {
     } catch (e) { window.alert("Couldn't read that file: " + e.message); return; }
     const run = [...allRuns]
       .filter(r => String(r.country || "").toLowerCase() === detected.toLowerCase())
-      .sort((a, b) => Number(b.year) - Number(a.year))[0];
+      .sort((a, b) => periodCmp(b.year, a.year))[0];
     if (!run) { window.alert(`No pulse run found for "${detected || "that file"}". Upload the survey for that country first, then import the director review.`); return; }
     setPendingImport(file);
     openRunShared(run, "review");
@@ -2310,7 +2327,7 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
   // ── Org-wide rollup from the latest run of each country (fast: uses the
   // department summaries already loaded, no per-run fetches). ──
   const latestByCountry = {};
-  allRuns.forEach(r => { if (!latestByCountry[r.country] || Number(r.year) > Number(latestByCountry[r.country].year)) latestByCountry[r.country] = r; });
+  allRuns.forEach(r => { if (!latestByCountry[r.country] || periodCmp(r.year, latestByCountry[r.country].year) > 0) latestByCountry[r.country] = r; });
   const latestRuns = Object.values(latestByCountry);
   const allDepts = latestRuns.flatMap(r => (r.depts || []).map(d => ({ ...d, country: r.country, year: r.year })));
   const withStatus = allDepts.filter(d => d.status);
@@ -4255,7 +4272,7 @@ function WorkspaceView({ allRuns, setView, authRole, authUser, authDepts = [], c
 
   // Latest run for the chosen country drives the question set.
   const latestRun = (allRuns || []).filter(r => r.country === country)
-    .sort((a, b) => Number(b.year) - Number(a.year))[0];
+    .sort((a, b) => periodCmp(b.year, a.year))[0];
   const year = latestRun && latestRun.year;
 
   const [sd, setSd] = useState(null);          // { depts } for the run (null = loading)
@@ -6112,11 +6129,6 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
 // in as yearly reports arrive. Auto-shows twice, then stays away (and there's
 // a "Don't show this again" box); reopen any time from the banner.
 const TRENDS_PREVIEW_KEY = "pulse:trendsPreviewSeen";
-const SAMPLE_TREND = [
-  { label: "Human Resources", color: "#5C9A6D", pts: [3.1, 3.3, 3.6, 3.8] },
-  { label: "Singles",         color: "#BE6650", pts: [2.4, 2.6, 2.9, 3.2] },
-  { label: "Marriages",       color: "#C08636", pts: [3.9, 3.7, 3.4, 3.6] },
-];
 const SAMPLE_HEALTH = [
   { label: "Counseling",         years: [["Concern", 2.3], ["Watch", 2.8], ["Watch", 3.1], ["Healthy", 3.6]] },
   { label: "JV Women",           years: [["Watch", 3.2], ["Watch", 3.3], ["Healthy", 3.7], ["Healthy", 3.8]] },
@@ -6125,8 +6137,6 @@ const SAMPLE_HEALTH = [
 const SAMPLE_YEARS = [2026, 2027, 2028, 2029];
 function TrendsExampleModal({ country, onClose, onNever }) {
   const [never, setNever] = useState(false);
-  const yFor = (v) => 150 - ((v - 1) / 4) * 130;
-  const xFor = (i) => 60 + i * 150;
   const close = () => { if (never && onNever) onNever(); onClose(); };
   return (
     <div onClick={close} style={{ position:"fixed", inset:0, background:"rgba(44,38,33,0.5)", zIndex:1000,
@@ -6140,8 +6150,9 @@ function TrendsExampleModal({ country, onClose, onNever }) {
         </div>
         <div style={{ fontSize:13, color:"#5A4A3B", lineHeight:1.6, marginBottom:12 }}>
           Right now {country ? `${country}'s` : "your"} dashboard holds one survey — the 2026 baseline. That's the
-          first chapter, not the whole story. Each yearly pulse adds a new point, and this page starts showing
-          movement: what's getting healthier, what's slipping, and where the care you're giving is landing.
+          first chapter, not the whole story. Every new Pulse Report adds a column — once a year, or more often if
+          your team runs one — and this page starts showing movement: what's getting healthier, what's slipping,
+          and where the care you're giving is landing.
         </div>
         <div style={{ display:"inline-block", fontSize:11, fontWeight:800, color:"#B96524", background:"#FBEFE4",
           border:"1px solid #E0A56F", borderRadius:6, padding:"4px 10px", marginBottom:16, letterSpacing:.5 }}>
@@ -6149,39 +6160,7 @@ function TrendsExampleModal({ country, onClose, onNever }) {
         </div>
 
         <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5, marginBottom:8 }}>
-          Over time — how the trend lines will read
-        </div>
-        <div style={{ border:"1px solid #F4ECDD", borderRadius:12, padding:"10px 8px 4px", marginBottom:8, overflowX:"auto" }}>
-          <svg viewBox="0 0 560 175" style={{ width:"100%", minWidth:420, display:"block" }}>
-            {/* status bands */}
-            <rect x="30" y={yFor(5)} width="510" height={yFor(3.5) - yFor(5)} fill="#9CC4A4" opacity="0.13" />
-            <rect x="30" y={yFor(3.5)} width="510" height={yFor(2.5) - yFor(3.5)} fill="#E4B061" opacity="0.13" />
-            <rect x="30" y={yFor(2.5)} width="510" height={yFor(1) - yFor(2.5)} fill="#D98874" opacity="0.13" />
-            {[5, 3.5, 2.5, 1].map(v => (
-              <text key={v} x="26" y={yFor(v) + 4} textAnchor="end" fontSize="10" fill="#A89C8D">{v.toFixed(1)}</text>
-            ))}
-            {SAMPLE_YEARS.map((yr, i) => (
-              <text key={yr} x={xFor(i)} y="170" textAnchor="middle" fontSize="11" fill="#7A6F63" fontWeight="600">{yr}</text>
-            ))}
-            {SAMPLE_TREND.map(t => (
-              <g key={t.label}>
-                <polyline fill="none" stroke={t.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                  points={t.pts.map((v, i) => `${xFor(i)},${yFor(v)}`).join(" ")} />
-                {t.pts.map((v, i) => <circle key={i} cx={xFor(i)} cy={yFor(v)} r="4" fill={t.color} />)}
-              </g>
-            ))}
-          </svg>
-        </div>
-        <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:18 }}>
-          {SAMPLE_TREND.map(t => (
-            <span key={t.label} style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:11.5, color:"#5A4A3B" }}>
-              <span style={{ width:10, height:10, borderRadius:"50%", background:t.color }} />{t.label}
-            </span>
-          ))}
-        </div>
-
-        <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5, marginBottom:8 }}>
-          Department health — how it fills in year by year
+          How it fills in — report by report
         </div>
         <div style={{ border:"1px solid #F4ECDD", borderRadius:12, padding:"12px 14px", marginBottom:6 }}>
           <div style={{ display:"grid", gridTemplateColumns:"minmax(110px,1.2fr) repeat(4, 1fr)", gap:8, marginBottom:6 }}>
@@ -6198,7 +6177,7 @@ function TrendsExampleModal({ country, onClose, onNever }) {
             </div>
           ))}
           <div style={{ fontSize:11.5, color:"#7A6F63", lineHeight:1.55, marginTop:8 }}>
-            Watch Counseling in this sample: two hard years, steady attention, and by the fourth survey it's genuinely
+            Watch Counseling in this sample: two hard seasons, steady attention, and by the fourth report it's genuinely
             healthy. That's the story this page is built to tell — and it starts with the baseline you have today.
           </div>
         </div>
@@ -6262,7 +6241,7 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
 
   const latestByCountry = {};
   for (const run of allRuns) {
-    if (!latestByCountry[run.country] || run.year > latestByCountry[run.country].year)
+    if (!latestByCountry[run.country] || periodCmp(run.year, latestByCountry[run.country].year) > 0)
       latestByCountry[run.country] = run;
   }
 

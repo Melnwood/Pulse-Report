@@ -82,13 +82,22 @@ export async function airtablePing() {
 // Escape a value for use inside an Airtable filterByFormula string literal.
 const q = (s) => `'${String(s).replace(/'/g, "\\'")}'`;
 
+// ── Pulse-report periods ─────────────────────────────────────────────────────
+// A run's "year" is really a PERIOD string: "2026" for the first pulse of a
+// year, "2026·2" for a second pulse in the same year, and so on. Everything
+// that builds run names ("Poland 2026·2") just uses the period verbatim; these
+// helpers recover the numeric year and the sequence when needed.
+export const baseYear = (p) => { const m = String(p ?? "").match(/\d{4}/); return m ? Number(m[0]) : (Number(p) || null); };
+export const periodSeq = (p) => { const m = String(p ?? "").match(/·\s*(\d+)\s*$/); return m ? Number(m[1]) : 1; };
+export const periodCmp = (a, b) => ((baseYear(a) || 0) - (baseYear(b) || 0)) || (periodSeq(a) - periodSeq(b));
+
 // ---- RUNS ----
 export async function upsertRun({ country, year, status, overallAvg, respondents, notes }) {
   const runName = `${country} ${year}`;
   const existing = await call({ action: "list", table: "runs",
     filterByFormula: `{Run} = ${q(runName)}` });
   const fields = {
-    [F.runs.run]: runName, [F.runs.country]: country, [F.runs.year]: Number(year),
+    [F.runs.run]: runName, [F.runs.country]: country, [F.runs.year]: baseYear(year),
     [F.runs.status]: status || "Draft",
     [F.runs.overallAvg]: overallAvg != null ? Number(overallAvg) : undefined,
     [F.runs.respondents]: respondents != null ? Number(respondents) : undefined,
@@ -309,7 +318,12 @@ export async function loadAllRuns() {
   const runs = [];
   for (const r of runsRes.records) {
     const country = r.fields["Country"];
-    const year = r.fields["Year"];
+    // The PERIOD comes from the Run name ("Poland 2026·2" → "2026·2"); the
+    // numeric Year field only stores the base year for sorting in Airtable.
+    const rn = String(r.fields["Run"] || "");
+    const year = (country && rn.toLowerCase().startsWith(String(country).toLowerCase() + " "))
+      ? rn.slice(String(country).length + 1).trim()
+      : (r.fields["Year"] != null ? String(r.fields["Year"]) : "");
     if (!country || !year) continue;   // skip empty placeholder rows
     const runName = `${country} ${year}`;
     runs.push({
@@ -563,7 +577,7 @@ export async function loadPrep(country, year) {
 export async function savePrep(country, year, patch, author) {
   const run = `${country} ${year}`;
   const existing = await call({ action: "list", table: "prep", filterByFormula: `{Run} = ${q(run)}` });
-  const fields = { "Run": run, "Country": country, "Year": Number(year), "Updated": new Date().toISOString() };
+  const fields = { "Run": run, "Country": country, "Year": baseYear(year), "Updated": new Date().toISOString() };
   if (author) fields["Author"] = author;
   if (patch.reactions !== undefined) fields["Reactions"] = JSON.stringify(patch.reactions).slice(0, 95000);
   if (patch.reflections !== undefined) fields["Reflections"] = JSON.stringify(patch.reflections).slice(0, 95000);
