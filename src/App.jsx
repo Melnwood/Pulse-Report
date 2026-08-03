@@ -2418,11 +2418,9 @@ function PulseSurveyProgress({ country = null, refreshKey = "" }) {
 function SurveyProgressRow({ sv, resps, isMobile }) {
   const finished = resps.filter(r => r.status === "Completed").length;
   const inProgress = resps.length - finished;
-  const [expected, setExpected] = useState(sv.expected);
-  const [editingExp, setEditingExp] = useState(false);
-  const [expInput, setExpInput] = useState(sv.expected != null ? String(sv.expected) : "");
-  const [saving, setSaving] = useState(false);
   // The check-off list — emails, completely separate from the anonymous answers.
+  // Loaded right away: the pasted staff list IS the "how many should take it"
+  // number, so the "haven't started" count needs it from the first glance.
   const [rosterOpen, setRosterOpen] = useState(false);
   const [roster, setRoster] = useState(null);
   const [addText, setAddText] = useState("");
@@ -2431,7 +2429,8 @@ function SurveyProgressRow({ sv, resps, isMobile }) {
   const loadRoster = async () => {
     try { setRoster(await loadCheckins(sv.run)); } catch { setRoster([]); }
   };
-  const toggleRoster = () => { const n = !rosterOpen; setRosterOpen(n); if (n && !roster) loadRoster(); };
+  useEffect(() => { loadRoster(); /* eslint-disable-line */ }, [sv.run]);
+  const toggleRoster = () => setRosterOpen(v => !v);
   const addEmails = async () => {
     const existing = new Set((roster || []).map(r => r.email.toLowerCase()));
     const emails = [...new Set(addText.split(/[\s,;]+/).map(s => s.trim().toLowerCase()).filter(Boolean))]
@@ -2448,19 +2447,12 @@ function SurveyProgressRow({ sv, resps, isMobile }) {
     catch (e) { window.alert("Couldn't remove that: " + e.message); }
     setRosterBusy(false);
   };
-  // With a list in place it becomes the denominator; the typed number is the fallback.
+  // The pasted staff list is the denominator — "haven't started" is simply the
+  // people on the list who haven't signed in yet.
   const rosterCount = roster ? roster.length : null;
-  const effExpected = rosterCount || expected;
-  const notStarted = effExpected != null ? Math.max(0, effExpected - resps.length) : null;
-  const total = effExpected != null ? Math.max(effExpected, resps.length) : resps.length;
+  const notStarted = rosterCount ? roster.filter(r => r.status === "Invited").length : null;
+  const total = rosterCount ? Math.max(rosterCount, resps.length) : resps.length;
   const seg = (n) => total > 0 ? `${(n / total) * 100}%` : "0%";
-  const saveExpected = async () => {
-    const n = expInput.trim() === "" ? null : Math.max(0, parseInt(expInput, 10) || 0);
-    setSaving(true);
-    try { await updateSurvey(sv.id, { expected: n }); setExpected(n); setEditingExp(false); }
-    catch (e) { window.alert("Couldn't save that number: " + e.message); }
-    setSaving(false);
-  };
   return (
     <div style={{ padding: "10px 14px", borderTop: "1px solid #F3EBE1" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -2493,30 +2485,8 @@ function SurveyProgressRow({ sv, resps, isMobile }) {
             ✉ Email the survey to your staff
           </button>
         )}
-        <span style={{ marginLeft: "auto" }}>
-          {editingExp ? (
-            <>
-              <span>How many staff should take it? </span>
-              <input type="number" min="0" value={expInput} onChange={e => setExpInput(e.target.value)} autoFocus
-                style={{ width: 64, fontSize: 12, padding: "3px 7px", border: "1px solid #E2D3C2", borderRadius: 6 }} />{" "}
-              <button onClick={saveExpected} disabled={saving}
-                style={{ ...navBtn, fontSize: 11, padding: "3px 10px" }}>{saving ? "…" : "Save"}</button>{" "}
-              <button onClick={() => setEditingExp(false)}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "#A89C8D", fontSize: 11.5, padding: 0 }}>Cancel</button>
-            </>
-          ) : rosterCount ? (
-            <span style={{ color: "#A89C8D" }}>{rosterCount} on the list</span>
-          ) : expected != null ? (
-            <button onClick={() => { setExpInput(String(expected)); setEditingExp(true); }}
-              style={{ background: "none", border: "none", cursor: "pointer", color: "#A89C8D", fontSize: 11.5, padding: 0, textDecoration: "underline" }}>
-              {expected} expected — change
-            </button>
-          ) : (
-            <button onClick={() => setEditingExp(true)}
-              style={{ background: "none", border: "none", cursor: "pointer", color: "#B96524", fontWeight: 700, fontSize: 11.5, padding: 0, textDecoration: "underline" }}>
-              Set how many staff should take it →
-            </button>
-          )}
+        <span style={{ marginLeft: "auto", color: "#A89C8D" }}>
+          {rosterCount ? `${rosterCount} on the list` : "Add staff emails to see who's still missing"}
         </span>
       </div>
 
@@ -2616,14 +2586,12 @@ function StaffSurveysModal({ countries = [], runs = [], onClose, onImport, gener
   const [eCountry, setECountry] = useState("");
   const [eOther, setEOther] = useState("");
   const [eDate, setEDate] = useState("");
-  const [eExpected, setEExpected] = useState("");
   const openEdit = (sv) => {
     setErr("");
     setEditing(editing === sv.id ? null : sv.id);
     setECountry(countries.includes(sv.country) ? sv.country : "__other__");
     setEOther(sv.country);
     setEDate(sv.sendDate || "");
-    setEExpected(sv.expected != null ? String(sv.expected) : "");
     if (!resps[sv.run]) loadResps(sv.run);
   };
   const saveEdit = async (sv) => {
@@ -2632,7 +2600,6 @@ function StaffSurveysModal({ countries = [], runs = [], onClose, onImport, gener
     if (!country || !eDate) return;
     setBusy(true); setErr("");
     try {
-      const expected = eExpected.trim() === "" ? null : Math.max(0, parseInt(eExpected, 10) || 0);
       const hasResps = (resps[sv.run] || []).length > 0;
       const countryChanged = cmp(country) !== cmp(sv.country);
       const yearChanged = eDate.slice(0, 4) !== String(sv.period).slice(0, 4);
@@ -2645,10 +2612,10 @@ function StaffSurveysModal({ countries = [], runs = [], onClose, onImport, gener
         (surveys || []).forEach(s2 => { if (s2.id !== sv.id && cmp(s2.country) === cmp(country)) taken.add(String(s2.period)); });
         let period = year;
         for (let n = 2; taken.has(period); n++) period = `${year}·${n}`;
-        await updateSurvey(sv.id, { country, period, sendDate: eDate, expected });
+        await updateSurvey(sv.id, { country, period, sendDate: eDate });
         setEditing(null); await reload();
       } else {
-        await updateSurvey(sv.id, { sendDate: eDate, expected });
+        await updateSurvey(sv.id, { sendDate: eDate });
         setEditing(null); await reload();
       }
     } catch (e) { setErr(e.message); }
@@ -2774,11 +2741,6 @@ function StaffSurveysModal({ countries = [], runs = [], onClose, onImport, gener
                   )}
                   <input type="date" value={eDate} onChange={e => setEDate(e.target.value)}
                     style={{ fontSize:13, padding:"7px 10px", border:"1px solid #E2D3C2", borderRadius:8, fontFamily:"inherit" }} />
-                  <label style={{ fontSize:12, color:"#7A6F63", display:"flex", alignItems:"center", gap:6 }}>
-                    Staff who should take it:
-                    <input type="number" min="0" value={eExpected} onChange={e => setEExpected(e.target.value)} placeholder="?"
-                      style={{ fontSize:13, padding:"7px 10px", border:"1px solid #E2D3C2", borderRadius:8, width:64 }} />
-                  </label>
                   <button onClick={() => saveEdit(sv)} disabled={busy}
                     style={{ ...navBtn, fontSize:12, padding:"6px 13px" }}>{busy ? "Saving…" : "Save changes"}</button>
                   {(resps[sv.run] || []).length > 0 && (
@@ -6190,6 +6152,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
   const reportLang = languageForCountry(country);
   const [langOn, setLangOn] = useState(false);
   const [trBusy, setTrBusy] = useState(false);
+  const [trNotice, setTrNotice] = useState(false); // "takes about a minute" heads-up
   const [trMap, setTrMap] = useState(() => {
     try { return JSON.parse(localStorage.getItem(`pulse:tr:${languageForCountry(country)}`) || "{}"); } catch { return {}; }
   });
@@ -6296,7 +6259,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
               ❔ {tr("How scoring works")}
             </button>
             {reportLang && (
-              <button onClick={() => setLangOn(v => !v)}
+              <button onClick={() => setLangOn(v => { if (!v) setTrNotice(true); return !v; })}
                 style={{ fontSize:12, fontWeight:700, cursor:"pointer", borderRadius:16, padding:"6px 13px",
                   color: langOn ? "white" : "#5A4A3B",
                   background: langOn ? "#B96524" : "#FDFAF4",
@@ -6308,6 +6271,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
         </div>
       </div>
       {showScoringHelp && <ScoringHelpPanel onClose={() => setShowScoringHelp(false)} audience={prepMode ? "Country leaders" : "Department leaders"} />}
+      {trNotice && trBusy && langOn && <TranslationPatienceModal onClose={() => setTrNotice(false)} />}
 
       <div style={{ maxWidth:960, margin:"0 auto", padding: isMobile ? "24px 16px" : "40px 24px" }}>
 
@@ -7222,6 +7186,34 @@ function surveyFirstUnanswered(steps, ans) {
   return null;
 }
 
+// A gentle heads-up when someone flips to their language for the first time:
+// the translation is made fresh and takes about a minute, arriving piece by
+// piece. (Once made, it's remembered — so this only ever shows while work is
+// actually happening.) Kept in English on purpose: it shows before any
+// translation exists.
+function TranslationPatienceModal({ onClose }) {
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(44,38,33,0.45)", zIndex: 1200,
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ maxWidth: 430, background: "#fff", borderRadius: 14,
+        padding: "26px 26px 22px", boxShadow: "0 24px 60px rgba(44,38,33,.35)", textAlign: "center" }}>
+        <div style={{ fontSize: 34, marginBottom: 8 }}>🌐</div>
+        <div style={{ fontFamily: FONT_DISPLAY, fontSize: 20, fontWeight: 600, color: "#2C2621", marginBottom: 8 }}>
+          Translating for you…
+        </div>
+        <div style={{ fontSize: 13.5, color: "#5A4A3B", lineHeight: 1.65 }}>
+          The first time takes about a minute — the translation is being made fresh and appears piece by piece
+          as it's ready. Thank you for your patience! After this it's remembered, so next time is instant.
+        </div>
+        <button onClick={onClose} style={{ marginTop: 16, fontSize: 13, fontWeight: 700, cursor: "pointer",
+          borderRadius: 20, padding: "9px 18px", border: "1px solid transparent", background: "#E0863C", color: "#fff" }}>
+          OK — I'll wait ☺
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function StaffSurveyView({ token }) {
   const isMobile = useIsMobile();
   const [meta, setMeta] = useState(null);        // null loading | {run,country,period,status} | {error}
@@ -7283,6 +7275,7 @@ function StaffSurveyView({ token }) {
   // chunk into the page the moment it lands — so the screen flips within
   // seconds instead of waiting a minute for everything.
   const [trBusy, setTrBusy] = useState(false);
+  const [trNotice, setTrNotice] = useState(false); // "takes about a minute" heads-up
   const routedKey = surveySectionsFor(answers.d || {}).map(s => s.key).join(",");
   useEffect(() => {
     if (!langOn || !lang || !meta || !meta.country) return;
@@ -7480,7 +7473,7 @@ function StaffSurveyView({ token }) {
         {saveNote === "saved" && <span style={{ fontSize: 11.5, color: "#5C9A6D", fontWeight: 700 }}>{tr("✓ Saved")}</span>}
         {code && <span style={{ fontSize: 11.5, fontWeight: 800, color: "#B96524", background: "#FBEFE4", border: "1px solid #E0A56F", borderRadius: 6, padding: "3px 9px", letterSpacing: 1 }}>{code}</span>}
         {lang && (
-          <button onClick={() => setLangOn(v => !v)}
+          <button onClick={() => setLangOn(v => { if (!v) setTrNotice(true); return !v; })}
             style={{ fontSize: 12, fontWeight: 700, cursor: "pointer", borderRadius: 16, padding: "5px 12px",
               color: langOn ? "#fff" : "#5A4A3B", background: langOn ? "#B96524" : "#FDFAF4",
               border: `1px solid ${langOn ? "#B96524" : "#E2D3C2"}` }}>
@@ -7506,6 +7499,7 @@ function StaffSurveyView({ token }) {
       <style>{"@keyframes svFadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}"}</style>
       <div style={shell}>
         <Header />
+        {trNotice && trBusy && langOn && <TranslationPatienceModal onClose={() => setTrNotice(false)} />}
         {(stage === "flow" || stage === "review") && (() => {
           // The timeline: a filling bar, one dot per section, and a running count.
           const pos = stage === "review" ? 100 : (steps.length ? Math.round((step / steps.length) * 100) : 0);
