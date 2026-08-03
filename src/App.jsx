@@ -6105,12 +6105,144 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
   );
 }
 
+// ─── DASHBOARD PREVIEW ────────────────────────────────────────────────────────
+// "What this page grows into" — a friendly example shown over a country's
+// dashboard while it only holds one survey. Sample numbers, clearly labelled,
+// so a leader can picture the over-time story and how Department Health fills
+// in as yearly reports arrive. Auto-shows twice, then stays away (and there's
+// a "Don't show this again" box); reopen any time from the banner.
+const TRENDS_PREVIEW_KEY = "pulse:trendsPreviewSeen";
+const SAMPLE_TREND = [
+  { label: "Human Resources", color: "#5C9A6D", pts: [3.1, 3.3, 3.6, 3.8] },
+  { label: "Singles",         color: "#BE6650", pts: [2.4, 2.6, 2.9, 3.2] },
+  { label: "Marriages",       color: "#C08636", pts: [3.9, 3.7, 3.4, 3.6] },
+];
+const SAMPLE_HEALTH = [
+  { label: "Counseling",         years: [["Concern", 2.3], ["Watch", 2.8], ["Watch", 3.1], ["Healthy", 3.6]] },
+  { label: "JV Women",           years: [["Watch", 3.2], ["Watch", 3.3], ["Healthy", 3.7], ["Healthy", 3.8]] },
+  { label: "Language & Culture", years: [["Healthy", 3.8], ["Healthy", 3.9], ["Watch", 3.4], ["Watch", 3.4]] },
+];
+const SAMPLE_YEARS = [2026, 2027, 2028, 2029];
+function TrendsExampleModal({ country, onClose, onNever }) {
+  const [never, setNever] = useState(false);
+  const yFor = (v) => 150 - ((v - 1) / 4) * 130;
+  const xFor = (i) => 60 + i * 150;
+  const close = () => { if (never && onNever) onNever(); onClose(); };
+  return (
+    <div onClick={close} style={{ position:"fixed", inset:0, background:"rgba(44,38,33,0.5)", zIndex:1000,
+      overflowY:"auto", padding:"36px 14px 60px" }}>
+      <div onClick={e => e.stopPropagation()} style={{ maxWidth:640, margin:"0 auto", background:"#fff",
+        borderRadius:16, padding:"22px 24px", boxShadow:"0 24px 60px rgba(44,38,33,.35)" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
+          <span style={{ fontFamily:FONT_DISPLAY, fontSize:20, fontWeight:600, color:"#2C2621" }}>What this page grows into</span>
+          <button onClick={close} style={{ marginLeft:"auto", background:"none", border:"none", cursor:"pointer",
+            fontSize:19, color:"#7A6F63", lineHeight:1 }}>✕</button>
+        </div>
+        <div style={{ fontSize:13, color:"#5A4A3B", lineHeight:1.6, marginBottom:12 }}>
+          Right now {country ? `${country}'s` : "your"} dashboard holds one survey — the 2026 baseline. That's the
+          first chapter, not the whole story. Each yearly pulse adds a new point, and this page starts showing
+          movement: what's getting healthier, what's slipping, and where the care you're giving is landing.
+        </div>
+        <div style={{ display:"inline-block", fontSize:11, fontWeight:800, color:"#B96524", background:"#FBEFE4",
+          border:"1px solid #E0A56F", borderRadius:6, padding:"4px 10px", marginBottom:16, letterSpacing:.5 }}>
+          SAMPLE NUMBERS — not {country || "your"} data
+        </div>
+
+        <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5, marginBottom:8 }}>
+          Over time — how the trend lines will read
+        </div>
+        <div style={{ border:"1px solid #F4ECDD", borderRadius:12, padding:"10px 8px 4px", marginBottom:8, overflowX:"auto" }}>
+          <svg viewBox="0 0 560 175" style={{ width:"100%", minWidth:420, display:"block" }}>
+            {/* status bands */}
+            <rect x="30" y={yFor(5)} width="510" height={yFor(3.5) - yFor(5)} fill="#9CC4A4" opacity="0.13" />
+            <rect x="30" y={yFor(3.5)} width="510" height={yFor(2.5) - yFor(3.5)} fill="#E4B061" opacity="0.13" />
+            <rect x="30" y={yFor(2.5)} width="510" height={yFor(1) - yFor(2.5)} fill="#D98874" opacity="0.13" />
+            {[5, 3.5, 2.5, 1].map(v => (
+              <text key={v} x="26" y={yFor(v) + 4} textAnchor="end" fontSize="10" fill="#A89C8D">{v.toFixed(1)}</text>
+            ))}
+            {SAMPLE_YEARS.map((yr, i) => (
+              <text key={yr} x={xFor(i)} y="170" textAnchor="middle" fontSize="11" fill="#7A6F63" fontWeight="600">{yr}</text>
+            ))}
+            {SAMPLE_TREND.map(t => (
+              <g key={t.label}>
+                <polyline fill="none" stroke={t.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                  points={t.pts.map((v, i) => `${xFor(i)},${yFor(v)}`).join(" ")} />
+                {t.pts.map((v, i) => <circle key={i} cx={xFor(i)} cy={yFor(v)} r="4" fill={t.color} />)}
+              </g>
+            ))}
+          </svg>
+        </div>
+        <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:18 }}>
+          {SAMPLE_TREND.map(t => (
+            <span key={t.label} style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:11.5, color:"#5A4A3B" }}>
+              <span style={{ width:10, height:10, borderRadius:"50%", background:t.color }} />{t.label}
+            </span>
+          ))}
+        </div>
+
+        <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5, marginBottom:8 }}>
+          Department health — how it fills in year by year
+        </div>
+        <div style={{ border:"1px solid #F4ECDD", borderRadius:12, padding:"12px 14px", marginBottom:6 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"minmax(110px,1.2fr) repeat(4, 1fr)", gap:8, marginBottom:6 }}>
+            <span />
+            {SAMPLE_YEARS.map(yr => <span key={yr} style={{ fontSize:10.5, fontWeight:700, color:"#7A6F63", textAlign:"center" }}>{yr}</span>)}
+          </div>
+          {SAMPLE_HEALTH.map(row => (
+            <div key={row.label} style={{ display:"grid", gridTemplateColumns:"minmax(110px,1.2fr) repeat(4, 1fr)", gap:8, alignItems:"center", marginBottom:6 }}>
+              <span style={{ fontSize:12, fontWeight:650, color:"#2C2621" }}>{row.label}</span>
+              {row.years.map(([st, v], i) => (
+                <span key={i} style={{ fontSize:11, fontWeight:700, textAlign:"center", color:sc(st), background:sb(st),
+                  border:`1px solid ${sbd(st)}`, borderRadius:6, padding:"4px 2px", fontVariantNumeric:"tabular-nums" }}>{v.toFixed(1)}</span>
+              ))}
+            </div>
+          ))}
+          <div style={{ fontSize:11.5, color:"#7A6F63", lineHeight:1.55, marginTop:8 }}>
+            Watch Counseling in this sample: two hard years, steady attention, and by the fourth survey it's genuinely
+            healthy. That's the story this page is built to tell — and it starts with the baseline you have today.
+          </div>
+        </div>
+
+        <div style={{ display:"flex", alignItems:"center", gap:12, marginTop:14, flexWrap:"wrap" }}>
+          <label style={{ display:"flex", alignItems:"center", gap:7, fontSize:12.5, color:"#5A4A3B", cursor:"pointer" }}>
+            <input type="checkbox" checked={never} onChange={e => setNever(e.target.checked)} /> Don't show this again
+          </label>
+          <button onClick={close} style={{ ...navBtn, marginLeft:"auto", background:"#E0863C", color:"#fff", border:"1px solid transparent", fontWeight:700 }}>
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── DASHBOARD VIEW ───────────────────────────────────────────────────────────
 function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country, year, surveyData, refinements, setRefinements, openReport, lockCountry, isLeader = true, authUser, onSignOut }) {
   const isMobile = useIsMobile();
   // "How scoring works" — the same explainer the department leaders get, served
   // with country-leader-audience videos.
   const [showScoringHelp, setShowScoringHelp] = useState(false);
+  // First-visit example of what the trends become — auto-shows twice per device
+  // on a country page, then only by the banner button (or never, if they tick
+  // "Don't show this again").
+  const [showTrendsExample, setShowTrendsExample] = useState(false);
+  const effDashCountryEarly = lockCountry || dashCountry;
+  useEffect(() => {
+    if (!effDashCountryEarly || effDashCountryEarly === "all") return;
+    try {
+      const st = JSON.parse(localStorage.getItem(TRENDS_PREVIEW_KEY) || "{}");
+      if (st.never || (st.count || 0) >= 2) return;
+      localStorage.setItem(TRENDS_PREVIEW_KEY, JSON.stringify({ ...st, count: (st.count || 0) + 1 }));
+      setShowTrendsExample(true);
+    } catch {}
+    // eslint-disable-next-line
+  }, [effDashCountryEarly]);
+  const neverShowTrendsExample = () => {
+    try {
+      const st = JSON.parse(localStorage.getItem(TRENDS_PREVIEW_KEY) || "{}");
+      localStorage.setItem(TRENDS_PREVIEW_KEY, JSON.stringify({ ...st, never: true }));
+    } catch {}
+  };
   const countries = [...new Set(allRuns.map(r=>r.country))].sort();
   const DEPTS_ORDER = ["HR","LD","LC","MPD","Counseling","Women","Singles","Marriages","JVK"];
   // A country leader is locked to their country; everyone else uses the selector.
@@ -6143,11 +6275,21 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
         <div style={{ flex:1, fontFamily:FONT_DISPLAY, fontSize:18, color:"#2C2621", fontWeight:600 }}>
           {effDashCountry !== "all" ? `${effDashCountry} Pulse Report Dashboard` : "Country Leader Pulse Report Dashboard"}
         </div>
+        {effDashCountry !== "all" && (
+          <button onClick={() => setShowTrendsExample(true)}
+            style={{ ...navBtn, background:"white", border:"1px solid #ECE2D2", color:"#5C9A6D", fontWeight:700, fontSize:12, padding:"6px 12px" }}>
+            📈 What this will become
+          </button>
+        )}
         <button onClick={() => setShowScoringHelp(true)}
           style={{ ...navBtn, background:"white", border:"1px solid #ECE2D2", color:"#E0863C", fontWeight:700, fontSize:12, padding:"6px 12px" }}>
           ❔ How scoring works
         </button>
         {showScoringHelp && <ScoringHelpPanel onClose={() => setShowScoringHelp(false)} audience="Country leaders" />}
+        {showTrendsExample && (
+          <TrendsExampleModal country={effDashCountry !== "all" ? effDashCountry : ""}
+            onClose={() => setShowTrendsExample(false)} onNever={neverShowTrendsExample} />
+        )}
         {!lockCountry && (
           <select value={dashCountry} onChange={e=>setDashCountry(e.target.value)}
             style={{ background:"#F6F1E8", border:"1px solid #ECE2D2", borderRadius:6, color:"#2C2621", padding:"6px 12px", fontSize:13 }}>
