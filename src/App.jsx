@@ -7269,7 +7269,9 @@ function StaffSurveyView({ token }) {
 
   // ── styling ──
   const page = { minHeight: "100vh", background: "#F6F1E8", fontFamily: "'Inter',system-ui,sans-serif", color: "#2C2621" };
-  const shell = { maxWidth: 640, margin: "0 auto", padding: isMobile ? "22px 16px 60px" : "36px 20px 80px" };
+  // Phones get a snug column; computers get a wide, unhurried window with the
+  // answers laid out side by side.
+  const shell = { maxWidth: isMobile ? 640 : 900, margin: "0 auto", padding: isMobile ? "22px 16px 60px" : "36px 24px 80px" };
   const cardS = { background: "#fff", border: "1px solid #ECE2D2", borderRadius: 16, padding: isMobile ? "20px 18px" : "26px 26px", boxShadow: "0 2px 8px rgba(124,111,224,0.08)" };
   const big = { fontFamily: FONT_DISPLAY, fontSize: isMobile ? 24 : 28, fontWeight: 600, letterSpacing: -0.3 };
   const btn = { fontSize: 14.5, fontWeight: 700, cursor: "pointer", borderRadius: 24, padding: "12px 22px", border: "1px solid transparent", background: "#E0863C", color: "#fff" };
@@ -7397,10 +7399,13 @@ function StaffSurveyView({ token }) {
           const fade = { animation: "svFadeUp .45s ease both" };
           const kicker = { fontSize: 11.5, fontWeight: 700, color: "#7A6F63", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 };
           const qTitle = { fontFamily: FONT_DISPLAY, fontSize: isMobile ? 20 : 23, fontWeight: 600, lineHeight: 1.4, marginBottom: 18 };
-          const stack = { display: "flex", flexDirection: "column", gap: 8 };
+          // Answers stack on a phone; on a wide screen they sit in one row,
+          // side by side, which reads gentler across a big window.
+          const stack = { display: "flex", flexDirection: isMobile ? "column" : "row", gap: 8, flexWrap: "wrap" };
           const bigChoice = (on) => ({ fontSize: 14.5, fontWeight: 650, cursor: "pointer", borderRadius: 12, padding: "13px 16px",
-            textAlign: "left", color: on ? "#fff" : "#5A4A3B", background: on ? "#E0863C" : "#FDFAF4",
-            border: `1.5px solid ${on ? "#E0863C" : "#E2D3C2"}`, transition: "background .15s,color .15s,border .15s", fontFamily: "inherit" });
+            textAlign: isMobile ? "left" : "center", flex: isMobile ? undefined : "1 1 0", minWidth: isMobile ? undefined : 120,
+            color: on ? "#fff" : "#5A4A3B", background: on ? "#E0863C" : "#FDFAF4",
+            border: `1.5px solid ${on ? "#E0863C" : "#E2D3C2"}`, transition: "background .15s,color .15s,border .15s", fontFamily: "inherit", lineHeight: 1.3 });
           const BackBtn = ({ mt = 18 }) => step > 0 ? (
             <button onClick={back} style={{ background: "none", border: "none", cursor: "pointer", color: "#A89C8D",
               fontSize: 12.5, fontWeight: 700, padding: 0, marginTop: mt }}>← {tr("Back")}</button>
