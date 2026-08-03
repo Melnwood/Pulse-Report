@@ -2832,7 +2832,7 @@ About your answers: you'll sign in with your email so we know who has finished, 
 
 Take it here: ${link}
 
-It works in your own language too — look for the language button at the top. Please give it some unhurried time; honest answers are what make it worth doing.
+It works in your own language too — look for the language button at the top. And wherever a question asks you to write something, feel free to write in your own language; it gets translated on our side. Please give it some unhurried time; honest answers are what make it worth doing.
 
 Thank you — your voice is a gift to the whole team.
 
