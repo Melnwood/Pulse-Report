@@ -602,6 +602,7 @@ const surveyFromRec = (r) => ({
   period: r.fields["Period"] || "",
   token: r.fields["Token"] || "",
   status: r.fields["Status"]?.name || r.fields["Status"] || "Closed",
+  sendDate: r.fields["Send Date"] || null,
   created: r.fields["Created"] || null,
 });
 export async function loadSurveys() {
@@ -609,7 +610,7 @@ export async function loadSurveys() {
   return (res.records || []).map(surveyFromRec)
     .sort((a, b) => new Date(b.created || 0) - new Date(a.created || 0));
 }
-export async function createSurvey({ country, period }) {
+export async function createSurvey({ country, period, sendDate }) {
   const bytes = new Uint8Array(16);
   (window.crypto || {}).getRandomValues ? window.crypto.getRandomValues(bytes)
     : bytes.forEach((_, i) => { bytes[i] = Math.floor(Math.random() * 256); });
@@ -618,6 +619,7 @@ export async function createSurvey({ country, period }) {
     "Run": `${country} ${period}`, "Country": country, "Period": String(period),
     "Token": token, "Status": "Open", "Created": new Date().toISOString(),
   };
+  if (sendDate) fields["Send Date"] = sendDate; // "YYYY-MM-DD" from the date picker
   const res = await call({ action: "create", table: "surveys", records: [{ fields }] });
   return surveyFromRec(res.records[0]);
 }

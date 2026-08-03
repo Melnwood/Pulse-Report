@@ -1,0 +1,10 @@
+# Dependencies and build output — recreated by `npm install` / `npm run build`.
+# Netlify builds from source, so neither belongs in the repo.
+node_modules/
+build/
+
+# Local environment and editor noise
+.env
+.env.local
+.DS_Store
+npm-debug.log*

@@ -24,6 +24,24 @@ const SB_KEY = {
 };
 const getSurveyBasics = (deptKey) => SURVEY_BASICS[SB_KEY[deptKey] || String(deptKey||"").toLowerCase()] || [];
 
+// Every JV country, so country dropdowns (survey links, country leaders, invite
+// email) aren't limited to countries that already have a pulse report in the
+// system. Merged with whatever names runs/leaders already use — the name
+// already in use wins on spelling, so nothing shows up twice.
+const JV_COUNTRIES = [
+  "Albania", "Bulgaria", "Croatia", "Czech Republic", "Estonia", "Germany",
+  "Hungary", "Latvia", "Lithuania", "Moldova", "Montenegro", "North Macedonia",
+  "Poland", "Romania", "Serbia", "Slovakia", "Slovenia", "Ukraine",
+];
+const mergeCountries = (...lists) => {
+  const seen = new Map();
+  lists.flat().forEach(c => {
+    const k = String(c || "").trim().toLowerCase();
+    if (k && !seen.has(k)) seen.set(k, String(c).trim());
+  });
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+};
+
 // Normalize question text for matching: unify apostrophes/quotes, collapse spaces,
 // strip punctuation. Makes Survey Basics matching robust to curly-vs-straight quotes
 // and tiny wording differences that were hiding the Survey Basics + Edit button.
@@ -1795,7 +1813,7 @@ export default function App() {
 
   if (view === "leaders" && effIsAdmin) return wrap(
     <CountryLeadersView setView={setView}
-      countries={[...new Set(allRuns.map(r => r.country))].filter(Boolean).sort()}
+      countries={mergeCountries(allRuns.map(r => r.country), JV_COUNTRIES)}
       onChanged={reloadCountryLeaders} />
   );
 
@@ -2360,14 +2378,15 @@ function RespondentSurveyModal({ resp, onClose }) {
   );
 }
 
-function StaffSurveysModal({ countries = [], onClose, onImport, generating }) {
+function StaffSurveysModal({ countries = [], runs = [], onClose, onImport, generating }) {
   const [surveys, setSurveys] = useState(null);
   const [resps, setResps] = useState({});        // run -> responses
   const [expanded, setExpanded] = useState(null); // run
   const [viewing, setViewing] = useState(null);   // respondent
   const [creating, setCreating] = useState(false);
   const [newCountry, setNewCountry] = useState(countries[0] || "");
-  const [newPeriod, setNewPeriod] = useState(String(new Date().getFullYear()));
+  const [otherCountry, setOtherCountry] = useState(""); // used when "Somewhere else…" is picked
+  const [newDate, setNewDate] = useState(new Date().toISOString().slice(0, 10)); // send-out day
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [copied, setCopied] = useState("");
@@ -2386,9 +2405,19 @@ function StaffSurveysModal({ countries = [], onClose, onImport, generating }) {
     if (next && !resps[next]) loadResps(next);
   };
   const create = async () => {
-    if (!newCountry.trim() || !newPeriod.trim()) return;
+    const country = (newCountry === "__other__" ? otherCountry : newCountry).trim();
+    if (!country || !newDate) return;
+    // The pulse period comes from the send-out date's year. If that country
+    // already has a report or survey for the year, this becomes "2026·2", "·3"…
+    const cmp = (s) => String(s || "").trim().toLowerCase();
+    const year = newDate.slice(0, 4);
+    const taken = new Set();
+    runs.forEach(r => { if (cmp(r.country) === cmp(country)) taken.add(String(r.year)); });
+    (surveys || []).forEach(sv => { if (cmp(sv.country) === cmp(country)) taken.add(String(sv.period)); });
+    let period = year;
+    for (let n = 2; taken.has(period); n++) period = `${year}·${n}`;
     setBusy(true); setErr("");
-    try { await createSurvey({ country: newCountry.trim(), period: newPeriod.trim() }); setCreating(false); await reload(); }
+    try { await createSurvey({ country, period, sendDate: newDate }); setCreating(false); await reload(); }
     catch (e) { setErr(e.message); }
     setBusy(false);
   };
@@ -2429,13 +2458,20 @@ function StaffSurveysModal({ countries = [], onClose, onImport, generating }) {
             <select value={newCountry} onChange={e => setNewCountry(e.target.value)}
               style={{ fontSize:13, padding:"8px 10px", border:"1px solid #E2D3C2", borderRadius:8, background:"#fff" }}>
               {countries.map(c => <option key={c} value={c}>{c}</option>)}
+              <option value="__other__">Somewhere else…</option>
             </select>
-            <input value={newPeriod} onChange={e => setNewPeriod(e.target.value)} placeholder="2026 or 2026·2"
-              style={{ fontSize:13, padding:"8px 10px", border:"1px solid #E2D3C2", borderRadius:8, width:110 }} />
+            {newCountry === "__other__" && (
+              <input value={otherCountry} onChange={e => setOtherCountry(e.target.value)} placeholder="Country name"
+                style={{ fontSize:13, padding:"8px 10px", border:"1px solid #E2D3C2", borderRadius:8, width:140 }} />
+            )}
+            <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
+              style={{ fontSize:13, padding:"8px 10px", border:"1px solid #E2D3C2", borderRadius:8, fontFamily:"inherit" }} />
             <button onClick={create} disabled={busy} style={{ ...navBtn, fontSize:12, padding:"7px 14px" }}>
               {busy ? "Creating…" : "Create link"}
             </button>
-            <span style={{ fontSize:11, color:"#A89C8D" }}>Tip: a second pulse in the same year is "2026·2".</span>
+            <span style={{ fontSize:11, color:"#A89C8D", flexBasis:"100%" }}>
+              Pick the day the survey goes out. The report is named for that year — a second pulse in the same year becomes "·2" automatically.
+            </span>
           </div>
         )}
 
@@ -2457,6 +2493,11 @@ function StaffSurveysModal({ countries = [], onClose, onImport, generating }) {
                   color: sv.status === "Open" ? "#5C9A6D" : "#7A6F63",
                   background: sv.status === "Open" ? "#E9F1E9" : "#F1EAE1",
                   border: `1px solid ${sv.status === "Open" ? "#C7E0CB" : "#E4D8C8"}` }}>{sv.status}</span>
+                {sv.sendDate && (
+                  <span style={{ fontSize:11.5, color:"#7A6F63" }}>
+                    goes out {new Date(sv.sendDate + "T00:00:00").toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" })}
+                  </span>
+                )}
                 {list && <span style={{ fontSize:12, color:"#7A6F63" }}>{done} completed · {list.length - done} in progress</span>}
                 <span style={{ marginLeft:"auto", display:"flex", gap:8, flexWrap:"wrap" }}>
                   <button onClick={() => copyLink(sv)} style={{ ...navBtn, fontSize:11.5, padding:"5px 11px" }}>
@@ -3189,14 +3230,15 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
       )}
       {surveysOpen && (
         <StaffSurveysModal
-          countries={[...new Set([...briefAllCountries, ...Object.values(countryLeaders).map(l => l.country).filter(Boolean)])].sort()}
+          countries={mergeCountries(briefAllCountries, Object.values(countryLeaders).map(l => l.country), JV_COUNTRIES)}
+          runs={allRuns}
           onClose={() => setSurveysOpen(false)}
           onImport={(sv) => { setSurveysOpen(false); onImportSurveyResponses && onImportSurveyResponses(sv); }}
           generating={generating} />
       )}
       {inviteOpen && (
         <InviteLeaderModal
-          countries={[...new Set([...briefAllCountries, ...Object.values(countryLeaders).map(l => l.country).filter(Boolean)])].sort()}
+          countries={mergeCountries(briefAllCountries, Object.values(countryLeaders).map(l => l.country), JV_COUNTRIES)}
           leaders={countryLeaders}
           onClose={() => setInviteOpen(false)}
           onManageLeaders={() => { setInviteOpen(false); setView("leaders"); }} />
@@ -6781,10 +6823,42 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
 // No login. Identity = the survey link's token + a personal resume code the
 // person gets when they start (kept on this device too, so coming back on the
 // same phone just resumes). Answers autosave as they move between sections.
+// The survey is one gentle question at a time: a flat list of steps built from
+// the routing answers — 4 demographic questions, then per section a breather
+// card, its questions, and an optional open comment. Answering fades the next
+// step up; a timeline shows how far along they are.
+function surveyStepsFor(ans) {
+  const secs = surveySectionsFor((ans && ans.d) || {});
+  const steps = [
+    { type: "demo", k: "culture" }, { type: "demo", k: "marital" },
+    { type: "demo", k: "kids" }, { type: "demo", k: "woman" },
+  ];
+  secs.forEach((dept, si) => {
+    steps.push({ type: "section", dept, si, count: secs.length });
+    dept.questions.forEach(qq => steps.push({ type: "q", dept, qq, si }));
+    steps.push({ type: "open", dept, si });
+  });
+  return steps;
+}
+// First step still waiting on an answer — null when every question is answered.
+function surveyFirstUnanswered(steps, ans) {
+  const d = (ans && ans.d) || {}, a = (ans && ans.a) || {};
+  for (let i = 0; i < steps.length; i++) {
+    const st = steps[i];
+    if (st.type === "demo") {
+      const done = st.k === "culture" ? d.culture != null : st.k === "woman" ? d.woman !== undefined : !!d[st.k];
+      if (!done) return i;
+    }
+    if (st.type === "q" && a[st.qq.col] == null) return i;
+  }
+  return null;
+}
+
 function StaffSurveyView({ token }) {
   const isMobile = useIsMobile();
   const [meta, setMeta] = useState(null);        // null loading | {run,country,period,status} | {error}
-  const [stage, setStage] = useState("welcome"); // welcome | code | resume | demo | <sectionIdx> | review | done
+  const [stage, setStage] = useState("welcome"); // welcome | code | resume | flow | review | done | closed
+  const [step, setStep] = useState(0);           // index into surveyStepsFor(answers) while stage === "flow"
   const [code, setCode] = useState("");
   const [codeInput, setCodeInput] = useState("");
   const [answers, setAnswers] = useState({ d: {}, a: {}, open: {} });
@@ -6815,45 +6889,56 @@ function StaffSurveyView({ token }) {
     "What is your marital status?", "Single", "Married", "Prefer not to say",
     "Do you have children living in your household?", "Yes", "No",
     "Are you a woman?",
-    "Section", "of", "Next section", "Back",
+    "Section", "of", "Question", "Next", "Back",
+    "short statements — tap the answer that fits.",
     "Anything else you'd like to share? (optional)",
+    "Optional — share anything you'd like in your own words.",
     "Almost done", "Look over anything you'd like, then send it in. You can still come back with your code and change answers until the survey closes.",
     "Submit my survey", "answered",
+    "still need an answer.", "Take me to the first one", "Please answer every question before sending it in.",
+    "Translating for you…",
     "Thank you — your voice is in.", "Your answers are saved. If you'd like to revisit them before the survey closes, use your code:",
     "This survey is closed.", "Thanks for your willingness — this pulse has finished collecting answers. Watch for the next one!",
     "Saving…", "✓ Saved",
   ];
+  // Translate in priority order (UI + answer labels first, then the sections
+  // this person will actually see), run the chunks in PARALLEL, and merge each
+  // chunk into the page the moment it lands — so the screen flips within
+  // seconds instead of waiting a minute for everything.
+  const [trBusy, setTrBusy] = useState(false);
+  const routedKey = surveySectionsFor(answers.d || {}).map(s => s.key).join(",");
   useEffect(() => {
     if (!langOn || !lang || !meta || !meta.country) return;
-    const wanted = new Set(SURVEY_UI);
-    wanted.add(LIKERT[0]); wanted.add(LIKERT[1]); wanted.add(LIKERT[2]); wanted.add(LIKERT[3]); wanted.add(LIKERT[4]);
-    for (const dept of DEPARTMENTS) {
-      wanted.add(dept.label); wanted.add(dept.openQLabel);
-      for (const qq of dept.questions) wanted.add(qq.en);
+    const routed = surveySectionsFor(answersRef.current.d || {});
+    const depts = routed.length ? routed : DEPARTMENTS;
+    const wanted = [...SURVEY_UI, ...LIKERT];
+    for (const dept of depts) {
+      wanted.push(dept.label, dept.openQLabel);
+      for (const qq of dept.questions) wanted.push(qq.en);
     }
-    const missing = [...wanted].filter(x => x && !trMap[x]);
+    const missing = [...new Set(wanted)].filter(x => x && !trMap[x]);
     if (!missing.length) return;
     let alive = true;
-    (async () => {
-      try {
-        const out = {};
-        for (let i = 0; i < missing.length; i += 35) {
-          const chunk = missing.slice(i, i + 35);
-          const trs = await translateBatch(chunk, lang);
-          if (!alive) return;
-          chunk.forEach((x, j) => { if (trs[j]) out[x] = trs[j]; });
-        }
+    setTrBusy(true);
+    const chunks = [];
+    for (let i = 0; i < missing.length; i += 35) chunks.push(missing.slice(i, i + 35));
+    let pending = chunks.length;
+    chunks.forEach(chunk => {
+      translateBatch(chunk, lang).then(trs => {
         if (!alive) return;
+        const out = {};
+        chunk.forEach((x, j) => { if (trs[j]) out[x] = trs[j]; });
         setTrMap(prev => {
           const next = { ...prev, ...out };
           try { localStorage.setItem(`pulse:tr:${lang}`, JSON.stringify(next)); } catch {}
           return next;
         });
-      } catch (e) { console.warn("Survey translation failed:", e.message); }
-    })();
-    return () => { alive = false; };
+      }).catch(e => console.warn("Survey translation failed:", e.message))
+        .finally(() => { if (alive && --pending === 0) setTrBusy(false); });
+    });
+    return () => { alive = false; setTrBusy(false); };
     // eslint-disable-next-line
-  }, [langOn, lang, meta && meta.country]);
+  }, [langOn, lang, meta && meta.country, routedKey]);
 
   // Load the survey's identity; auto-resume if this device already has a code.
   useEffect(() => {
@@ -6871,9 +6956,15 @@ function StaffSurveyView({ token }) {
             const r = await surveyApi({ action: "resume", token, code: saved.code });
             if (!alive) return;
             setCode(r.code);
-            setAnswers({ d: {}, a: {}, open: {}, ...(r.answers || {}) });
+            const a = { d: {}, a: {}, open: {}, ...(r.answers || {}) };
+            setAnswers(a);
             if (r.language && r.language !== "English") setLangOn(true);
-            setStage(r.status === "Completed" ? "done" : (r.answers && r.answers.d && r.answers.d.culture != null ? 0 : "demo"));
+            if (r.status === "Completed") setStage("done");
+            else {
+              const steps = surveyStepsFor(a);
+              const idx = surveyFirstUnanswered(steps, a);
+              if (idx === null) setStage("review"); else { setStep(idx); setStage("flow"); }
+            }
           } catch { /* stale device code — start fresh */ }
         }
       } catch (e) { if (alive) setMeta({ error: e.message }); }
@@ -6909,9 +7000,15 @@ function StaffSurveyView({ token }) {
       const r = await surveyApi({ action: "resume", token, code: codeInput });
       setCode(r.code);
       try { localStorage.setItem(`pulse:survey:${token}`, JSON.stringify({ code: r.code })); } catch {}
-      setAnswers({ d: {}, a: {}, open: {}, ...(r.answers || {}) });
+      const a = { d: {}, a: {}, open: {}, ...(r.answers || {}) };
+      setAnswers(a);
       if (r.language && r.language !== "English") setLangOn(true);
-      setStage(r.status === "Completed" ? "done" : (r.answers && r.answers.d && r.answers.d.culture != null ? 0 : "demo"));
+      if (r.status === "Completed") setStage("done");
+      else {
+        const steps = surveyStepsFor(a);
+        const idx = surveyFirstUnanswered(steps, a);
+        if (idx === null) setStage("review"); else { setStep(idx); setStage("flow"); }
+      }
     } catch (e) { setErr(e.message); }
     setBusy(false);
   };
@@ -6923,6 +7020,39 @@ function StaffSurveyView({ token }) {
   const setD = (k, v) => setAnswers(prev => ({ ...prev, d: { ...prev.d, [k]: v } }));
   const setA = (col, v) => setAnswers(prev => ({ ...prev, a: { ...prev.a, [col]: v } }));
   const setOpen = (col, v) => setAnswers(prev => ({ ...prev, open: { ...prev.open, [col]: v } }));
+
+  // One step at a time. Answering auto-advances after a beat (the tap needs a
+  // moment to show), through refs so the timer always sees fresh state — the
+  // step list itself GROWS when a routing answer adds sections.
+  const steps = surveyStepsFor(answers);
+  const stepsRef = useRef(steps); stepsRef.current = steps;
+  const stepRef = useRef(step); stepRef.current = step;
+  const advTimer = useRef(null);
+  useEffect(() => () => clearTimeout(advTimer.current), []);
+  const advance = () => {
+    const s = stepRef.current, len = stepsRef.current.length;
+    if (s + 1 >= len) setStage("review"); else setStep(s + 1);
+    save();
+    try { window.scrollTo({ top: 0 }); } catch {}
+  };
+  const answerThenAdvance = (apply) => {
+    apply();
+    clearTimeout(advTimer.current);
+    advTimer.current = setTimeout(advance, 320);
+  };
+  const back = () => {
+    const s = stepRef.current;
+    if (s > 0) setStep(s - 1);
+    try { window.scrollTo({ top: 0 }); } catch {}
+  };
+  const jumpToSection = (si) => {
+    const idx = stepsRef.current.findIndex(st => st.type === "section" && st.si === si);
+    if (idx >= 0) { setStep(idx); setStage("flow"); }
+  };
+  const jumpToFirstUnanswered = () => {
+    const idx = surveyFirstUnanswered(stepsRef.current, answersRef.current);
+    if (idx !== null) { setStep(idx); setStage("flow"); }
+  };
 
   const goTo = (next) => { setStage(next); save(); try { window.scrollTo({ top: 0 }); } catch {} };
   const submit = async () => {
@@ -6952,6 +7082,7 @@ function StaffSurveyView({ token }) {
         <div style={{ fontFamily: FONT_DISPLAY, fontSize: 18, fontWeight: 600 }}>{meta && meta.country ? `${meta.country} · ` : ""}{tr("Staff Pulse Survey")}</div>
       </div>
       <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+        {trBusy && <span style={{ fontSize: 11.5, color: "#7A6F63" }}>{tr("Translating for you…")}</span>}
         {saveNote === "saving" && <span style={{ fontSize: 11.5, color: "#7A6F63" }}>{tr("Saving…")}</span>}
         {saveNote === "saved" && <span style={{ fontSize: 11.5, color: "#5C9A6D", fontWeight: 700 }}>{tr("✓ Saved")}</span>}
         {code && <span style={{ fontSize: 11.5, fontWeight: 800, color: "#B96524", background: "#FBEFE4", border: "1px solid #E0A56F", borderRadius: 6, padding: "3px 9px", letterSpacing: 1 }}>{code}</span>}
@@ -6977,17 +7108,38 @@ function StaffSurveyView({ token }) {
     </div></div></div>
   );
 
-  const progress = totalQs > 0 ? Math.round((answeredQs / totalQs) * 100) : 0;
-
   return (
     <div style={page}>
+      <style>{"@keyframes svFadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}"}</style>
       <div style={shell}>
         <Header />
-        {typeof stage === "number" || stage === "review" ? (
-          <div style={{ height: 8, background: "#EBDECB", borderRadius: 5, overflow: "hidden", marginBottom: 16 }}>
-            <div style={{ width: `${progress}%`, height: "100%", background: "#5C9A6D", transition: "width .3s" }} />
-          </div>
-        ) : null}
+        {(stage === "flow" || stage === "review") && (() => {
+          // The timeline: a filling bar, one dot per section, and a running count.
+          const pos = stage === "review" ? 100 : (steps.length ? Math.round((step / steps.length) * 100) : 0);
+          const cur = steps[Math.min(step, steps.length - 1)] || {};
+          return (
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ height: 6, background: "#EBDECB", borderRadius: 4, overflow: "hidden" }}>
+                <div style={{ width: `${pos}%`, height: "100%", background: "#5C9A6D", transition: "width .45s ease" }} />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+                <span style={{ display: "flex", gap: 5, alignItems: "center" }}>
+                  {sections.map((dept, i) => {
+                    const done = dept.questions.every(qq => (answers.a || {})[qq.col] != null);
+                    const here = stage === "flow" && cur.si === i;
+                    return <span key={dept.key} title={tr(dept.label)}
+                      style={{ width: here ? 11 : 8, height: here ? 11 : 8, borderRadius: "50%",
+                        background: here ? "#E0863C" : done ? "#5C9A6D" : "#EBDECB",
+                        border: here ? "2px solid #F3C9A2" : "none", transition: "all .3s" }} />;
+                  })}
+                </span>
+                <span style={{ fontSize: 11.5, color: "#7A6F63", marginLeft: "auto", fontWeight: 600 }}>
+                  {answeredQs} {tr("of")} {totalQs} {tr("answered")}
+                </span>
+              </div>
+            </div>
+          );
+        })()}
 
         {stage === "closed" && (
           <div style={{ ...cardS, textAlign: "center" }}>
@@ -7033,92 +7185,106 @@ function StaffSurveyView({ token }) {
             <div style={{ fontSize: 13.5, color: "#5A4A3B", lineHeight: 1.65, maxWidth: 440, margin: "0 auto 20px" }}>
               {tr("Write it down or take a photo — it's the only way back into your answers if you switch devices. On this device we'll remember it for you.")}
             </div>
-            <button onClick={() => goTo("demo")} style={btn}>{tr("Continue")}</button>
+            <button onClick={() => { setStep(0); goTo("flow"); }} style={btn}>{tr("Continue")}</button>
           </div>
         )}
 
-        {stage === "demo" && (
-          <div style={cardS}>
-            <div style={big}>{tr("A few quick questions first")}</div>
-            <div style={{ fontSize: 13.5, color: "#7A6F63", margin: "8px 0 18px", lineHeight: 1.6 }}>
-              {tr("These only decide which sections you'll see — they're stored with your answers, never your name.")}
-            </div>
-            {[{
-              label: tr("Are you serving cross-culturally (living outside your home culture)?"),
-              opts: [[tr("Yes — I serve outside my home culture"), () => setD("culture", 1), answers.d.culture === 1],
-                     [tr("No — I serve in my home culture"), () => setD("culture", 2), answers.d.culture === 2]],
-            }, {
-              label: tr("What is your marital status?"),
-              opts: [[tr("Single"), () => setD("marital", "Single"), answers.d.marital === "Single"],
-                     [tr("Married"), () => setD("marital", "Married"), answers.d.marital === "Married"],
-                     [tr("Prefer not to say"), () => setD("marital", "None"), answers.d.marital === "None"]],
-            }, {
-              label: tr("Do you have children living in your household?"),
-              opts: [[tr("Yes"), () => setD("kids", "Yes"), answers.d.kids === "Yes"],
-                     [tr("No"), () => setD("kids", "No"), answers.d.kids === "No"]],
-            }, {
-              label: tr("Are you a woman?"),
-              opts: [[tr("Yes"), () => setD("woman", true), answers.d.woman === true],
-                     [tr("No"), () => setD("woman", false), answers.d.woman === false]],
-            }].map((qd, i) => (
-              <div key={i} style={{ marginBottom: 18 }}>
-                <div style={{ fontSize: 14.5, fontWeight: 650, marginBottom: 9, lineHeight: 1.5 }}>{qd.label}</div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {qd.opts.map(([label, on, active], oi) => (
-                    <button key={oi} onClick={on} style={choice(active)}>{label}</button>
+        {stage === "flow" && (() => {
+          const cur = steps[Math.min(step, steps.length - 1)];
+          if (!cur) return null;
+          const fade = { animation: "svFadeUp .45s ease both" };
+          const kicker = { fontSize: 11.5, fontWeight: 700, color: "#7A6F63", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 };
+          const qTitle = { fontFamily: FONT_DISPLAY, fontSize: isMobile ? 20 : 23, fontWeight: 600, lineHeight: 1.4, marginBottom: 18 };
+          const stack = { display: "flex", flexDirection: "column", gap: 8 };
+          const bigChoice = (on) => ({ fontSize: 14.5, fontWeight: 650, cursor: "pointer", borderRadius: 12, padding: "13px 16px",
+            textAlign: "left", color: on ? "#fff" : "#5A4A3B", background: on ? "#E0863C" : "#FDFAF4",
+            border: `1.5px solid ${on ? "#E0863C" : "#E2D3C2"}`, transition: "background .15s,color .15s,border .15s", fontFamily: "inherit" });
+          const BackBtn = ({ mt = 18 }) => step > 0 ? (
+            <button onClick={back} style={{ background: "none", border: "none", cursor: "pointer", color: "#A89C8D",
+              fontSize: 12.5, fontWeight: 700, padding: 0, marginTop: mt }}>← {tr("Back")}</button>
+          ) : null;
+
+          if (cur.type === "demo") {
+            const DEMO_DEFS = {
+              culture: { label: "Are you serving cross-culturally (living outside your home culture)?",
+                opts: [["Yes — I serve outside my home culture", () => setD("culture", 1), answers.d.culture === 1],
+                       ["No — I serve in my home culture", () => setD("culture", 2), answers.d.culture === 2]] },
+              marital: { label: "What is your marital status?",
+                opts: [["Single", () => setD("marital", "Single"), answers.d.marital === "Single"],
+                       ["Married", () => setD("marital", "Married"), answers.d.marital === "Married"],
+                       ["Prefer not to say", () => setD("marital", "None"), answers.d.marital === "None"]] },
+              kids: { label: "Do you have children living in your household?",
+                opts: [["Yes", () => setD("kids", "Yes"), answers.d.kids === "Yes"],
+                       ["No", () => setD("kids", "No"), answers.d.kids === "No"]] },
+              woman: { label: "Are you a woman?",
+                opts: [["Yes", () => setD("woman", true), answers.d.woman === true],
+                       ["No", () => setD("woman", false), answers.d.woman === false]] },
+            };
+            const qd = DEMO_DEFS[cur.k];
+            return (
+              <div key={`d-${cur.k}`} style={{ ...cardS, ...fade }}>
+                <div style={kicker}>{tr("A few quick questions first")}</div>
+                <div style={qTitle}>{tr(qd.label)}</div>
+                <div style={stack}>
+                  {qd.opts.map(([label, apply, on], oi) => (
+                    <button key={oi} onClick={() => answerThenAdvance(apply)} style={bigChoice(on)}>{tr(label)}</button>
                   ))}
                 </div>
-              </div>
-            ))}
-            <button onClick={() => goTo(0)} style={{ ...btn, opacity: (answers.d.culture != null && answers.d.marital && answers.d.kids && answers.d.woman !== undefined) ? 1 : 0.45 }}
-              disabled={!(answers.d.culture != null && answers.d.marital && answers.d.kids && answers.d.woman !== undefined)}>
-              {tr("Continue")}
-            </button>
-          </div>
-        )}
-
-        {typeof stage === "number" && sections[stage] && (() => {
-          const dept = sections[stage];
-          return (
-            <div style={cardS}>
-              <div style={{ fontSize: 11.5, fontWeight: 700, color: "#7A6F63", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>
-                {tr("Section")} {stage + 1} {tr("of")} {sections.length}
-              </div>
-              <div style={big}>{tr(dept.label)}</div>
-              <div style={{ marginTop: 16 }}>
-                {dept.questions.map(qq => (
-                  <div key={qq.col} style={{ marginBottom: 20, paddingBottom: 16, borderBottom: "1px solid #F6F1E8" }}>
-                    <div style={{ fontSize: 14.5, lineHeight: 1.55, marginBottom: 10 }}>{tr(qq.en)}</div>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {[1, 2, 3, 4, 5].map(v => {
-                        const on = (answers.a || {})[qq.col] === v;
-                        return (
-                          <button key={v} onClick={() => setA(qq.col, v)}
-                            title={LIKERT[v - 1]}
-                            style={{ flex: isMobile ? "1 1 30%" : 1, minWidth: 86, fontSize: 12, fontWeight: 650, cursor: "pointer",
-                              borderRadius: 10, padding: "9px 6px", lineHeight: 1.25,
-                              color: on ? "#fff" : "#5A4A3B", background: on ? "#E0863C" : "#FDFAF4",
-                              border: `1px solid ${on ? "#E0863C" : "#E2D3C2"}` }}>
-                            {tr(LIKERT[v - 1])}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-                <div style={{ marginBottom: 6 }}>
-                  <div style={{ fontSize: 14, fontWeight: 650, marginBottom: 8, lineHeight: 1.5 }}>{tr(dept.openQLabel)} <span style={{ fontWeight: 400, color: "#A89C8D" }}>({tr("Anything else you'd like to share? (optional)")})</span></div>
-                  <textarea rows={3} value={(answers.open || {})[dept.openQ] || ""}
-                    onChange={e => setOpen(dept.openQ, e.target.value)}
-                    onBlur={() => save()}
-                    style={{ width: "100%", boxSizing: "border-box", fontSize: 14, padding: 11, border: "1px solid #E2D3C2", borderRadius: 10, resize: "vertical", fontFamily: "inherit", lineHeight: 1.5 }} />
+                <div style={{ fontSize: 12, color: "#A89C8D", marginTop: 14, lineHeight: 1.55 }}>
+                  {tr("These only decide which sections you'll see — they're stored with your answers, never your name.")}
                 </div>
+                <BackBtn />
               </div>
-              <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-                <button onClick={() => goTo(stage === 0 ? "demo" : stage - 1)} style={btnGhost}>{tr("Back")}</button>
-                <button onClick={() => goTo(stage + 1 < sections.length ? stage + 1 : "review")} style={{ ...btn, marginLeft: "auto" }}>
-                  {stage + 1 < sections.length ? tr("Next section") : tr("Continue")}
-                </button>
+            );
+          }
+
+          if (cur.type === "section") {
+            return (
+              <div key={`s-${cur.si}`} style={{ ...cardS, ...fade, textAlign: "center" }}>
+                <div style={{ ...kicker, marginBottom: 4 }}>{tr("Section")} {cur.si + 1} {tr("of")} {cur.count}</div>
+                <div style={{ ...big, margin: "6px 0 8px" }}>{tr(cur.dept.label)}</div>
+                <div style={{ fontSize: 13.5, color: "#7A6F63", marginBottom: 20 }}>
+                  {cur.dept.questions.length} {tr("short statements — tap the answer that fits.")}
+                </div>
+                <button onClick={advance} style={btn}>{tr("Continue")}</button>
+                <div><BackBtn /></div>
+              </div>
+            );
+          }
+
+          if (cur.type === "q") {
+            const qNum = steps.slice(0, step + 1).filter(t => t.type === "q").length;
+            const on = (answers.a || {})[cur.qq.col];
+            return (
+              <div key={`q-${cur.qq.col}`} style={{ ...cardS, ...fade }}>
+                <div style={kicker}>{tr(cur.dept.label)} · {tr("Question")} {qNum} {tr("of")} {totalQs}</div>
+                <div style={qTitle}>{tr(cur.qq.en)}</div>
+                <div style={stack}>
+                  {[1, 2, 3, 4, 5].map(v => (
+                    <button key={v} onClick={() => answerThenAdvance(() => setA(cur.qq.col, v))} style={bigChoice(on === v)}>
+                      {tr(LIKERT[v - 1])}
+                    </button>
+                  ))}
+                </div>
+                <BackBtn />
+              </div>
+            );
+          }
+
+          // Open comment — the one step with a Next button, because typing can't auto-advance.
+          return (
+            <div key={`o-${cur.si}`} style={{ ...cardS, ...fade }}>
+              <div style={kicker}>{tr(cur.dept.label)}</div>
+              <div style={{ ...qTitle, marginBottom: 8 }}>{tr(cur.dept.openQLabel)}</div>
+              <div style={{ fontSize: 12.5, color: "#A89C8D", marginBottom: 12 }}>{tr("Optional — share anything you'd like in your own words.")}</div>
+              <textarea rows={4} value={(answers.open || {})[cur.dept.openQ] || ""}
+                onChange={e => setOpen(cur.dept.openQ, e.target.value)}
+                onBlur={() => save()}
+                style={{ width: "100%", boxSizing: "border-box", fontSize: 14, padding: 12, border: "1px solid #E2D3C2",
+                  borderRadius: 10, resize: "vertical", fontFamily: "inherit", lineHeight: 1.5 }} />
+              <div style={{ display: "flex", alignItems: "center", marginTop: 14 }}>
+                <BackBtn mt={0} />
+                <button onClick={advance} style={{ ...btn, marginLeft: "auto" }}>{tr("Next")}</button>
               </div>
             </div>
           );
@@ -7135,7 +7301,7 @@ function StaffSurveyView({ token }) {
                 const done = dept.questions.filter(qq => (answers.a || {})[qq.col] != null).length;
                 const all = dept.questions.length;
                 return (
-                  <button key={dept.key} onClick={() => goTo(i)}
+                  <button key={dept.key} onClick={() => jumpToSection(i)}
                     style={{ display: "flex", alignItems: "center", gap: 10, textAlign: "left", background: "#FDFAF4",
                       border: "1px solid #ECE2D2", borderRadius: 10, padding: "10px 14px", cursor: "pointer" }}>
                     <span style={{ flex: 1, fontSize: 13.5, fontWeight: 650, color: "#2C2621" }}>{tr(dept.label)}</span>
@@ -7146,7 +7312,21 @@ function StaffSurveyView({ token }) {
                 );
               })}
             </div>
-            <button onClick={submit} disabled={busy} style={{ ...btn, background: "#5C9A6D" }}>{busy ? "…" : `✓ ${tr("Submit my survey")}`}</button>
+            {answeredQs < totalQs && (
+              <div style={{ background: "#FBF3E4", border: "1px solid #E0C48F", borderRadius: 10, padding: "11px 14px", marginBottom: 14,
+                fontSize: 13, color: "#8A6A2F", lineHeight: 1.55 }}>
+                <b>{totalQs - answeredQs}</b> {tr("still need an answer.")} {tr("Please answer every question before sending it in.")}{" "}
+                <button onClick={jumpToFirstUnanswered}
+                  style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "#B96524",
+                    fontWeight: 700, fontSize: 13, textDecoration: "underline" }}>
+                  {tr("Take me to the first one")}
+                </button>
+              </div>
+            )}
+            <button onClick={submit} disabled={busy || answeredQs < totalQs}
+              style={{ ...btn, background: "#5C9A6D", opacity: answeredQs < totalQs ? 0.45 : 1, cursor: answeredQs < totalQs ? "default" : "pointer" }}>
+              {busy ? "…" : `✓ ${tr("Submit my survey")}`}
+            </button>
             {err && <div style={{ color: "#BE6650", fontSize: 13, marginTop: 12 }}>{err}</div>}
           </div>
         )}
@@ -7160,7 +7340,7 @@ function StaffSurveyView({ token }) {
             </div>
             <div style={{ fontFamily: FONT_DISPLAY, fontSize: 30, fontWeight: 700, letterSpacing: 4, color: "#B96524", marginBottom: 6 }}>{code}</div>
             {meta.status === "Open" && (
-              <button onClick={() => setStage(0)} style={{ ...btnGhost, marginTop: 10 }}>{tr("Back")}</button>
+              <button onClick={() => setStage("review")} style={{ ...btnGhost, marginTop: 10 }}>{tr("Back")}</button>
             )}
           </div>
         )}
