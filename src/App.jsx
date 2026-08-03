@@ -5387,14 +5387,56 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
 
   return (
     <div style={{ minHeight:"100vh", background:"#F6F1E8", fontFamily:"'Inter',system-ui,sans-serif" }}>
-      {/* Toolbar */}
-      <div className="no-print" style={{ background:"white", borderBottom:"1px solid #ECE2D2", padding: isMobile ? "10px 14px" : "12px 24px", display:"flex", gap:12, alignItems:"center", flexWrap: isMobile ? "wrap" : "nowrap", position:"sticky", top:0, zIndex:10 }}>
-        <button onClick={()=>setView("__back__")} style={{ ...navBtn, background:"transparent", border:"1px solid #ECE2D2" }}>← Back</button>
-        <div style={{ flex:1, order: isMobile ? 3 : 0, color:"#E0863C", fontWeight:700, fontSize: isMobile ? 11 : 13, letterSpacing:1, whiteSpace: isMobile ? "normal" : "nowrap" }}>
-          JOSIAH VENTURE · {country.toUpperCase()} {year}
+      {/* Toolbar — sticky, two rows: navigation, then the greeting + the report's
+          action buttons, so Prepare / Concern & Watch / How scoring works / the
+          language flip ride along on every scroll (deep in a department too). */}
+      <div className="no-print" style={{ position:"sticky", top:0, zIndex:30, background:"white", borderBottom:"1px solid #ECE2D2" }}>
+        <div style={{ padding: isMobile ? "10px 14px" : "12px 24px", display:"flex", gap:12, alignItems:"center", flexWrap: isMobile ? "wrap" : "nowrap" }}>
+          <button onClick={()=>setView("__back__")} style={{ ...navBtn, background:"transparent", border:"1px solid #ECE2D2" }}>← Back</button>
+          <div style={{ flex:1, order: isMobile ? 3 : 0, color:"#E0863C", fontWeight:700, fontSize: isMobile ? 11 : 13, letterSpacing:1, whiteSpace: isMobile ? "normal" : "nowrap" }}>
+            JOSIAH VENTURE · {country.toUpperCase()} {year}
+          </div>
+          <button onClick={()=>window.print()} style={{ ...navBtn, background:"#E0863C", color:"white" }}>Download PDF</button>
         </div>
-        <button onClick={()=>window.print()} style={{ ...navBtn, background:"#E0863C", color:"white" }}>Download PDF</button>
+        <div style={{ padding: isMobile ? "8px 14px 10px" : "8px 24px 10px", display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", borderTop:"1px solid #F6F1E8" }}>
+          <span style={{ fontFamily:FONT_DISPLAY, fontSize: isMobile ? 14 : 16, fontWeight:600, color:"#2C2621", marginRight:4 }}>
+            {leaderFirst ? `${leaderFirst}, here's your ${country} Pulse report` : `${country} Staff Pulse Report`}
+          </span>
+          <span style={{ marginLeft:"auto", display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+            {prepMode && prep && (
+              <button onClick={() => setPrepOpen(true)}
+                style={{ fontSize:12, fontWeight:700, cursor:"pointer", borderRadius:16, padding:"6px 13px",
+                  color: prep.ready ? "#5C9A6D" : "white",
+                  background: prep.ready ? "#E9F1E9" : "#E0863C",
+                  border: `1px solid ${prep.ready ? "#C7E0CB" : "#E0863C"}` }}>
+                {prep.ready ? tr("✓ You've finished your part — thank you!") : tr("Prepare for your Pulse meeting")}
+              </button>
+            )}
+            {flaggedCount > 0 && (
+              <button onClick={() => setFlaggedOpen(true)}
+                style={{ fontSize:12, fontWeight:700, cursor:"pointer", borderRadius:16, padding:"6px 13px",
+                  color:"#BE6650", background:"#F6E5DE", border:"1px solid #E2B3A8" }}>
+                ⚠ {tr("Concern & Watch questions")} · {flaggedCount}
+              </button>
+            )}
+            <button onClick={() => setShowScoringHelp(true)}
+              style={{ fontSize:12, fontWeight:700, cursor:"pointer", borderRadius:16, padding:"6px 13px",
+                color:"#5A4A3B", background:"#FDFAF4", border:"1px solid #E2D3C2" }}>
+              ❔ {tr("How scoring works")}
+            </button>
+            {reportLang && (
+              <button onClick={() => setLangOn(v => !v)}
+                style={{ fontSize:12, fontWeight:700, cursor:"pointer", borderRadius:16, padding:"6px 13px",
+                  color: langOn ? "white" : "#5A4A3B",
+                  background: langOn ? "#B96524" : "#FDFAF4",
+                  border: `1px solid ${langOn ? "#B96524" : "#E2D3C2"}`, whiteSpace:"nowrap" }}>
+                {langOn ? "🌐 English" : `🌐 ${nativeLanguageLabel(reportLang)}`}
+              </button>
+            )}
+          </span>
+        </div>
       </div>
+      {showScoringHelp && <ScoringHelpPanel onClose={() => setShowScoringHelp(false)} audience={prepMode ? "Country leaders" : "Department leaders"} />}
 
       <div style={{ maxWidth:960, margin:"0 auto", padding: isMobile ? "24px 16px" : "40px 24px" }}>
 
@@ -5428,52 +5470,10 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
                   <div style={{ fontSize:15, color:"#7A6F63" }}>{year}{totalN ? ` · ${totalN} respondents` : ""} across {depts.length} departments</div>
                 </>
               )}
-              {((prepMode && prep) || flaggedCount > 0) && (
-                <div className="no-print" style={{ display:"flex", gap:10, flexWrap:"wrap", marginTop:12 }}>
-                  {prepMode && prep && (
-                    <button
-                      onClick={() => setPrepOpen(true)}
-                      style={{ fontSize:13.5, fontWeight:700, cursor:"pointer", borderRadius:20, padding:"9px 18px",
-                        color: prep.ready ? "#5C9A6D" : "white",
-                        background: prep.ready ? "#E9F1E9" : "#E0863C",
-                        border: `1px solid ${prep.ready ? "#C7E0CB" : "#E0863C"}` }}>
-                      {prep.ready ? tr("✓ You've finished your part — thank you!") : tr("Prepare for your Pulse meeting")}
-                    </button>
-                  )}
-                  {flaggedCount > 0 && (
-                    <button
-                      onClick={() => setFlaggedOpen(true)}
-                      style={{ fontSize:13.5, fontWeight:700, cursor:"pointer", borderRadius:20, padding:"9px 18px",
-                        color:"#BE6650", background:"#F6E5DE", border:"1px solid #E2B3A8" }}>
-                      ⚠ {tr("Concern & Watch questions")} · {flaggedCount}
-                    </button>
-                  )}
-                  {prepMode && (
-                    <button onClick={() => setShowScoringHelp(true)}
-                      style={{ fontSize:13.5, fontWeight:700, cursor:"pointer", borderRadius:20, padding:"9px 18px",
-                        color:"#5A4A3B", background:"#FDFAF4", border:"1px solid #E2D3C2" }}>
-                      ❔ {tr("How scoring works")}
-                    </button>
-                  )}
-                </div>
-              )}
-              {showScoringHelp && <ScoringHelpPanel onClose={() => setShowScoringHelp(false)} audience="Country leaders" />}
             </div>
             <div style={{ textAlign:"right" }}>
               <div style={{ fontSize:42, fontWeight:800, color:sc(overallAvg>=3.5?"Healthy":overallAvg>=2.5?"Watch":"Concern") }}>{overallAvg}</div>
               <div style={{ fontSize:11, color:"#7A6F63", marginTop:2 }}>Overall avg</div>
-              {/* Language flip lives under the score, top-right */}
-              {reportLang && (
-                <div className="no-print" style={{ marginTop:10 }}>
-                  <button onClick={() => setLangOn(v => !v)}
-                    style={{ fontSize:12.5, fontWeight:700, cursor:"pointer", borderRadius:20, padding:"7px 14px",
-                      color: langOn ? "white" : "#5A4A3B",
-                      background: langOn ? "#B96524" : "#FDFAF4",
-                      border: `1px solid ${langOn ? "#B96524" : "#E2D3C2"}`, whiteSpace:"nowrap" }}>
-                    {langOn ? "🌐 English" : `🌐 ${nativeLanguageLabel(reportLang)}`}
-                  </button>
-                </div>
-              )}
             </div>
           </div>
 
