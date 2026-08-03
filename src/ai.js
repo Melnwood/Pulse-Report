@@ -30,6 +30,7 @@ const LANG_BY_COUNTRY = {
   romania: "Romanian", moldova: "Romanian", ukraine: "Ukrainian",
   estonia: "Estonian", latvia: "Latvian", lithuania: "Lithuanian",
   albania: "Albanian", "north macedonia": "Macedonian", macedonia: "Macedonian",
+  montenegro: "Montenegrin",
   germany: "German", austria: "German", spain: "Spanish", portugal: "Portuguese",
 };
 export function languageForCountry(country) {
@@ -42,7 +43,8 @@ const NATIVE_LABEL = {
   Slovene: "Slovensko", Croatian: "Hrvatski", Serbian: "Srpski", Bulgarian: "Български",
   Romanian: "Română", Ukrainian: "Українською", Estonian: "Eesti keeles",
   Latvian: "Latviski", Lithuanian: "Lietuviškai", Albanian: "Shqip",
-  Macedonian: "Македонски", German: "Deutsch", Spanish: "Español", Portuguese: "Português",
+  Macedonian: "Македонски", Montenegrin: "Crnogorski",
+  German: "Deutsch", Spanish: "Español", Portuguese: "Português",
 };
 export function nativeLanguageLabel(language) { return NATIVE_LABEL[language] || language; }
 

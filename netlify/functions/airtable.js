@@ -28,6 +28,7 @@ const TABLES = {
   briefs:        "Briefs",   // leadership synthesis history — P&C leaders only
   surveys:         "Surveys",           // staff survey links — leaders only
   surveyResponses: "Survey Responses",  // staff answers (by code) — leaders only
+  checkins:        "Survey Checkins",   // who's taken it (emails) — separate from answers
 };
 
 // Tables a COUNTRY LEADER may write to (scoped to their own country below):
@@ -146,6 +147,7 @@ exports.handler = async (event) => {
     if (tbl === "prep") return startsWithCountry(fields.Run);
     if (tbl === "surveys") return String(fields.Country || "").toLowerCase() === country.toLowerCase();
     if (tbl === "surveyResponses") return startsWithCountry(fields.Run);
+    if (tbl === "checkins") return startsWithCountry(fields.Run);
     if (tbl === "selections") { const set = await allowedCountryDeptIds(); const id = selectionDeptId(fields); return !!id && set.has(id); }
     return false;
   };
@@ -188,7 +190,7 @@ exports.handler = async (event) => {
       // content: the link token is stripped from surveys, and responses come
       // back as status-only rows (no answers, no codes). Directors see none.
       // (Staff submit through the separate public survey function, never this proxy.)
-      if ((table === "surveys" || table === "surveyResponses") && role === "director") {
+      if ((table === "surveys" || table === "surveyResponses" || table === "checkins") && role === "director") {
         return { statusCode: 200, headers, body: JSON.stringify({ records: [] }) };
       }
       let all = await listAll(tableId, filterByFormula, params && params.pageSize, params && params.sort);
@@ -197,9 +199,6 @@ exports.handler = async (event) => {
         const kept = [];
         for (const r of all) { if (await recordInCountry(table, r.fields)) kept.push(r); }
         all = kept;
-      }
-      if (table === "surveys" && role === "country") {
-        all = all.map(r => { const f = { ...(r.fields || {}) }; delete f.Token; return { ...r, fields: f }; });
       }
       if (table === "surveyResponses" && role === "country") {
         all = all.map(r => { const f = r.fields || {};
@@ -234,6 +233,9 @@ exports.handler = async (event) => {
             if (!f || c !== country.toLowerCase()) return fail(403, "Outside your country.");
           }
         }
+        // The check-off roster is theirs to manage (their own country's runs only —
+        // the per-record checks below handle that via the Run field).
+        else if (table === "checkins") { /* allowed, scoped below */ }
         // Country leaders write ONLY their prep + notes, ONLY within their country.
         else if (!COUNTRY_WRITABLE.has(table)) return fail(403, "Read-only access.");
         if (action === "create") {
@@ -247,13 +249,21 @@ exports.handler = async (event) => {
             if (!ok) return fail(403, "Outside your country.");
           }
         } else if (action === "delete") {
-          // Only their own notes (never someone else's, never prep rows).
+          // Only their own notes (never someone else's, never prep rows) — but
+          // roster rows in their own country may be removed freely.
           if (table === "prep") return fail(403, "Prep rows can't be deleted.");
-          const myName = String((user && user.name) || "");
-          for (const id of (recordIds || [])) {
-            const f = await getRecord(tableId, id);
-            const ok = f && await recordInCountry(table, f.fields) && myName !== "" && String((f.fields || {}).Author || "") === myName;
-            if (!ok) return fail(403, "You can only delete your own notes.");
+          if (table === "checkins") {
+            for (const id of (recordIds || [])) {
+              const f = await getRecord(tableId, id);
+              if (!f || !(await recordInCountry(table, f.fields))) return fail(403, "Outside your country.");
+            }
+          } else {
+            const myName = String((user && user.name) || "");
+            for (const id of (recordIds || [])) {
+              const f = await getRecord(tableId, id);
+              const ok = f && await recordInCountry(table, f.fields) && myName !== "" && String((f.fields || {}).Author || "") === myName;
+              if (!ok) return fail(403, "You can only delete your own notes.");
+            }
           }
         }
       }

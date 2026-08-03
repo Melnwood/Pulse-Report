@@ -1,19 +1,25 @@
-// Public endpoint for the in-app staff survey. Staff have NO login — the only
-// credentials are (1) the survey link's unguessable token, which must match an
-// OPEN row in the Surveys table, and (2) their personal resume code, generated
-// here when they start. No names are ever collected or stored.
+// Public endpoint for the in-app staff survey. The credentials are (1) the
+// survey link's unguessable token, which must match an OPEN row in the Surveys
+// table, and (2) their personal resume code, generated here when they start.
 //
 // Actions (POST JSON):
 //   { action:"meta",   token }                      → { run, country, period, status }
 //   { action:"start",  token }                      → { code }   (creates the response row)
 //   { action:"resume", token, code }                → { code, answers, status }
 //   { action:"save",   token, code, answers, status, language } → { ok:true }
+//   { action:"checkin", token, email, done? }       → { ok:true }
+//
+// The check-in is the QuestionPro-style "sign in, stay anonymous" piece: the
+// email lands in the separate Survey Checkins table (Started, then Finished on
+// submit) and is NEVER written to a response row — there is no stored link
+// between an email and a code or any answers.
 //
 // The Airtable token stays server-side, and this function can only touch the
-// Surveys / Survey Responses tables — nothing else in the base.
+// Surveys / Survey Responses / Survey Checkins tables — nothing else in the base.
 const BASE_ID_FALLBACK = "appbGbWHVhneI7hQo";
 const SURVEYS_TABLE = "Surveys";
 const RESPONSES_TABLE = "Survey Responses";
+const CHECKINS_TABLE = "Survey Checkins";
 
 // Unambiguous alphabet (no 0/O, 1/I/L) so codes survive handwriting and phones.
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -123,6 +129,25 @@ exports.handler = async (event) => {
       if (body.status === "Completed") fields["Status"] = "Completed";
       if (body.language !== undefined) fields["Language"] = String(body.language || "").slice(0, 40);
       await update(RESPONSES_TABLE, row.id, fields);
+      return ok({ ok: true });
+    }
+
+    if (action === "checkin") {
+      if (status !== "Open") return fail(409, "This survey is closed.");
+      const email = String(body.email || "").trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail(400, "Please enter a real email address.");
+      const rows = await list(CHECKINS_TABLE, `AND({Run} = '${esc(run)}', LOWER({Email}) = '${esc(email)}')`);
+      const now = new Date().toISOString();
+      const row = rows[0];
+      if (!row) {
+        await create(CHECKINS_TABLE, { "Email": email, "Run": run,
+          "Status": body.done ? "Finished" : "Started", "Updated": now });
+      } else {
+        const cur = (row.fields.Status && row.fields.Status.name) || row.fields.Status || "";
+        // Never step someone back from Finished.
+        const next = body.done ? "Finished" : (cur === "Finished" ? "Finished" : "Started");
+        await update(CHECKINS_TABLE, row.id, { "Status": next, "Updated": now });
+      }
       return ok({ ok: true });
     }
 

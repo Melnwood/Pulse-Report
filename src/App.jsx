@@ -10,7 +10,7 @@ import VideosView from "./components/VideosView";
 import { authStatus, tokenValid, getUser, logout, listCountryLeaders } from "./authClient";
 import CountryLeadersView from "./components/CountryLeadersView";
 import SURVEY_BASICS from "./surveyBasics.json";
-import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, deleteDepartmentNote, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, updateQuestionNote, deleteQuestionNote, loadMeasures, loadSurveyBasicsMaster, saveSurveyBasicsMaster, loadHelpVideos, loadPrep, savePrep, saveBrief, loadBriefs, baseYear, periodSeq, periodCmp, loadSurveys, createSurvey, setSurveyStatus, loadSurveyResponses, updateSurvey, deleteSurvey } from "./airtable";
+import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, deleteDepartmentNote, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, updateQuestionNote, deleteQuestionNote, loadMeasures, loadSurveyBasicsMaster, saveSurveyBasicsMaster, loadHelpVideos, loadPrep, savePrep, saveBrief, loadBriefs, baseYear, periodSeq, periodCmp, loadSurveys, createSurvey, setSurveyStatus, loadSurveyResponses, updateSurvey, deleteSurvey, loadCheckins, addCheckins, removeCheckin } from "./airtable";
 import { synthesizeLeadership, languageForCountry, translateBatch, translateToEnglish, nativeLanguageLabel } from "./ai";
 import MeasurePanel from "./components/MeasurePanel";
 import NotesDigest from "./components/NotesDigest";
@@ -2422,8 +2422,37 @@ function SurveyProgressRow({ sv, resps, isMobile }) {
   const [editingExp, setEditingExp] = useState(false);
   const [expInput, setExpInput] = useState(sv.expected != null ? String(sv.expected) : "");
   const [saving, setSaving] = useState(false);
-  const notStarted = expected != null ? Math.max(0, expected - resps.length) : null;
-  const total = expected != null ? Math.max(expected, resps.length) : resps.length;
+  // The check-off list — emails, completely separate from the anonymous answers.
+  const [rosterOpen, setRosterOpen] = useState(false);
+  const [roster, setRoster] = useState(null);
+  const [addText, setAddText] = useState("");
+  const [rosterBusy, setRosterBusy] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
+  const loadRoster = async () => {
+    try { setRoster(await loadCheckins(sv.run)); } catch { setRoster([]); }
+  };
+  const toggleRoster = () => { const n = !rosterOpen; setRosterOpen(n); if (n && !roster) loadRoster(); };
+  const addEmails = async () => {
+    const existing = new Set((roster || []).map(r => r.email.toLowerCase()));
+    const emails = [...new Set(addText.split(/[\s,;]+/).map(s => s.trim().toLowerCase()).filter(Boolean))]
+      .filter(e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) && !existing.has(e));
+    if (!emails.length) { setAddText(""); return; }
+    setRosterBusy(true);
+    try { await addCheckins(sv.run, emails); setAddText(""); await loadRoster(); }
+    catch (e) { window.alert("Couldn't add those emails: " + e.message); }
+    setRosterBusy(false);
+  };
+  const removeEmail = async (row) => {
+    setRosterBusy(true);
+    try { await removeCheckin(row.id); await loadRoster(); }
+    catch (e) { window.alert("Couldn't remove that: " + e.message); }
+    setRosterBusy(false);
+  };
+  // With a list in place it becomes the denominator; the typed number is the fallback.
+  const rosterCount = roster ? roster.length : null;
+  const effExpected = rosterCount || expected;
+  const notStarted = effExpected != null ? Math.max(0, effExpected - resps.length) : null;
+  const total = effExpected != null ? Math.max(effExpected, resps.length) : resps.length;
   const seg = (n) => total > 0 ? `${(n / total) * 100}%` : "0%";
   const saveExpected = async () => {
     const n = expInput.trim() === "" ? null : Math.max(0, parseInt(expInput, 10) || 0);
@@ -2453,29 +2482,81 @@ function SurveyProgressRow({ sv, resps, isMobile }) {
         <div style={{ width: seg(finished), background: "#5C9A6D", transition: "width .3s" }} />
         <div style={{ width: seg(inProgress), background: "#E0A56F", transition: "width .3s" }} />
       </div>
-      <div style={{ marginTop: 6, fontSize: 11.5, color: "#7A6F63", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-        {editingExp ? (
-          <>
-            <span>How many staff should take it?</span>
-            <input type="number" min="0" value={expInput} onChange={e => setExpInput(e.target.value)} autoFocus
-              style={{ width: 64, fontSize: 12, padding: "3px 7px", border: "1px solid #E2D3C2", borderRadius: 6 }} />
-            <button onClick={saveExpected} disabled={saving}
-              style={{ ...navBtn, fontSize: 11, padding: "3px 10px" }}>{saving ? "…" : "Save"}</button>
-            <button onClick={() => setEditingExp(false)}
-              style={{ background: "none", border: "none", cursor: "pointer", color: "#A89C8D", fontSize: 11.5, padding: 0 }}>Cancel</button>
-          </>
-        ) : expected != null ? (
-          <button onClick={() => { setExpInput(String(expected)); setEditingExp(true); }}
-            style={{ background: "none", border: "none", cursor: "pointer", color: "#A89C8D", fontSize: 11.5, padding: 0, textDecoration: "underline" }}>
-            {expected} expected — change
-          </button>
-        ) : (
-          <button onClick={() => setEditingExp(true)}
-            style={{ background: "none", border: "none", cursor: "pointer", color: "#B96524", fontWeight: 700, fontSize: 11.5, padding: 0, textDecoration: "underline" }}>
-            Set how many staff should take it →
+      <div style={{ marginTop: 6, fontSize: 11.5, color: "#7A6F63", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <button onClick={toggleRoster}
+          style={{ background: "none", border: "none", cursor: "pointer", color: "#B96524", fontWeight: 700, fontSize: 11.5, padding: 0 }}>
+          {rosterOpen ? "▾" : "▸"} Who's taken it{rosterCount ? ` (${roster.filter(r => r.status === "Finished").length} of ${rosterCount} ✓)` : ""}
+        </button>
+        {sv.token && (
+          <button onClick={() => { if (!roster) loadRoster(); setEmailOpen(true); }}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "#B96524", fontWeight: 700, fontSize: 11.5, padding: 0 }}>
+            ✉ Email the survey to your staff
           </button>
         )}
+        <span style={{ marginLeft: "auto" }}>
+          {editingExp ? (
+            <>
+              <span>How many staff should take it? </span>
+              <input type="number" min="0" value={expInput} onChange={e => setExpInput(e.target.value)} autoFocus
+                style={{ width: 64, fontSize: 12, padding: "3px 7px", border: "1px solid #E2D3C2", borderRadius: 6 }} />{" "}
+              <button onClick={saveExpected} disabled={saving}
+                style={{ ...navBtn, fontSize: 11, padding: "3px 10px" }}>{saving ? "…" : "Save"}</button>{" "}
+              <button onClick={() => setEditingExp(false)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#A89C8D", fontSize: 11.5, padding: 0 }}>Cancel</button>
+            </>
+          ) : rosterCount ? (
+            <span style={{ color: "#A89C8D" }}>{rosterCount} on the list</span>
+          ) : expected != null ? (
+            <button onClick={() => { setExpInput(String(expected)); setEditingExp(true); }}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "#A89C8D", fontSize: 11.5, padding: 0, textDecoration: "underline" }}>
+              {expected} expected — change
+            </button>
+          ) : (
+            <button onClick={() => setEditingExp(true)}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "#B96524", fontWeight: 700, fontSize: 11.5, padding: 0, textDecoration: "underline" }}>
+              Set how many staff should take it →
+            </button>
+          )}
+        </span>
       </div>
+
+      {rosterOpen && (
+        <div style={{ marginTop: 8, background: "#FDFAF4", border: "1px solid #F3EBE1", borderRadius: 10, padding: "10px 12px" }}>
+          <div style={{ fontSize: 11, color: "#A89C8D", lineHeight: 1.5, marginBottom: 8 }}>
+            Add your staff's emails and each person gets a check-off as they finish. Their emails are never
+            connected to their answers — you see <b>that</b> someone finished, never <b>what</b> they said.
+          </div>
+          {!roster ? (
+            <div style={{ fontSize: 12, color: "#7A6F63" }}>Loading…</div>
+          ) : roster.length === 0 ? null : (
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "2px 16px", marginBottom: 8 }}>
+              {roster.map(r => (
+                <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, padding: "3px 0" }}>
+                  <span title={r.status} style={{ width: 16, textAlign: "center" }}>
+                    {r.status === "Finished" ? "✅" : r.status === "Started" ? "🟡" : "⚪"}
+                  </span>
+                  <span style={{ flex: 1, color: "#2C2621", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.email}</span>
+                  <span style={{ fontSize: 10.5, fontWeight: 700,
+                    color: r.status === "Finished" ? "#5C9A6D" : r.status === "Started" ? "#C08636" : "#A89C8D" }}>
+                    {r.status === "Finished" ? "Finished" : r.status === "Started" ? "In progress" : "Not started"}
+                  </span>
+                  <button onClick={() => removeEmail(r)} disabled={rosterBusy} title="Remove from the list"
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#C9BEB0", fontSize: 13, padding: "0 2px" }}>✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
+            <textarea rows={2} value={addText} onChange={e => setAddText(e.target.value)}
+              placeholder="Paste staff emails here — commas, spaces, or one per line"
+              style={{ flex: 1, minWidth: 220, fontSize: 12.5, padding: "7px 10px", border: "1px solid #E2D3C2",
+                borderRadius: 8, resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }} />
+            <button onClick={addEmails} disabled={rosterBusy || !addText.trim()}
+              style={{ ...navBtn, fontSize: 12, padding: "7px 13px" }}>{rosterBusy ? "…" : "Add to list"}</button>
+          </div>
+        </div>
+      )}
+      {emailOpen && <StaffEmailModal sv={sv} roster={roster || []} onClose={() => setEmailOpen(false)} />}
     </div>
   );
 }
@@ -2768,6 +2849,91 @@ This isn't about scores — it's about your people, and we're really looking for
 With you,
 Mel & Chris for the People & Culture team`,
   };
+}
+
+// The email a country leader sends their staff when a survey opens: what the
+// Pulse Report is, how leadership uses it, and how the sign-in stays separate
+// from the anonymous answers. The survey link is filled in automatically.
+function staffEmailFor(sv) {
+  const link = `${APP_URL}/?survey=${sv.token}`;
+  return {
+    subject: `Your voice matters — the ${sv.country} Pulse Survey is open`,
+    body: `Hi everyone,
+
+It's Pulse Survey time — the moment where every one of us gets to say, honestly and confidentially, how it's really going.
+
+What it is: a survey about how you're doing — your work, your team, the support you're getting. Your answers come together into the Pulse Report: one honest picture of where our team is healthy and where something needs attention.
+
+How it helps: leadership and the People & Culture team read the combined picture and sit down together over it. Real conversations and real changes come out of what you share — this is how leadership listens.
+
+About your answers: you'll sign in with your email so we know who has finished, but your email is kept completely separate from your answers. We can see THAT you finished — never WHAT you said. Your answers are tied only to a personal code the survey gives you, so you can pause and pick it up again anytime, even on another device.
+
+Take it here: ${link}
+
+It works in your own language too — look for the language button at the top. Please give it some unhurried time; honest answers are what make it worth doing.
+
+Thank you — your voice is a gift to the whole team.
+
+With gratitude,
+Your ${sv.country} leadership`,
+  };
+}
+
+// Preview + send window for the staff email. Staff go in BCC so nobody's
+// address is shared with the whole list.
+function StaffEmailModal({ sv, roster = [], onClose }) {
+  const tmpl = staffEmailFor(sv);
+  const [subject, setSubject] = useState(tmpl.subject);
+  const [body, setBody] = useState(tmpl.body);
+  const [copied, setCopied] = useState(false);
+  const emails = roster.map(r => r.email).filter(Boolean);
+  const mailto = `mailto:?bcc=${encodeURIComponent(emails.join(","))}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(`Bcc: ${emails.join(", ")}\nSubject: ${subject}\n\n${body}`);
+      setCopied(true); setTimeout(() => setCopied(false), 2500);
+    } catch {}
+  };
+  const inpStyle = { width:"100%", boxSizing:"border-box", fontSize:13, padding:"9px 11px",
+    border:"1px solid #E2D3C2", borderRadius:8, fontFamily:"inherit" };
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(44,38,33,0.45)", zIndex:1100,
+      overflowY:"auto", padding:"40px 16px 60px" }}>
+      <div onClick={e => e.stopPropagation()} style={{ maxWidth:640, margin:"0 auto", background:"#fff",
+        borderRadius:14, padding:"20px 22px", boxShadow:"0 24px 60px rgba(44,38,33,.35)" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+          <span style={{ fontFamily:FONT_DISPLAY, fontSize:19, fontWeight:600, color:"#2C2621" }}>Email the survey to your staff</span>
+          <button onClick={onClose} style={{ marginLeft:"auto", background:"none", border:"none", cursor:"pointer",
+            fontSize:19, color:"#7A6F63", lineHeight:1 }}>✕</button>
+        </div>
+        <div style={{ fontSize:12.5, color:"#7A6F63", lineHeight:1.5, marginBottom:12 }}>
+          Everything's written for you — what the Pulse Report is, how it helps, and how their answers stay
+          anonymous — with the survey link inside. Tweak anything, then open it in your mail app.
+        </div>
+        <div style={{ fontSize:12, color:"#5A4A3B", marginBottom:12, background:"#FDFAF4",
+          border:"1px solid #ECE2D2", borderRadius:8, padding:"8px 11px", lineHeight:1.5 }}>
+          {emails.length
+            ? <><b>Bcc ({emails.length}):</b> {emails.join(", ")}</>
+            : <>No staff emails on the list yet — add them under "Who's taken it" first, or just add addresses in your mail app.</>}
+        </div>
+        <div style={{ marginBottom:10 }}>
+          <label style={{ display:"block", fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1, marginBottom:4 }}>Subject</label>
+          <input style={inpStyle} value={subject} onChange={e => setSubject(e.target.value)} />
+        </div>
+        <div style={{ marginBottom:14 }}>
+          <label style={{ display:"block", fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1, marginBottom:4 }}>Message</label>
+          <textarea rows={14} style={{ ...inpStyle, resize:"vertical", lineHeight:1.55 }}
+            value={body} onChange={e => setBody(e.target.value)} />
+        </div>
+        <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
+          <a href={mailto} style={{ ...navBtn, background:"#E0863C", color:"#fff", border:"1px solid transparent",
+            fontWeight:700, textDecoration:"none", display:"inline-block" }}>✉ Open in your email app</a>
+          <button onClick={copy} style={{ ...navBtn }}>{copied ? "✓ Copied" : "Copy email text"}</button>
+          <span style={{ fontSize:11.5, color:"#A89C8D" }}>Nothing sends until you press Send in your mail app.</span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // Pick a country, get the agreed email pre-addressed and pre-written — tweak if
@@ -7063,12 +7229,15 @@ function StaffSurveyView({ token }) {
   const [step, setStep] = useState(0);           // index into surveyStepsFor(answers) while stage === "flow"
   const [code, setCode] = useState("");
   const [codeInput, setCodeInput] = useState("");
+  // Their sign-in email — kept in the separate check-off list, never with answers.
+  const [email, setEmail] = useState("");
   const [answers, setAnswers] = useState({ d: {}, a: {}, open: {} });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [saveNote, setSaveNote] = useState("");
   const answersRef = useRef(answers); answersRef.current = answers;
   const codeRef = useRef(code); codeRef.current = code;
+  const emailOk = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(e || "").trim());
 
   // Language — same cache the report's flip uses, so questions translate once.
   const lang = meta && meta.country ? languageForCountry(meta.country) : null;
@@ -7081,7 +7250,7 @@ function StaffSurveyView({ token }) {
   const tr = (s) => (langOn && s && trMap[s]) || s;
   const SURVEY_UI = [
     "Staff Pulse Survey", "Your voice, in confidence",
-    "This survey is anonymous — no name, no email. When you start, you'll get a short personal code. Keep it: it lets you pause and come back later. Only you have it.",
+    "Your answers are anonymous. You'll sign in with your email so your leader knows who has finished — but your email is never connected to what you say. You'll also get a short personal code so you can pause and come back later.",
     "Start the survey", "I already have a code", "Continue",
     "Here is your personal code", "Write it down or take a photo — it's the only way back into your answers if you switch devices. On this device we'll remember it for you.",
     "Welcome back", "Enter your code to pick up where you left off.", "Resume my survey",
@@ -7099,6 +7268,12 @@ function StaffSurveyView({ token }) {
     "Submit my survey", "answered",
     "still need an answer.", "Take me to the first one", "Please answer every question before sending it in.",
     "Translating for you…",
+    "Sign in to begin",
+    "Your email goes on the finished list so your leader knows who's still missing — it is never connected to your answers. Those stay anonymous, tied only to your personal code.",
+    "Please enter a real email address.",
+    "Your email — so your leader can tick you off the finished list",
+    "Never connected to your answers — they stay anonymous.",
+    "Please enter your email so your leader can tick you off the finished list — your answers stay anonymous.",
     "Thank you — your voice is in.", "Your answers are saved. If you'd like to revisit them before the survey closes, use your code:",
     "This survey is closed.", "Thanks for your willingness — this pulse has finished collecting answers. Watch for the next one!",
     "Saving…", "✓ Saved",
@@ -7153,6 +7328,7 @@ function StaffSurveyView({ token }) {
         if (m.status !== "Open") { setStage("closed"); return; }
         let saved = null;
         try { saved = JSON.parse(localStorage.getItem(`pulse:survey:${token}`) || "null"); } catch {}
+        if (saved && saved.email) setEmail(saved.email);
         if (saved && saved.code) {
           try {
             const r = await surveyApi({ action: "resume", token, code: saved.code });
@@ -7186,12 +7362,17 @@ function StaffSurveyView({ token }) {
     } catch (e) { setSaveNote(""); setErr(e.message); }
   };
 
-  const start = async () => {
+  // Sign in first (check-off list), then start — the code and the email live in
+  // different tables with nothing joining them.
+  const beginWithEmail = async () => {
+    const em = String(email).trim().toLowerCase();
+    if (!emailOk(em)) { setErr(tr("Please enter a real email address.")); return; }
     setBusy(true); setErr("");
     try {
+      await surveyApi({ action: "checkin", token, email: em });
       const r = await surveyApi({ action: "start", token });
       setCode(r.code);
-      try { localStorage.setItem(`pulse:survey:${token}`, JSON.stringify({ code: r.code })); } catch {}
+      try { localStorage.setItem(`pulse:survey:${token}`, JSON.stringify({ code: r.code, email: em })); } catch {}
       setStage("code");
     } catch (e) { setErr(e.message); }
     setBusy(false);
@@ -7201,7 +7382,7 @@ function StaffSurveyView({ token }) {
     try {
       const r = await surveyApi({ action: "resume", token, code: codeInput });
       setCode(r.code);
-      try { localStorage.setItem(`pulse:survey:${token}`, JSON.stringify({ code: r.code })); } catch {}
+      try { localStorage.setItem(`pulse:survey:${token}`, JSON.stringify({ code: r.code, email: String(email).trim().toLowerCase() || undefined })); } catch {}
       const a = { d: {}, a: {}, open: {}, ...(r.answers || {}) };
       setAnswers(a);
       if (r.language && r.language !== "English") setLangOn(true);
@@ -7258,10 +7439,18 @@ function StaffSurveyView({ token }) {
 
   const goTo = (next) => { setStage(next); save(); try { window.scrollTo({ top: 0 }); } catch {} };
   const submit = async () => {
+    const em = String(email).trim().toLowerCase();
+    if (!emailOk(em)) { setErr(tr("Please enter your email so your leader can tick you off the finished list — your answers stay anonymous.")); return; }
     setBusy(true); setErr("");
     try {
       await surveyApi({ action: "save", token, code, answers, status: "Completed",
         language: langOn && lang ? lang : "English" });
+      // Tick their name on the finished list — a separate table, never joined
+      // to the answers. If it hiccups, the answers are still safely in.
+      try {
+        await surveyApi({ action: "checkin", token, email: em, done: true });
+        localStorage.setItem(`pulse:survey:${token}`, JSON.stringify({ code, email: em }));
+      } catch {}
       setStage("done");
     } catch (e) { setErr(e.message); }
     setBusy(false);
@@ -7356,11 +7545,30 @@ function StaffSurveyView({ token }) {
           <div style={cardS}>
             <div style={big}>{tr("Your voice, in confidence")}</div>
             <div style={{ fontSize: 14.5, color: "#5A4A3B", margin: "12px 0 20px", lineHeight: 1.65 }}>
-              {tr("This survey is anonymous — no name, no email. When you start, you'll get a short personal code. Keep it: it lets you pause and come back later. Only you have it.")}
+              {tr("Your answers are anonymous. You'll sign in with your email so your leader knows who has finished — but your email is never connected to what you say. You'll also get a short personal code so you can pause and come back later.")}
             </div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button onClick={start} disabled={busy} style={btn}>{busy ? "…" : tr("Start the survey")}</button>
+              <button onClick={() => { setErr(""); setStage("email"); }} style={btn}>{tr("Start the survey")}</button>
               <button onClick={() => { setErr(""); setStage("resume"); }} style={btnGhost}>{tr("I already have a code")}</button>
+            </div>
+            {err && <div style={{ color: "#BE6650", fontSize: 13, marginTop: 12 }}>{err}</div>}
+          </div>
+        )}
+
+        {stage === "email" && (
+          <div style={cardS}>
+            <div style={big}>{tr("Sign in to begin")}</div>
+            <div style={{ fontSize: 13.5, color: "#5A4A3B", margin: "10px 0 16px", lineHeight: 1.65, maxWidth: 520 }}>
+              {tr("Your email goes on the finished list so your leader knows who's still missing — it is never connected to your answers. Those stay anonymous, tied only to your personal code.")}
+            </div>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") beginWithEmail(); }}
+              placeholder="you@josiahventure.com" autoFocus
+              style={{ fontSize: 15, width: "100%", maxWidth: 360, boxSizing: "border-box", padding: "11px 13px",
+                border: "2px solid #E2D3C2", borderRadius: 10, fontFamily: "inherit", marginBottom: 14, display: "block" }} />
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button onClick={beginWithEmail} disabled={busy} style={btn}>{busy ? "…" : tr("Continue")}</button>
+              <button onClick={() => { setErr(""); setStage("welcome"); }} style={btnGhost}>{tr("Back")}</button>
             </div>
             {err && <div style={{ color: "#BE6650", fontSize: 13, marginTop: 12 }}>{err}</div>}
           </div>
@@ -7519,6 +7727,20 @@ function StaffSurveyView({ token }) {
                 );
               })}
             </div>
+            {!emailOk(email) && (
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#7A6F63", marginBottom: 5 }}>
+                  {tr("Your email — so your leader can tick you off the finished list")}
+                </label>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                  placeholder="you@josiahventure.com"
+                  style={{ fontSize: 14, width: "100%", maxWidth: 340, boxSizing: "border-box", padding: "10px 12px",
+                    border: "1px solid #E2D3C2", borderRadius: 10, fontFamily: "inherit" }} />
+                <div style={{ fontSize: 11.5, color: "#A89C8D", marginTop: 4 }}>
+                  {tr("Never connected to your answers — they stay anonymous.")}
+                </div>
+              </div>
+            )}
             {answeredQs < totalQs && (
               <div style={{ background: "#FBF3E4", border: "1px solid #E0C48F", borderRadius: 10, padding: "11px 14px", marginBottom: 14,
                 fontSize: 13, color: "#8A6A2F", lineHeight: 1.55 }}>

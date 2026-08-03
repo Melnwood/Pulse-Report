@@ -640,12 +640,38 @@ export async function updateSurvey(id, { country, period, sendDate, expected } =
   const res = await call({ action: "update", table: "surveys", records: [{ id, fields }] });
   return surveyFromRec(res.records[0]);
 }
-// Delete a survey link AND any answers already collected under its run.
+// The check-off roster — who should take / has taken a survey. Lives in its own
+// table with no connection to codes or answers: leaders see THAT someone
+// finished, never WHAT they said. Staff check-ins arrive through the public
+// survey function; leaders manage the invited list here.
+export async function loadCheckins(run) {
+  const res = await call({ action: "list", table: "checkins", filterByFormula: `{Run} = ${q(run)}` });
+  return (res.records || []).map(r => ({
+    id: r.id,
+    email: r.fields["Email"] || "",
+    status: r.fields["Status"]?.name || r.fields["Status"] || "Invited",
+    updated: r.fields["Updated"] || null,
+  })).sort((a, b) => a.email.localeCompare(b.email));
+}
+export async function addCheckins(run, emails) {
+  const records = emails.map(e => ({ fields: {
+    "Email": String(e).trim().toLowerCase(), "Run": run,
+    "Status": "Invited", "Updated": new Date().toISOString(),
+  } }));
+  if (records.length) await call({ action: "create", table: "checkins", records });
+}
+export async function removeCheckin(id) {
+  await call({ action: "delete", table: "checkins", recordIds: [id] });
+}
+
+// Delete a survey link AND any answers + check-ins already collected under its run.
 export async function deleteSurvey(id, run) {
   if (run) {
-    const res = await call({ action: "list", table: "surveyResponses", filterByFormula: `{Run} = ${q(run)}` });
-    const ids = (res.records || []).map(r => r.id);
-    if (ids.length) await call({ action: "delete", table: "surveyResponses", recordIds: ids });
+    for (const table of ["surveyResponses", "checkins"]) {
+      const res = await call({ action: "list", table, filterByFormula: `{Run} = ${q(run)}` });
+      const ids = (res.records || []).map(r => r.id);
+      if (ids.length) await call({ action: "delete", table, recordIds: ids });
+    }
   }
   await call({ action: "delete", table: "surveys", recordIds: [id] });
 }
