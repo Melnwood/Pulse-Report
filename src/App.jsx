@@ -2753,7 +2753,7 @@ function inviteEmailFor(countryName, leader) {
     subject: `Your ${countryName} Pulse Report is ready`,
     body: `Hi ${first},
 
-Your team's Pulse Report for ${countryName} is ready — and it's worth some unhurried time. It gathers what your staff shared in this year's survey into one honest picture: where your team is healthy, where attention is needed, and the exact questions worth talking about together.
+Your team's Pulse Report is ready — and it's worth some unhurried time to read and understand. It gathers what your staff shared in the latest survey into one honest picture: where your team is healthy, where attention is needed, and the exact questions worth talking about together.
 
 Here's how to get in:
 
