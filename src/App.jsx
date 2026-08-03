@@ -2761,7 +2761,7 @@ Here's how to get in:
 2. Sign in with this email address (${email}). The first time, it will ask you to choose your own password.
 3. You'll land straight on your ${countryName} page — click any department in the chart to go deeper.
 
-As you read, react to each department, answer the leadership questions, and add whatever you want us to talk through to your meeting agenda. When you're done, press "I've finished my part of the Pulse report" so we know you're ready.
+As you read, react to each department by clicking into the available note boxes, answer the leadership questions, and add whatever you want us to talk through to your meeting agenda. When you're done, press "I've finished my part of the Pulse report" so we know you're ready.
 
 This isn't about scores — it's about your people, and we're really looking forward to walking through it with you.
 
