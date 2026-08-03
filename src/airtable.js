@@ -592,6 +592,52 @@ export async function savePrep(country, year, patch, author) {
   return created.records?.[0]?.id || null;
 }
 
+// ─── STAFF SURVEYS (in-app) ──────────────────────────────────────────────────
+// Leader-side management of survey links + responses. Staff never touch this
+// proxy — they answer through the public /survey function with their code.
+const surveyFromRec = (r) => ({
+  id: r.id,
+  run: r.fields["Run"] || "",
+  country: r.fields["Country"] || "",
+  period: r.fields["Period"] || "",
+  token: r.fields["Token"] || "",
+  status: r.fields["Status"]?.name || r.fields["Status"] || "Closed",
+  created: r.fields["Created"] || null,
+});
+export async function loadSurveys() {
+  const res = await call({ action: "list", table: "surveys" });
+  return (res.records || []).map(surveyFromRec)
+    .sort((a, b) => new Date(b.created || 0) - new Date(a.created || 0));
+}
+export async function createSurvey({ country, period }) {
+  const bytes = new Uint8Array(16);
+  (window.crypto || {}).getRandomValues ? window.crypto.getRandomValues(bytes)
+    : bytes.forEach((_, i) => { bytes[i] = Math.floor(Math.random() * 256); });
+  const token = Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
+  const fields = {
+    "Run": `${country} ${period}`, "Country": country, "Period": String(period),
+    "Token": token, "Status": "Open", "Created": new Date().toISOString(),
+  };
+  const res = await call({ action: "create", table: "surveys", records: [{ fields }] });
+  return surveyFromRec(res.records[0]);
+}
+export async function setSurveyStatus(id, status) {
+  await call({ action: "update", table: "surveys", records: [{ id, fields: { "Status": status } }] });
+}
+export async function loadSurveyResponses(run) {
+  const res = await call({ action: "list", table: "surveyResponses", filterByFormula: `{Run} = ${q(run)}` });
+  return (res.records || []).map(r => ({
+    id: r.id,
+    code: r.fields["Code"] || "",
+    run: r.fields["Run"] || "",
+    status: r.fields["Status"]?.name || r.fields["Status"] || "In progress",
+    language: r.fields["Language"] || "",
+    started: r.fields["Started"] || null,
+    updated: r.fields["Updated"] || null,
+    answers: (() => { try { const v = JSON.parse(r.fields["Answers"] || "{}"); return v && typeof v === "object" ? v : {}; } catch { return {}; } })(),
+  })).sort((a, b) => new Date(b.updated || 0) - new Date(a.updated || 0));
+}
+
 // ─── LEADERSHIP BRIEFS (synthesis history) ───────────────────────────────────
 // One row per AI synthesis run from the Leadership page, so Mel & Chris can go
 // back and compare briefs over time. The proxy serves this table to leaders only.
