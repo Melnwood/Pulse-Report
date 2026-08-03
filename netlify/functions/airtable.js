@@ -144,6 +144,8 @@ exports.handler = async (event) => {
     if (tbl === "surveyBasics") return true; // shared org-wide defaults — everyone reads them
     if (tbl === "helpVideos") return true;   // shared help content — everyone reads it
     if (tbl === "prep") return startsWithCountry(fields.Run);
+    if (tbl === "surveys") return String(fields.Country || "").toLowerCase() === country.toLowerCase();
+    if (tbl === "surveyResponses") return startsWithCountry(fields.Run);
     if (tbl === "selections") { const set = await allowedCountryDeptIds(); const id = selectionDeptId(fields); return !!id && set.has(id); }
     return false;
   };
@@ -181,9 +183,12 @@ exports.handler = async (event) => {
       if (table === "briefs" && role && role !== "leader") {
         return { statusCode: 200, headers, body: JSON.stringify({ records: [] }) };
       }
-      // Staff survey links and answers are for P&C leadership only. (Staff
-      // submit through the separate public survey function, never this proxy.)
-      if ((table === "surveys" || table === "surveyResponses") && role && role !== "leader") {
+      // Staff survey links and answers: P&C leadership sees everything. A
+      // country leader sees only their own country's — and only progress, never
+      // content: the link token is stripped from surveys, and responses come
+      // back as status-only rows (no answers, no codes). Directors see none.
+      // (Staff submit through the separate public survey function, never this proxy.)
+      if ((table === "surveys" || table === "surveyResponses") && role === "director") {
         return { statusCode: 200, headers, body: JSON.stringify({ records: [] }) };
       }
       let all = await listAll(tableId, filterByFormula, params && params.pageSize, params && params.sort);
@@ -192,6 +197,13 @@ exports.handler = async (event) => {
         const kept = [];
         for (const r of all) { if (await recordInCountry(table, r.fields)) kept.push(r); }
         all = kept;
+      }
+      if (table === "surveys" && role === "country") {
+        all = all.map(r => { const f = { ...(r.fields || {}) }; delete f.Token; return { ...r, fields: f }; });
+      }
+      if (table === "surveyResponses" && role === "country") {
+        all = all.map(r => { const f = r.fields || {};
+          return { ...r, fields: { Run: f.Run, Status: f.Status, Started: f.Started, Updated: f.Updated } }; });
       }
       // Notes carry a visibility. Non-leaders never receive someone else's PRIVATE
       // note — a country leader gets public notes plus their own; a director also
@@ -210,8 +222,20 @@ exports.handler = async (event) => {
     // ── WRITES: create / update / delete ──
     if (action === "create" || action === "update" || action === "delete") {
       if (writeByCountry) {
+        // One survey exception: a country leader may set how many staff should
+        // take their own country's survey — the Expected field, nothing else.
+        if (table === "surveys") {
+          if (action !== "update") return fail(403, "Read-only access.");
+          for (const rec of (records || [])) {
+            const keys = Object.keys(rec.fields || {});
+            if (!keys.length || keys.some(k => k !== "Expected")) return fail(403, "Read-only access.");
+            const f = await getRecord(tableId, rec.id);
+            const c = f && String((f.fields || {}).Country || "").toLowerCase();
+            if (!f || c !== country.toLowerCase()) return fail(403, "Outside your country.");
+          }
+        }
         // Country leaders write ONLY their prep + notes, ONLY within their country.
-        if (!COUNTRY_WRITABLE.has(table)) return fail(403, "Read-only access.");
+        else if (!COUNTRY_WRITABLE.has(table)) return fail(403, "Read-only access.");
         if (action === "create") {
           for (const rec of (records || [])) {
             if (!(await recordInCountry(table, rec.fields))) return fail(403, "Outside your country.");

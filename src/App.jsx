@@ -10,7 +10,7 @@ import VideosView from "./components/VideosView";
 import { authStatus, tokenValid, getUser, logout, listCountryLeaders } from "./authClient";
 import CountryLeadersView from "./components/CountryLeadersView";
 import SURVEY_BASICS from "./surveyBasics.json";
-import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, deleteDepartmentNote, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, updateQuestionNote, deleteQuestionNote, loadMeasures, loadSurveyBasicsMaster, saveSurveyBasicsMaster, loadHelpVideos, loadPrep, savePrep, saveBrief, loadBriefs, baseYear, periodSeq, periodCmp, loadSurveys, createSurvey, setSurveyStatus, loadSurveyResponses } from "./airtable";
+import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, deleteDepartmentNote, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, updateQuestionNote, deleteQuestionNote, loadMeasures, loadSurveyBasicsMaster, saveSurveyBasicsMaster, loadHelpVideos, loadPrep, savePrep, saveBrief, loadBriefs, baseYear, periodSeq, periodCmp, loadSurveys, createSurvey, setSurveyStatus, loadSurveyResponses, updateSurvey, deleteSurvey } from "./airtable";
 import { synthesizeLeadership, languageForCountry, translateBatch, translateToEnglish, nativeLanguageLabel } from "./ai";
 import MeasurePanel from "./components/MeasurePanel";
 import NotesDigest from "./components/NotesDigest";
@@ -2378,6 +2378,108 @@ function RespondentSurveyModal({ resp, onClose }) {
   );
 }
 
+// "Pulse survey progress" — one row per OPEN survey: who's finished, who's in
+// the middle, and (once someone says how many staff should take it) how many
+// haven't started. Shown on the P&C Leadership page for every country, and on
+// a country's own dashboard for just that country. Renders nothing when no
+// survey is running. The country leader (or P&C) can set the expected count
+// right here — the server only lets a country leader touch that one number.
+function PulseSurveyProgress({ country = null, refreshKey = "" }) {
+  const isMobile = useIsMobile();
+  const [items, setItems] = useState(null); // [{sv, resps}]
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const cmp = (s) => String(s || "").trim().toLowerCase();
+        const svs = (await loadSurveys()).filter(sv =>
+          sv.status === "Open" && (!country || cmp(sv.country) === cmp(country)));
+        const withResps = await Promise.all(svs.map(async sv => {
+          try { return { sv, resps: await loadSurveyResponses(sv.run) }; }
+          catch { return { sv, resps: [] }; }
+        }));
+        if (alive) setItems(withResps);
+      } catch { if (alive) setItems([]); }
+    })();
+    return () => { alive = false; };
+  }, [country, refreshKey]);
+  if (!items || !items.length) return null;
+  return (
+    <div style={{ ...card, padding: 0, overflow: "hidden", marginBottom: 24 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "11px 14px 7px", flexWrap: "wrap" }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#7A6F63", textTransform: "uppercase", letterSpacing: 1.5 }}>Pulse survey progress</span>
+        <span style={{ fontSize: 11, color: "#A89C8D" }}>· a survey is out right now</span>
+      </div>
+      {items.map(({ sv, resps }) => <SurveyProgressRow key={sv.id} sv={sv} resps={resps} isMobile={isMobile} />)}
+    </div>
+  );
+}
+
+function SurveyProgressRow({ sv, resps, isMobile }) {
+  const finished = resps.filter(r => r.status === "Completed").length;
+  const inProgress = resps.length - finished;
+  const [expected, setExpected] = useState(sv.expected);
+  const [editingExp, setEditingExp] = useState(false);
+  const [expInput, setExpInput] = useState(sv.expected != null ? String(sv.expected) : "");
+  const [saving, setSaving] = useState(false);
+  const notStarted = expected != null ? Math.max(0, expected - resps.length) : null;
+  const total = expected != null ? Math.max(expected, resps.length) : resps.length;
+  const seg = (n) => total > 0 ? `${(n / total) * 100}%` : "0%";
+  const saveExpected = async () => {
+    const n = expInput.trim() === "" ? null : Math.max(0, parseInt(expInput, 10) || 0);
+    setSaving(true);
+    try { await updateSurvey(sv.id, { expected: n }); setExpected(n); setEditingExp(false); }
+    catch (e) { window.alert("Couldn't save that number: " + e.message); }
+    setSaving(false);
+  };
+  return (
+    <div style={{ padding: "10px 14px", borderTop: "1px solid #F3EBE1" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 13, fontWeight: 650, color: "#2C2621" }}>
+          {sv.country} <span style={{ fontWeight: 500, color: "#A89C8D", fontSize: 12 }}>{sv.period}</span>
+        </span>
+        {sv.sendDate && (
+          <span style={{ fontSize: 11.5, color: "#A89C8D" }}>
+            went out {new Date(sv.sendDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+          </span>
+        )}
+        <span style={{ marginLeft: "auto", fontSize: 12, color: "#5A4A3B" }}>
+          <b style={{ color: "#5C9A6D" }}>{finished}</b> finished
+          {" · "}<b style={{ color: "#C08636" }}>{inProgress}</b> in progress
+          {notStarted != null && <>{" · "}<b style={{ color: "#7A6F63" }}>{notStarted}</b> haven't started</>}
+        </span>
+      </div>
+      <div style={{ display: "flex", height: 8, background: "#EBDECB", borderRadius: 5, overflow: "hidden", marginTop: 8 }}>
+        <div style={{ width: seg(finished), background: "#5C9A6D", transition: "width .3s" }} />
+        <div style={{ width: seg(inProgress), background: "#E0A56F", transition: "width .3s" }} />
+      </div>
+      <div style={{ marginTop: 6, fontSize: 11.5, color: "#7A6F63", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        {editingExp ? (
+          <>
+            <span>How many staff should take it?</span>
+            <input type="number" min="0" value={expInput} onChange={e => setExpInput(e.target.value)} autoFocus
+              style={{ width: 64, fontSize: 12, padding: "3px 7px", border: "1px solid #E2D3C2", borderRadius: 6 }} />
+            <button onClick={saveExpected} disabled={saving}
+              style={{ ...navBtn, fontSize: 11, padding: "3px 10px" }}>{saving ? "…" : "Save"}</button>
+            <button onClick={() => setEditingExp(false)}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "#A89C8D", fontSize: 11.5, padding: 0 }}>Cancel</button>
+          </>
+        ) : expected != null ? (
+          <button onClick={() => { setExpInput(String(expected)); setEditingExp(true); }}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "#A89C8D", fontSize: 11.5, padding: 0, textDecoration: "underline" }}>
+            {expected} expected — change
+          </button>
+        ) : (
+          <button onClick={() => setEditingExp(true)}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "#B96524", fontWeight: 700, fontSize: 11.5, padding: 0, textDecoration: "underline" }}>
+            Set how many staff should take it →
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function StaffSurveysModal({ countries = [], runs = [], onClose, onImport, generating }) {
   const [surveys, setSurveys] = useState(null);
   const [resps, setResps] = useState({});        // run -> responses
@@ -2424,6 +2526,63 @@ function StaffSurveysModal({ countries = [], runs = [], onClose, onImport, gener
   const flip = async (sv) => {
     try { await setSurveyStatus(sv.id, sv.status === "Open" ? "Closed" : "Open"); await reload(); }
     catch (e) { setErr(e.message); }
+  };
+
+  // Fixing a survey that was set up wrong. Country/year can change freely until
+  // someone has answered; after that only the send date (same year) and the
+  // expected count are editable — delete is always available, with a warning.
+  const [editing, setEditing] = useState(null); // survey id
+  const [eCountry, setECountry] = useState("");
+  const [eOther, setEOther] = useState("");
+  const [eDate, setEDate] = useState("");
+  const [eExpected, setEExpected] = useState("");
+  const openEdit = (sv) => {
+    setErr("");
+    setEditing(editing === sv.id ? null : sv.id);
+    setECountry(countries.includes(sv.country) ? sv.country : "__other__");
+    setEOther(sv.country);
+    setEDate(sv.sendDate || "");
+    setEExpected(sv.expected != null ? String(sv.expected) : "");
+    if (!resps[sv.run]) loadResps(sv.run);
+  };
+  const saveEdit = async (sv) => {
+    const cmp = (s) => String(s || "").trim().toLowerCase();
+    const country = (eCountry === "__other__" ? eOther : eCountry).trim();
+    if (!country || !eDate) return;
+    setBusy(true); setErr("");
+    try {
+      const expected = eExpected.trim() === "" ? null : Math.max(0, parseInt(eExpected, 10) || 0);
+      const hasResps = (resps[sv.run] || []).length > 0;
+      const countryChanged = cmp(country) !== cmp(sv.country);
+      const yearChanged = eDate.slice(0, 4) !== String(sv.period).slice(0, 4);
+      if ((countryChanged || yearChanged) && hasResps) {
+        setErr("People have already answered this survey, so its country and year can't change. You can adjust the date within the same year — or delete the survey and start over.");
+      } else if (countryChanged || yearChanged) {
+        const year = eDate.slice(0, 4);
+        const taken = new Set();
+        runs.forEach(r => { if (cmp(r.country) === cmp(country)) taken.add(String(r.year)); });
+        (surveys || []).forEach(s2 => { if (s2.id !== sv.id && cmp(s2.country) === cmp(country)) taken.add(String(s2.period)); });
+        let period = year;
+        for (let n = 2; taken.has(period); n++) period = `${year}·${n}`;
+        await updateSurvey(sv.id, { country, period, sendDate: eDate, expected });
+        setEditing(null); await reload();
+      } else {
+        await updateSurvey(sv.id, { sendDate: eDate, expected });
+        setEditing(null); await reload();
+      }
+    } catch (e) { setErr(e.message); }
+    setBusy(false);
+  };
+  const del = async (sv) => {
+    setBusy(true); setErr("");
+    try {
+      const list = resps[sv.run] || await loadSurveyResponses(sv.run);
+      const msg = list.length
+        ? `Delete the ${sv.run} survey?\n\n${list.length} ${list.length === 1 ? "person has" : "people have"} already answered — their answers will be deleted too. This can't be undone.`
+        : `Delete the ${sv.run} survey link? This can't be undone.`;
+      if (window.confirm(msg)) { await deleteSurvey(sv.id, sv.run); setEditing(null); await reload(); }
+    } catch (e) { setErr(e.message); }
+    setBusy(false);
   };
   const copyLink = async (sv) => {
     try {
@@ -2506,12 +2665,48 @@ function StaffSurveysModal({ countries = [], runs = [], onClose, onImport, gener
                   <button onClick={() => flip(sv)} style={{ ...navBtn, fontSize:11.5, padding:"5px 11px" }}>
                     {sv.status === "Open" ? "Close survey" : "Reopen"}
                   </button>
+                  <button onClick={() => openEdit(sv)} style={{ ...navBtn, fontSize:11.5, padding:"5px 11px",
+                    background: editing === sv.id ? "#FBEFE4" : undefined, borderColor: editing === sv.id ? "#E0A56F" : undefined }}>
+                    {editing === sv.id ? "Close edit" : "Edit"}
+                  </button>
+                  <button onClick={() => del(sv)} disabled={busy}
+                    style={{ ...navBtn, fontSize:11.5, padding:"5px 11px", color:"#BE6650", borderColor:"#E8C7BC" }}>
+                    Delete
+                  </button>
                   <button onClick={() => onImport && onImport(sv)} disabled={generating}
                     style={{ ...navBtn, fontSize:11.5, padding:"5px 11px", background:"#5C9A6D", color:"#fff", border:"1px solid transparent" }}>
                     Import into report →
                   </button>
                 </span>
               </div>
+              {editing === sv.id && (
+                <div style={{ padding:"12px 14px", borderTop:"1px solid #F3EBE1", background:"#fff",
+                  display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
+                  <select value={eCountry} onChange={e => setECountry(e.target.value)}
+                    style={{ fontSize:13, padding:"7px 10px", border:"1px solid #E2D3C2", borderRadius:8, background:"#fff" }}>
+                    {countries.map(c => <option key={c} value={c}>{c}</option>)}
+                    <option value="__other__">Somewhere else…</option>
+                  </select>
+                  {eCountry === "__other__" && (
+                    <input value={eOther} onChange={e => setEOther(e.target.value)} placeholder="Country name"
+                      style={{ fontSize:13, padding:"7px 10px", border:"1px solid #E2D3C2", borderRadius:8, width:130 }} />
+                  )}
+                  <input type="date" value={eDate} onChange={e => setEDate(e.target.value)}
+                    style={{ fontSize:13, padding:"7px 10px", border:"1px solid #E2D3C2", borderRadius:8, fontFamily:"inherit" }} />
+                  <label style={{ fontSize:12, color:"#7A6F63", display:"flex", alignItems:"center", gap:6 }}>
+                    Staff who should take it:
+                    <input type="number" min="0" value={eExpected} onChange={e => setEExpected(e.target.value)} placeholder="?"
+                      style={{ fontSize:13, padding:"7px 10px", border:"1px solid #E2D3C2", borderRadius:8, width:64 }} />
+                  </label>
+                  <button onClick={() => saveEdit(sv)} disabled={busy}
+                    style={{ ...navBtn, fontSize:12, padding:"6px 13px" }}>{busy ? "Saving…" : "Save changes"}</button>
+                  {(resps[sv.run] || []).length > 0 && (
+                    <span style={{ fontSize:11, color:"#A89C8D", flexBasis:"100%" }}>
+                      {(resps[sv.run] || []).length} answered already, so country and year are locked — date (same year) and staff count are fine to change.
+                    </span>
+                  )}
+                </div>
+              )}
               {expanded === sv.run && (
                 <div style={{ padding:"10px 14px" }}>
                   {!list ? (
@@ -2861,6 +3056,9 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
       <div style={{ maxWidth:900, margin:"0 auto" }}>
 
         {canPreview && showPreview && <PreviewAsPanel allRuns={allRuns} setPreviewAs={setPreviewAs} setView={setView} />}
+
+        {/* ── Pulse survey progress — any survey out in the field right now ── */}
+        <PulseSurveyProgress refreshKey={String(surveysOpen)} />
 
         {/* ── Director review progress — compact, at the very top ──
             One row per active country: how much of its director review is done.
@@ -6657,6 +6855,10 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
       </div>
 
       <div style={{ maxWidth:1100, margin:"0 auto", padding: isMobile ? "20px 14px" : "32px 24px" }}>
+
+        {/* A survey out in the field for this country shows its progress right
+            on top — the country's leader can set how many staff should take it. */}
+        {effDashCountry !== "all" && <PulseSurveyProgress country={effDashCountry} />}
 
         {/* JV-wide overview grid */}
         {effDashCountry === "all" && (

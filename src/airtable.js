@@ -603,6 +603,7 @@ const surveyFromRec = (r) => ({
   token: r.fields["Token"] || "",
   status: r.fields["Status"]?.name || r.fields["Status"] || "Closed",
   sendDate: r.fields["Send Date"] || null,
+  expected: r.fields["Expected"] != null ? Number(r.fields["Expected"]) : null,
   created: r.fields["Created"] || null,
 });
 export async function loadSurveys() {
@@ -625,6 +626,28 @@ export async function createSurvey({ country, period, sendDate }) {
 }
 export async function setSurveyStatus(id, status) {
   await call({ action: "update", table: "surveys", records: [{ id, fields: { "Status": status } }] });
+}
+// Fix up a survey that was set up wrong. Pass country+period together to rename
+// the run; sendDate/expected can be changed on their own. (A country leader may
+// only ever change Expected — the proxy enforces that.)
+export async function updateSurvey(id, { country, period, sendDate, expected } = {}) {
+  const fields = {};
+  if (country !== undefined && period !== undefined) {
+    fields["Run"] = `${country} ${period}`; fields["Country"] = country; fields["Period"] = String(period);
+  }
+  if (sendDate !== undefined) fields["Send Date"] = sendDate || null;
+  if (expected !== undefined) fields["Expected"] = expected == null ? null : Number(expected);
+  const res = await call({ action: "update", table: "surveys", records: [{ id, fields }] });
+  return surveyFromRec(res.records[0]);
+}
+// Delete a survey link AND any answers already collected under its run.
+export async function deleteSurvey(id, run) {
+  if (run) {
+    const res = await call({ action: "list", table: "surveyResponses", filterByFormula: `{Run} = ${q(run)}` });
+    const ids = (res.records || []).map(r => r.id);
+    if (ids.length) await call({ action: "delete", table: "surveyResponses", recordIds: ids });
+  }
+  await call({ action: "delete", table: "surveys", recordIds: [id] });
 }
 export async function loadSurveyResponses(run) {
   const res = await call({ action: "list", table: "surveyResponses", filterByFormula: `{Run} = ${q(run)}` });
