@@ -3482,15 +3482,20 @@ function PreviewBanner({ preview, onExit }) {
 
 // Director-facing "How to use the app" video library (a modal). Same Help Videos
 // table, filtered to the "How to use the app" section.
-function HowToVideosPanel({ onClose }) {
+// A video with no Audience set is for everyone; otherwise it shows only to the
+// audience(s) ticked on the Manage videos screen.
+const videoForAudience = (v, audience) => !(v.audience || []).length || v.audience.includes(audience);
+
+function HowToVideosPanel({ onClose, audience = "Department leaders" }) {
   const isMobile = useIsMobile();
   const [videos, setVideos] = useState(null);
   const [playing, setPlaying] = useState(null);
   useEffect(() => {
     loadHelpVideos()
-      .then(vs => setVideos(vs.filter(v => (v.section || "").trim().toLowerCase() === "how to use the app")))
+      .then(vs => setVideos(vs.filter(v => (v.section || "").trim().toLowerCase() === "how to use the app" && videoForAudience(v, audience))))
       .catch(() => setVideos([]));
-  }, []);
+    // eslint-disable-next-line
+  }, [audience]);
   return (
     <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.4)", zIndex:1000,
       display:"flex", alignItems:"flex-start", justifyContent:"center", paddingTop: isMobile?20:60, overflow:"auto" }} onClick={onClose}>
@@ -3540,14 +3545,15 @@ function HowToVideosButton({ style }) {
   );
 }
 
-function ScoringHelpPanel({ onClose }) {
+function ScoringHelpPanel({ onClose, audience = "Department leaders" }) {
   const isMobile = useIsMobile();
   const [videos, setVideos] = useState([]);
   const [playing, setPlaying] = useState(null);
   useEffect(() => { loadHelpVideos().then(setVideos).catch(() => setVideos([])); }, []);
   // A small "▶ Watch" button next to a section's title, if a video is tagged for
-  // it. Clicking pops the video in its own window — the text stays put.
-  const videoFor = (s) => videos.find(v => (v.section || "").trim().toLowerCase() === s.toLowerCase());
+  // it (and for this viewer's audience). Clicking pops the video in its own
+  // window — the text stays put.
+  const videoFor = (s) => videos.find(v => (v.section || "").trim().toLowerCase() === s.toLowerCase() && videoForAudience(v, audience));
   const watch = (sec) => <WatchButton video={videoFor(sec)} onPlay={setPlaying} />;
   return (
     <div style={{
@@ -4992,7 +4998,7 @@ const TR_UI_STRINGS = () => [
   "+ Agenda", "✓ On agenda",
   "Department Scores", "(Click on a department to see more details.)",
   "Concern & Watch questions", "Every question at this level, across every department — including the healthy ones.",
-  "Open department →",
+  "Open department →", "How scoring works",
   "Prepare for your Pulse meeting", "✓ You've finished your part — thank you!", "Close department",
   "Prepare for your pulse meeting", "Meeting agenda — most important first", " (drag to reorder)", "Reflect",
   "Your notes on what's working — saves when you click away, and goes to People & Culture with your prep.",
@@ -5229,6 +5235,8 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
   const [prepOpen, setPrepOpen] = useState(false);
   // The Concern & Watch questions open the same way — a window over the report.
   const [flaggedOpen, setFlaggedOpen] = useState(false);
+  // "How scoring works" for the country leader, right on their report.
+  const [showScoringHelp, setShowScoringHelp] = useState(false);
   // The API DeptReportPage uses to render the prep layer on each department.
   const prepApi = (prepMode && prep) ? {
     author: prepAuthor,
@@ -5440,8 +5448,16 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
                       ⚠ {tr("Concern & Watch questions")} · {flaggedCount}
                     </button>
                   )}
+                  {prepMode && (
+                    <button onClick={() => setShowScoringHelp(true)}
+                      style={{ fontSize:13.5, fontWeight:700, cursor:"pointer", borderRadius:20, padding:"9px 18px",
+                        color:"#5A4A3B", background:"#FDFAF4", border:"1px solid #E2D3C2" }}>
+                      ❔ {tr("How scoring works")}
+                    </button>
+                  )}
                 </div>
               )}
+              {showScoringHelp && <ScoringHelpPanel onClose={() => setShowScoringHelp(false)} audience="Country leaders" />}
             </div>
             <div style={{ textAlign:"right" }}>
               <div style={{ fontSize:42, fontWeight:800, color:sc(overallAvg>=3.5?"Healthy":overallAvg>=2.5?"Watch":"Concern") }}>{overallAvg}</div>
@@ -5969,6 +5985,9 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
 // ─── DASHBOARD VIEW ───────────────────────────────────────────────────────────
 function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country, year, surveyData, refinements, setRefinements, openReport, lockCountry, isLeader = true, authUser, onSignOut }) {
   const isMobile = useIsMobile();
+  // "How scoring works" — the same explainer the department leaders get, served
+  // with country-leader-audience videos.
+  const [showScoringHelp, setShowScoringHelp] = useState(false);
   const countries = [...new Set(allRuns.map(r=>r.country))].sort();
   const DEPTS_ORDER = ["HR","LD","LC","MPD","Counseling","Women","Singles","Marriages","JVK"];
   // A country leader is locked to their country; everyone else uses the selector.
@@ -6001,6 +6020,11 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
         <div style={{ flex:1, fontFamily:FONT_DISPLAY, fontSize:18, color:"#2C2621", fontWeight:600 }}>
           {effDashCountry !== "all" ? `${effDashCountry} Pulse Report Dashboard` : "Country Leader Pulse Report Dashboard"}
         </div>
+        <button onClick={() => setShowScoringHelp(true)}
+          style={{ ...navBtn, background:"white", border:"1px solid #ECE2D2", color:"#E0863C", fontWeight:700, fontSize:12, padding:"6px 12px" }}>
+          ❔ How scoring works
+        </button>
+        {showScoringHelp && <ScoringHelpPanel onClose={() => setShowScoringHelp(false)} audience="Country leaders" />}
         {!lockCountry && (
           <select value={dashCountry} onChange={e=>setDashCountry(e.target.value)}
             style={{ background:"#F6F1E8", border:"1px solid #ECE2D2", borderRadius:6, color:"#2C2621", padding:"6px 12px", fontSize:13 }}>

@@ -731,6 +731,9 @@ export async function loadHelpVideos() {
       section: r.fields["Section"] || "",
       order: r.fields["Order"] ?? 999,
       active: r.fields["Active"] !== false,
+      // Who the video is for ("Department leaders" / "Country leaders").
+      // Empty = everyone sees it.
+      audience: Array.isArray(r.fields["Audience"]) ? r.fields["Audience"] : [],
     }))
     .filter(v => v.active && (v.url || v.fileUrl))
     .sort((a, b) => (a.order - b.order) || a.title.localeCompare(b.title));
@@ -742,6 +745,7 @@ const helpVideoFromRec = (r) => ({
   fileUrl: (Array.isArray(r.fields["Video File"]) && r.fields["Video File"][0] && r.fields["Video File"][0].url) || "",
   description: r.fields["Description"] || "", section: r.fields["Section"] || "",
   order: r.fields["Order"] ?? 0, active: r.fields["Active"] !== false,
+  audience: Array.isArray(r.fields["Audience"]) ? r.fields["Audience"] : [],
 });
 export async function loadAllHelpVideos() {
   const res = await call({ action: "list", table: "helpVideos" });
@@ -753,6 +757,7 @@ export async function saveHelpVideo(v) {
     "Title": v.title || "", "URL": v.url || "", "Description": v.description || "",
     "Section": v.section || "", "Order": v.order != null && v.order !== "" ? Number(v.order) : undefined,
     "Active": v.active !== false,
+    "Audience": Array.isArray(v.audience) ? v.audience : [],
   };
   const res = v.id
     ? await call({ action: "update", table: "helpVideos", records: [{ id: v.id, fields }] })

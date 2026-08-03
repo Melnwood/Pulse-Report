@@ -13,7 +13,14 @@ const SECTIONS = [
   { value: "Status thresholds",  label: "How scoring works — under “Status thresholds”" },
 ];
 const sectionLabel = (v) => (SECTIONS.find(s => s.value === v)?.label) || v || "—";
-const blank = { id: null, title: "", url: "", fileUrl: "", section: "How to use the app", description: "", order: "", active: true };
+// Who a video is for. Both ticked (or none) = everyone sees it.
+const AUDIENCES = ["Department leaders", "Country leaders"];
+const audienceLabel = (aud) => {
+  const a = Array.isArray(aud) ? aud : [];
+  if (!a.length || a.length === AUDIENCES.length) return "Everyone";
+  return a.join(" + ");
+};
+const blank = { id: null, title: "", url: "", fileUrl: "", section: "How to use the app", description: "", order: "", active: true, audience: [] };
 
 // Leaders-only screen to add / edit / remove instructional videos.
 export default function VideosView({ setView }) {
@@ -81,6 +88,24 @@ export default function VideosView({ setView }) {
                 <div><label style={lbl}>Description (optional)</label><input style={inp} value={form.description} onChange={e => set("description", e.target.value)} placeholder="One line shown under the title" /></div>
                 <div><label style={lbl}>Order</label><input style={inp} type="number" value={form.order} onChange={e => set("order", e.target.value)} placeholder="1" /></div>
               </div>
+              <div>
+                <label style={lbl}>Who is this video for?</label>
+                <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 4 }}>
+                  {AUDIENCES.map(a => {
+                    const on = (form.audience || []).includes(a);
+                    return (
+                      <label key={a} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13, color: C.inkSoft, cursor: "pointer" }}>
+                        <input type="checkbox" checked={on}
+                          onChange={() => set("audience", on ? (form.audience || []).filter(x => x !== a) : [...(form.audience || []), a])} />
+                        {a}
+                      </label>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 5, lineHeight: 1.5 }}>
+                  Tick who should see it — leave both unticked (or tick both) and everyone sees it.
+                </div>
+              </div>
             </div>
             <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 13, color: C.inkSoft }}>
               <input type="checkbox" checked={form.active} onChange={e => set("active", e.target.checked)} /> Active (visible in the app)
@@ -102,7 +127,7 @@ export default function VideosView({ setView }) {
               <div key={v.id} style={{ ...card, display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", flexWrap: "wrap" }}>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ fontWeight: 650, color: C.ink }}>{v.title || "(untitled)"} {!v.active && <span style={{ fontSize: 11, color: "#BE6650" }}>· hidden</span>}</div>
-                  <div style={{ fontSize: 12, color: C.muted }}>{sectionLabel(v.section)}</div>
+                  <div style={{ fontSize: 12, color: C.muted }}>{sectionLabel(v.section)} · <b>{audienceLabel(v.audience)}</b></div>
                 </div>
                 <button onClick={() => { setErr(""); setForm({ ...v, order: v.order ?? "" }); }} style={{ ...navBtn, fontSize: 12, padding: "6px 12px" }}>Edit</button>
                 <button onClick={() => remove(v)} style={{ ...navBtn, fontSize: 12, padding: "6px 12px", color: "#BE6650", borderColor: "#E4C4BA" }}>Remove</button>
