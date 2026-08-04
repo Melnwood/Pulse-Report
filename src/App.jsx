@@ -4998,11 +4998,8 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
   // Notes attached to one question, oldest first — the conversation in order.
   const notesFor = (qText) => visQ.filter(n => !isAnswer(n) && n.question === qText)
     .sort((a, b) => new Date(a.created || 0) - new Date(b.created || 0));
-  // Department-level notes: dept notes plus "§ …" question notes.
-  const deptLevel = [
-    ...(dNotes || []).filter(n => hasBody(n) && canSee(n)),
-    ...visQ.filter(n => !isAnswer(n) && String(n.question || "").startsWith("§")),
-  ].sort((a, b) => new Date(a.created || 0) - new Date(b.created || 0));
+  // (Department-level notes live in the Meeting notes pad on the right — no
+  // separate "Notes about this department" window; Mel wants one home per note.)
   // Leadership-question answers — ONLY the country leader's own (never anyone
   // else's public notes; that was showing Chris under David's name).
   const answers = visQ.filter(isAnswer).filter(n => !leaderName || n.author === leaderName);
@@ -5228,12 +5225,6 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
             )) : <div style={{ fontSize:12.5, color:"#A89C8D", fontStyle:"italic" }}>No quotes approved for this department.</div>}
           </MnSection>
 
-          {/* Notes about this department as a whole (either leader) */}
-          {!loading && deptLevel.length > 0 && (
-            <MnSection title="Notes about this department" dot="#E0863C" count={`${deptLevel.length}`}>
-              {deptLevel.map(n => <NoteCard key={n.id} n={n} />)}
-            </MnSection>
-          )}
         </div>
 
         {/* ── RIGHT: agenda, then Reflect, then the meeting-notes pad ── */}
