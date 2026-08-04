@@ -4780,10 +4780,12 @@ function MnSection({ title, count, dot, children, defaultOpen = false }) {
 // by the Country Leader Prep flow). The meeting-notes page surfaces them here.
 const LEADER_ANSWER_PREFIX = "LQA: ";
 
-// The redesigned Meeting Notes page — two columns, everything collapsed.
-// Left (1.5fr): the real generated report (DeptReportPage, reused, collapsed) with
-// per-question inline heatmaps; then everything the country leader shared.
-// Right (1fr): the director's notes in a fixed scroll window, and the meeting log.
+// The Meeting Notes page, rebuilt to MIRROR the department leader review —
+// same sections, same order, no deviation: Question scores, Strengths, Growth
+// areas, Leadership questions, Staff quotes. Every note lives with the thing
+// it's about (the country leader's notes carry the warm accent), the agenda
+// sits on the right with one simple meeting-notes pad under it. Heatmaps are
+// the same QuestionHeatmap the review renders — identical by construction.
 function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getApproved, sbOverrides, sbMaster, leaderName }) {
   const isMobile = useIsMobile();
   const [dNotes, setDNotes] = useState(null);   // department-level notes
@@ -4795,9 +4797,8 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
   };
   useEffect(() => { setDNotes(null); setQNotes(null); reload(); /* eslint-disable-next-line */ }, [country, year, dept.key]);
 
-  // The country leader's meeting agenda (from their prep) — the walk-through
-  // list for the meeting. The server only serves Prep to P&C and the country's
-  // own leader, so anyone else simply doesn't see this section.
+  // The country leader's meeting agenda (from their prep). The server only
+  // serves Prep to P&C and the country's own leader.
   const [agenda, setAgenda] = useState([]);
   useEffect(() => {
     let alive = true;
@@ -4809,84 +4810,175 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
 
   const hasBody = n => (n.body || "").trim();
   const isAnswer = n => String(n.question || "").startsWith(LEADER_ANSWER_PREFIX);
-  const pub = list => (list || []).filter(n => hasBody(n) && n.visibility === "Public");
+  const canSee = n => n.visibility === "Public" || (me && n.author === me) || isPCLead;
+  const isLeaderNote = n => !!leaderName && n.author === leaderName;
+  const visQ = (qNotes || []).filter(n => hasBody(n) && canSee(n));
 
-  // From the country leader: everything shared publicly for this department —
-  // notes + questions, tagged with who wrote them, plus leadership-question answers.
-  const leaderAnswers = pub(qNotes).filter(isAnswer);
-  const leaderShared = [...pub(dNotes), ...pub(qNotes).filter(n => !isAnswer(n))];
+  // Notes attached to one question, oldest first — the conversation in order.
+  const notesFor = (qText) => visQ.filter(n => !isAnswer(n) && n.question === qText)
+    .sort((a, b) => new Date(a.created || 0) - new Date(b.created || 0));
+  // Department-level notes: dept notes plus "§ …" question notes.
+  const deptLevel = [
+    ...(dNotes || []).filter(n => hasBody(n) && canSee(n)),
+    ...visQ.filter(n => !isAnswer(n) && String(n.question || "").startsWith("§")),
+  ].sort((a, b) => new Date(a.created || 0) - new Date(b.created || 0));
+  // Leadership-question answers — ONLY the country leader's own (never anyone
+  // else's public notes; that was showing Chris under David's name).
+  const answers = visQ.filter(isAnswer).filter(n => !leaderName || n.author === leaderName);
+  const answerFor = (qText) => answers.find(n =>
+    String(n.question).slice(LEADER_ANSWER_PREFIX.length).trim() === String(qText).trim());
 
-  // Director's notes: same visibility rule as everywhere (public, yours, or P&C lead).
-  const dirNotes = (qNotes || []).filter(n => hasBody(n) && !isAnswer(n) &&
-    (n.visibility === "Public" || (me && n.author === me) || isPCLead));
+  const strengths    = getApproved(dept.key, "strengths");
+  const growth       = getApproved(dept.key, "growth");
+  const leadershipQs = getApproved(dept.key, "leadershipQs");
+  const quotes       = getApproved(dept.key, "quotes");
+  const questions    = dept.questions || [];
+  const loading = dNotes === null || qNotes === null;
+  const qWithNotes = loading ? 0 : questions.filter(q => notesFor(q.en).length > 0).length;
+  const myNoteOn = (qText) => visQ.some(n => n.author === me && n.question === qText);
 
   const fmt = (iso) => { try { return new Date(iso).toLocaleDateString(undefined, { month:"short", day:"numeric" }); } catch { return ""; } };
-  const aboutLabel = (question) => {
-    const s = String(question || "");
-    return s.startsWith("§") ? s.replace(/^§\s*/, "") + " (section)" : s;
+
+  // One note card — the country leader's notes carry the warm accent so the
+  // room can always tell whose voice it is.
+  const NoteCard = ({ n }) => {
+    const lead = isLeaderNote(n);
+    return (
+      <div style={{ borderRadius:10, padding:"10px 13px", marginTop:8,
+        background: lead ? "#FBEFE4" : "#FDFAF4",
+        border: `1px solid ${lead ? "#E0A56F" : "#ECE2D2"}` }}>
+        <div style={{ fontSize:10.5, fontWeight:800, letterSpacing:.4, textTransform:"uppercase",
+          color: lead ? "#B96524" : "#7A6F63", marginBottom:4 }}>
+          {n.author || "Unknown"}{lead ? " — country leader" : ""}
+        </div>
+        <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.55, whiteSpace:"pre-wrap" }}>{n.body}</div>
+        {n.translation && (
+          <div style={{ marginTop:6, fontSize:12, color:"#7A6F63", borderLeft:"2px solid #E2D3C2", paddingLeft:8, lineHeight:1.5, whiteSpace:"pre-wrap" }}>
+            <span style={{ fontSize:9, fontWeight:800, textTransform:"uppercase", letterSpacing:.5, marginRight:6 }}>English (AI)</span>{n.translation}
+          </div>
+        )}
+        {n.created && <div style={{ fontSize:10.5, color:"#A89C8D", marginTop:5 }}>{fmt(n.created)}</div>}
+      </div>
+    );
   };
-  const noteCard = { border:"1px solid #ECE2D2", borderRadius:10, background:"#fff", padding:"11px 13px", marginBottom:9 };
-  const loading = dNotes === null || qNotes === null;
+  const bulletRow = { display:"flex", gap:9, alignItems:"flex-start", fontSize:13, lineHeight:1.55, color:"#2C2621", marginBottom:7 };
+  const BulletDot = ({ color }) => <span style={{ width:7, height:7, borderRadius:"50%", background:color, marginTop:6, flexShrink:0 }} />;
 
   return (
     <div>
       <style>{`
         details.pulse-mn > summary::-webkit-details-marker { display: none; }
         details.pulse-mn[open] > summary .pulse-mn-caret { transform: rotate(90deg); }
+        details.pulse-mnq > summary::-webkit-details-marker { display: none; }
+        details.pulse-mnq[open] > summary .pulse-mn-caret { transform: rotate(90deg); }
       `}</style>
-      <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1.5fr 1fr", gap:16, alignItems:"start" }}>
+      <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1.6fr 1fr", gap:16, alignItems:"start" }}>
 
-        {/* ── LEFT COLUMN ─────────────────────────────────────────────── */}
+        {/* ── LEFT: the department's story, in the SAME order as the review ── */}
         <div>
-          {/* 1+2. The real report, sections collapsed, per-question heatmaps inline */}
-          <MnSection title={`Report — ${dept.label}`} count={`${dept.avg} avg · ${dept.status}`} dot={sc(dept.status)}>
-            <DeptReportPage dept={dept} getApproved={getApproved} country={country} year={year}
-              sbOverrides={sbOverrides} sbMaster={sbMaster} me={me} isPCLead={isPCLead} startCollapsed />
+          {/* 1. Question scores */}
+          <MnSection title="Question scores" dot="#E0863C" defaultOpen
+            count={loading ? "…" : `${questions.length} questions${qWithNotes ? ` · ${qWithNotes} with notes` : ""}`}>
+            {questions.map((q, qi) => {
+              const notesHere = loading ? [] : notesFor(q.en);
+              return (
+                <details key={qi} className="pulse-mnq" style={{ borderTop:"1px solid #F8F2E8" }}>
+                  <summary style={{ display:"flex", alignItems:"center", gap:9, padding:"10px 2px", cursor:"pointer", listStyle:"none" }}>
+                    <svg className="pulse-mn-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#A89C8D"
+                      strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0, transition:"transform .15s" }}>
+                      <path d="M9 6l6 6-6 6" /></svg>
+                    <span style={{ flex:1, fontSize:13.5, lineHeight:1.45, color:"#2C2621" }}>{q.en}</span>
+                    {notesHere.length > 0 && (
+                      <span style={{ fontSize:10.5, fontWeight:700, color:"#B96524", background:"#FBEFE4", border:"1px solid #E0A56F", borderRadius:10, padding:"1px 8px", whiteSpace:"nowrap" }}>
+                        {notesHere.length} note{notesHere.length === 1 ? "" : "s"}
+                      </span>
+                    )}
+                    <span style={{ fontSize:12, fontWeight:800, borderRadius:7, padding:"2px 9px", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums",
+                      color:sc(q.status), background:sb(q.status), border:`1px solid ${sbd(q.status)}` }}>
+                      {q.score != null ? Number(q.score).toFixed(2) : "—"}
+                    </span>
+                  </summary>
+                  <div style={{ padding:"4px 2px 14px 21px" }}>
+                    <QuestionHeatmap q={q} />
+                    {notesHere.map(n => <NoteCard key={n.id} n={n} />)}
+                    <div className="no-print" style={{ marginTop:10 }}>
+                      <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={q.en}
+                        label={q.en} me={me} hasNote={myNoteOn(q.en)} onSaved={reload} btnLabel="+ Add a note" />
+                    </div>
+                  </div>
+                </details>
+              );
+            })}
           </MnSection>
 
-          {/* 3. Everything the country leader shared for this department */}
-          <MnSection title={leaderName ? `From ${leaderName} (country leader)` : "From the country leader"} dot="#E0863C"
-            count={loading ? "…" : `${leaderShared.length + leaderAnswers.length}`}>
-            {loading ? <div style={{ fontSize:12, color:"#7A6F63" }}>Loading…</div> : <>
-              {leaderAnswers.length > 0 && (
-                <div style={{ marginBottom:12 }}>
-                  <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:.5, marginBottom:8 }}>
-                    Answers to this department's leadership questions
-                  </div>
-                  {leaderAnswers.map(n => (
-                    <div key={n.id} style={{ ...noteCard, background:"#FDFAF4" }}>
-                      <div style={{ fontSize:11, color:"#7A6F63", marginBottom:5, lineHeight:1.4, fontStyle:"italic" }}>
-                        {String(n.question).slice(LEADER_ANSWER_PREFIX.length)}
-                      </div>
-                      <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{n.body}</div>
-                      {n.translation && <div style={{ marginTop:6, fontSize:12, color:"#7A6F63", borderLeft:"2px solid #E2D3C2", paddingLeft:8, lineHeight:1.5, whiteSpace:"pre-wrap" }}>
-                        <span style={{ fontSize:9, fontWeight:700, textTransform:"uppercase", letterSpacing:.5, marginRight:6 }}>English (AI)</span>{n.translation}</div>}
-                      <div style={{ fontSize:11, color:"#A89C8D", marginTop:6 }}>{n.author || leaderName || "Country leader"}{n.created ? " · " + fmt(n.created) : ""}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {leaderShared.length > 0 ? leaderShared.map(n => (
-                <div key={n.id} style={noteCard}>
-                  {n.question && <div style={{ fontSize:11, color:"#7A6F63", marginBottom:5, lineHeight:1.4 }}>{aboutLabel(n.question)}</div>}
-                  <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{n.body}</div>
-                  {n.translation && <div style={{ marginTop:6, fontSize:12, color:"#7A6F63", borderLeft:"2px solid #E2D3C2", paddingLeft:8, lineHeight:1.5, whiteSpace:"pre-wrap" }}>
-                    <span style={{ fontSize:9, fontWeight:700, textTransform:"uppercase", letterSpacing:.5, marginRight:6 }}>English (AI)</span>{n.translation}</div>}
-                  <div style={{ fontSize:11, color:"#A89C8D", marginTop:6 }}>{n.author || "Unknown"}{n.created ? " · " + fmt(n.created) : ""}</div>
-                </div>
-              )) : leaderAnswers.length === 0 && (
-                <div style={{ fontSize:12.5, color:"#A89C8D", fontStyle:"italic" }}>
-                  Nothing shared yet — the country leader's public notes, questions, and prep answers for this department will appear here.
-                </div>
-              )}
-            </>}
+          {/* 2. Strengths */}
+          <MnSection title="Strengths" dot="#5C9A6D" count={`${strengths.length}`}>
+            {strengths.length ? strengths.map((t, i) => (
+              <div key={i} style={bulletRow}><BulletDot color="#5C9A6D" />{t}</div>
+            )) : <div style={{ fontSize:12.5, color:"#A89C8D", fontStyle:"italic" }}>Nothing approved for this department yet.</div>}
           </MnSection>
+
+          {/* 3. Growth areas */}
+          <MnSection title="Growth areas" dot="#C08636" count={`${growth.length}`}>
+            {growth.length ? growth.map((t, i) => (
+              <div key={i} style={bulletRow}><BulletDot color="#BE6650" />{t}</div>
+            )) : <div style={{ fontSize:12.5, color:"#A89C8D", fontStyle:"italic" }}>Nothing approved for this department yet.</div>}
+          </MnSection>
+
+          {/* 4. Leadership questions — ONLY the country leader's answers */}
+          <MnSection title="Leadership questions" dot="#B96524"
+            count={loading ? "…" : (answers.length ? `${answers.length} answered` : `${leadershipQs.length}`)}>
+            {leadershipQs.length === 0 && answers.length === 0 ? (
+              <div style={{ fontSize:12.5, color:"#A89C8D", fontStyle:"italic" }}>No leadership questions selected for this department.</div>
+            ) : (
+              <>
+                {leadershipQs.map((qText, i) => {
+                  const a = answerFor(qText);
+                  return (
+                    <div key={i} style={{ marginBottom:12 }}>
+                      <div style={{ fontSize:13, fontWeight:650, color:"#2C2621", lineHeight:1.5 }}>{qText}</div>
+                      {a ? <NoteCard n={a} /> : (
+                        <div style={{ fontSize:12, color:"#A89C8D", fontStyle:"italic", marginTop:4 }}>
+                          {leaderName || "The country leader"} hasn't answered this one yet.
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {answers.filter(a => !leadershipQs.some(qT =>
+                  String(a.question).slice(LEADER_ANSWER_PREFIX.length).trim() === String(qT).trim())).map(a => (
+                  <div key={a.id} style={{ marginBottom:12 }}>
+                    <div style={{ fontSize:13, fontWeight:650, color:"#2C2621", lineHeight:1.5 }}>
+                      {String(a.question).slice(LEADER_ANSWER_PREFIX.length)}
+                    </div>
+                    <NoteCard n={a} />
+                  </div>
+                ))}
+              </>
+            )}
+          </MnSection>
+
+          {/* 5. Staff quotes */}
+          <MnSection title="Staff quotes" dot="#7A6F63" count={`${quotes.length}`}>
+            {quotes.length ? quotes.map((qt, i) => (
+              <div key={i} style={{ fontSize:13, lineHeight:1.6, color:"#5A4A3B", background:"#FDFAF4",
+                borderLeft:"3px solid #E2D3C2", borderRadius:"0 9px 9px 0", padding:"9px 13px", fontStyle:"italic", marginBottom:8 }}>
+                "{qt.text}"
+                {qt.translation && <div style={{ fontStyle:"normal", fontSize:12, color:"#7A6F63", marginTop:5 }}>{qt.translation}</div>}
+              </div>
+            )) : <div style={{ fontSize:12.5, color:"#A89C8D", fontStyle:"italic" }}>No quotes approved for this department.</div>}
+          </MnSection>
+
+          {/* Notes about this department as a whole (either leader) */}
+          {!loading && deptLevel.length > 0 && (
+            <MnSection title="Notes about this department" dot="#E0863C" count={`${deptLevel.length}`}>
+              {deptLevel.map(n => <NoteCard key={n.id} n={n} />)}
+            </MnSection>
+          )}
         </div>
 
-        {/* ── RIGHT COLUMN ────────────────────────────────────────────── */}
+        {/* ── RIGHT: agenda, then the meeting-notes pad under it ── */}
         <div>
-          {/* Meeting agenda — the country leader's walk-through list, open by
-              default so the room always sees where they are. */}
           {agenda.length > 0 && (
             <MnSection title="Meeting agenda" dot="#E0863C" count={`${agenda.length}`} defaultOpen>
               <div style={{ fontSize:11.5, color:"#7A6F63", marginBottom:8 }}>
@@ -4910,36 +5002,10 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
             </MnSection>
           )}
 
-          {/* 4+5. Meeting notes — director's notes (when there are any) sit at
-              the top of the same window the team types in, so the context and
-              the composer live together. */}
-          <MnSection title="Meeting notes" dot="#5C9A6D"
-            count={loading ? "…" : (dirNotes.length ? `${dirNotes.length} department leader note${dirNotes.length === 1 ? "" : "s"}` : null)}>
-            {loading ? <div style={{ fontSize:12, color:"#7A6F63", marginBottom:10 }}>Loading…</div> :
-              dirNotes.length > 0 && (
-                <div style={{ marginBottom:14 }}>
-                  <div style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:.5, marginBottom:8 }}>
-                    Department leader's notes
-                  </div>
-                  <div style={{ maxHeight:270, overflowY:"auto" }}>
-                    {dirNotes.map(n => (
-                      <div key={n.id} style={noteCard}>
-                        <div style={{ fontSize:11, color:"#7A6F63", marginBottom:5, lineHeight:1.4 }}>{aboutLabel(n.question)}</div>
-                        <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{n.body}</div>
-                        {n.translation && <div style={{ marginTop:6, fontSize:12, color:"#7A6F63", borderLeft:"2px solid #E2D3C2", paddingLeft:8, lineHeight:1.5, whiteSpace:"pre-wrap" }}>
-                          <span style={{ fontSize:9, fontWeight:700, textTransform:"uppercase", letterSpacing:.5, marginRight:6 }}>English (AI)</span>{n.translation}</div>}
-                        <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:7 }}>
-                          <span style={{ fontSize:9, fontWeight:700, borderRadius:4, padding:"2px 7px", border:"1px solid",
-                            ...(n.visibility === "Public" ? { color:"#5C9A6D", background:"#E9F1E9", borderColor:"#C7E0CB" } : { color:"#7A6F63", background:"#F1EAE1", borderColor:"#E4D8C8" }) }}>
-                            {n.visibility === "Public" ? "Shared" : "Private"}
-                          </span>
-                          <span style={{ fontSize:11, color:"#A89C8D" }}>{n.author}{n.created ? " · " + fmt(n.created) : ""}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+          <MnSection title="Meeting notes" dot="#5C9A6D" defaultOpen>
+            <div style={{ fontSize:11.5, color:"#7A6F63", marginBottom:8 }}>
+              Just write — decisions, follow-ups, anything worth remembering. Every note saves with your name and today's date.
+            </div>
             <NotesPanel country={country} year={year} deptKey={dept.key} deptLabel={dept.label}
               me={me} saveMe={saveMe} isPCLead={isPCLead} />
           </MnSection>
