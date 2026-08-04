@@ -4364,7 +4364,7 @@ function HowToVideosPanel({ onClose, audience = "Department leaders" }) {
 // Inline "How-to videos" button for the director-page top bars (Home, Review,
 // Workspace) — sits with the other header buttons. Reuses the existing
 // HowToVideosPanel; matches the "How scoring works" button styling.
-function HowToVideosButton({ style }) {
+function HowToVideosButton({ style, audience = "Department leaders" }) {
   const [showHowTo, setShowHowTo] = useState(false);
   return (
     <>
@@ -4373,7 +4373,7 @@ function HowToVideosButton({ style }) {
           border:"1px solid #ECE2D2", color:"#E0863C", fontWeight:700, ...(style||{}) }}>
         <IconHelp/> How-to videos
       </button>
-      {showHowTo && <HowToVideosPanel onClose={() => setShowHowTo(false)} />}
+      {showHowTo && <HowToVideosPanel onClose={() => setShowHowTo(false)} audience={audience} />}
     </>
   );
 }
@@ -6960,6 +6960,7 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
             📈 What this will become
           </button>
         )}
+        <HowToVideosButton audience="Country leaders" style={{ fontSize:12, padding:"6px 12px" }} />
         <button onClick={() => setShowScoringHelp(true)}
           style={{ ...navBtn, background:"white", border:"1px solid #ECE2D2", color:"#E0863C", fontWeight:700, fontSize:12, padding:"6px 12px" }}>
           ❔ How scoring works
