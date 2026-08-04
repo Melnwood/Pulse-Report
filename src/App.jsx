@@ -4205,9 +4205,11 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
                 (selections[deptKey]?.[section] || [])
                   .filter(i => i.include)
                   .map(i => {
+                    // key = the ORIGINAL text — that's what notes are filed under
+                    // in the review, even when the display text was rewritten.
                     const text = (i.rewrite || "").trim() || i.text;
-                    if (section === 'quotes') return { text, translation: i.translation || null, isOriginalLang: !!i.isOriginalLang };
-                    return text;
+                    if (section === 'quotes') return { text, key: i.text, translation: i.translation || null, isOriginalLang: !!i.isOriginalLang };
+                    return { text, key: i.text };
                   })}
               sbOverrides={sbOverrides} sbMaster={sbMaster}
               leaderName={leaderName}
@@ -4797,16 +4799,20 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
   };
   useEffect(() => { setDNotes(null); setQNotes(null); reload(); /* eslint-disable-next-line */ }, [country, year, dept.key]);
 
-  // The country leader's meeting agenda (from their prep). The server only
-  // serves Prep to P&C and the country's own leader.
-  const [agenda, setAgenda] = useState([]);
+  // The country leader's whole prep — agenda, per-department reactions
+  // (matches / what's working / where attention is needed), and the five
+  // Reflect essay answers. All of it belongs in the meeting.
+  const [prepData, setPrepData] = useState(null);
   useEffect(() => {
     let alive = true;
     loadPrep(country, year)
-      .then(p => { if (alive) setAgenda([...(p.agenda || [])].sort((a, b) => (a.order || 0) - (b.order || 0))); })
-      .catch(() => { if (alive) setAgenda([]); });
+      .then(p => { if (alive) setPrepData(p); })
+      .catch(() => { if (alive) setPrepData({ reactions: {}, reflections: {}, agenda: [] }); });
     return () => { alive = false; };
   }, [country, year]);
+  const agenda = [...((prepData && prepData.agenda) || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
+  const reaction = (prepData && prepData.reactions && prepData.reactions[dept.key]) || null;
+  const reflections = (prepData && prepData.reflections) || {};
 
   const hasBody = n => (n.body || "").trim();
   const isAnswer = n => String(n.question || "").startsWith(LEADER_ANSWER_PREFIX);
@@ -4864,6 +4870,49 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
   const bulletRow = { display:"flex", gap:9, alignItems:"flex-start", fontSize:13, lineHeight:1.55, color:"#2C2621", marginBottom:7 };
   const BulletDot = ({ color }) => <span style={{ width:7, height:7, borderRadius:"50%", background:color, marginTop:6, flexShrink:0 }} />;
 
+  // The country leader's prep text (what's working / attention / reflect
+  // answers) rendered like their notes — warm accent, English copy when the
+  // original isn't in English.
+  const PrepCard = ({ body, en, prompt }) => !String(body || "").trim() ? null : (
+    <div style={{ borderRadius:10, padding:"10px 13px", marginTop:8, background:"#FBEFE4", border:"1px solid #E0A56F" }}>
+      <div style={{ fontSize:10.5, fontWeight:800, letterSpacing:.4, textTransform:"uppercase", color:"#B96524", marginBottom:4 }}>
+        {leaderName || "Country leader"} — country leader
+      </div>
+      {prompt && <div style={{ fontSize:12, color:"#7A6F63", fontStyle:"italic", marginBottom:4, lineHeight:1.5 }}>{prompt}</div>}
+      <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.55, whiteSpace:"pre-wrap" }}>{body}</div>
+      {String(en || "").trim() && (
+        <div style={{ marginTop:6, fontSize:12, color:"#7A6F63", borderLeft:"2px solid #E2D3C2", paddingLeft:8, lineHeight:1.5, whiteSpace:"pre-wrap" }}>
+          <span style={{ fontSize:9, fontWeight:800, textTransform:"uppercase", letterSpacing:.5, marginRight:6 }}>English (AI)</span>{en}
+        </div>
+      )}
+    </div>
+  );
+
+  // One approved line (strength / growth area / leadership question / quote)
+  // with everything filed under it in the review: notes keyed by the line's
+  // ORIGINAL text, plus the same compact note button the review offers.
+  const ItemWithNotes = ({ item, dotColor, quote }) => {
+    const itemNotes = loading ? [] : notesFor(item.key).concat(item.key !== item.text ? notesFor(item.text) : []);
+    return (
+      <div style={{ marginBottom:10 }}>
+        {quote ? (
+          <div style={{ fontSize:13, lineHeight:1.6, color:"#5A4A3B", background:"#FDFAF4",
+            borderLeft:"3px solid #E2D3C2", borderRadius:"0 9px 9px 0", padding:"9px 13px", fontStyle:"italic" }}>
+            "{item.text}"
+            {item.translation && <div style={{ fontStyle:"normal", fontSize:12, color:"#7A6F63", marginTop:5 }}>{item.translation}</div>}
+          </div>
+        ) : (
+          <div style={{ ...bulletRow, marginBottom:0 }}><BulletDot color={dotColor} />{item.text}</div>
+        )}
+        {itemNotes.map(n => <NoteCard key={n.id} n={n} />)}
+        <div className="no-print" style={{ marginTop:6, marginLeft: quote ? 0 : 16 }}>
+          <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={item.key}
+            label={item.text} me={me} hasNote={myNoteOn(item.key)} onSaved={reload} compact />
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div>
       <style>{`
@@ -4876,6 +4925,15 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
 
         {/* ── LEFT: the department's story, in the SAME order as the review ── */}
         <div>
+          {/* The country leader's reaction to this department, right up top. */}
+          {reaction && reaction.choice && (
+            <div style={{ background:"#FBEFE4", border:"1px solid #E0A56F", borderRadius:12, padding:"10px 14px",
+              marginBottom:14, fontSize:13, color:"#2C2621", lineHeight:1.55 }}>
+              <b style={{ color:"#B96524" }}>{leaderName || "Country leader"}:</b>{" "}
+              "{reaction.choice}" — does this department's survey match what they're seeing or experiencing.
+            </div>
+          )}
+
           {/* 1. Question scores */}
           <MnSection title="Question scores" dot="#E0863C" defaultOpen
             count={loading ? "…" : `${questions.length} questions${qWithNotes ? ` · ${qWithNotes} with notes` : ""}`}>
@@ -4931,18 +4989,20 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
             })}
           </MnSection>
 
-          {/* 2. Strengths */}
+          {/* 2. Strengths — plus the country leader's "What's working" note */}
           <MnSection title="Strengths" dot="#5C9A6D" count={`${strengths.length}`}>
-            {strengths.length ? strengths.map((t, i) => (
-              <div key={i} style={bulletRow}><BulletDot color="#5C9A6D" />{t}</div>
+            {strengths.length ? strengths.map((item, i) => (
+              <ItemWithNotes key={i} item={item} dotColor="#5C9A6D" />
             )) : <div style={{ fontSize:12.5, color:"#A89C8D", fontStyle:"italic" }}>Nothing approved for this department yet.</div>}
+            {reaction && <PrepCard body={reaction.noteWorking} en={reaction.noteWorkingEn} prompt="Their notes on what's working:" />}
           </MnSection>
 
-          {/* 3. Growth areas */}
+          {/* 3. Growth areas — plus the country leader's "Where attention is needed" note */}
           <MnSection title="Growth areas" dot="#C08636" count={`${growth.length}`}>
-            {growth.length ? growth.map((t, i) => (
-              <div key={i} style={bulletRow}><BulletDot color="#BE6650" />{t}</div>
+            {growth.length ? growth.map((item, i) => (
+              <ItemWithNotes key={i} item={item} dotColor="#BE6650" />
             )) : <div style={{ fontSize:12.5, color:"#A89C8D", fontStyle:"italic" }}>Nothing approved for this department yet.</div>}
+            {reaction && <PrepCard body={reaction.noteAttention} en={reaction.noteAttentionEn} prompt="Their notes on where attention is needed:" />}
           </MnSection>
 
           {/* 4. Leadership questions — ONLY the country leader's answers */}
@@ -4952,21 +5012,29 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
               <div style={{ fontSize:12.5, color:"#A89C8D", fontStyle:"italic" }}>No leadership questions selected for this department.</div>
             ) : (
               <>
-                {leadershipQs.map((qText, i) => {
-                  const a = answerFor(qText);
+                {leadershipQs.map((item, i) => {
+                  const a = answerFor(item.text) || answerFor(item.key);
+                  const itemNotes = loading ? [] : notesFor(item.key).concat(item.key !== item.text ? notesFor(item.text) : []);
                   return (
                     <div key={i} style={{ marginBottom:12 }}>
-                      <div style={{ fontSize:13, fontWeight:650, color:"#2C2621", lineHeight:1.5 }}>{qText}</div>
+                      <div style={{ fontSize:13, fontWeight:650, color:"#2C2621", lineHeight:1.5 }}>{item.text}</div>
                       {a ? <NoteCard n={a} /> : (
                         <div style={{ fontSize:12, color:"#A89C8D", fontStyle:"italic", marginTop:4 }}>
                           {leaderName || "The country leader"} hasn't answered this one yet.
                         </div>
                       )}
+                      {itemNotes.map(n => <NoteCard key={n.id} n={n} />)}
+                      <div className="no-print" style={{ marginTop:6 }}>
+                        <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={item.key}
+                          label={item.text} me={me} hasNote={myNoteOn(item.key)} onSaved={reload} compact />
+                      </div>
                     </div>
                   );
                 })}
-                {answers.filter(a => !leadershipQs.some(qT =>
-                  String(a.question).slice(LEADER_ANSWER_PREFIX.length).trim() === String(qT).trim())).map(a => (
+                {answers.filter(a => !leadershipQs.some(item => {
+                  const q = String(a.question).slice(LEADER_ANSWER_PREFIX.length).trim();
+                  return q === String(item.text).trim() || q === String(item.key).trim();
+                })).map(a => (
                   <div key={a.id} style={{ marginBottom:12 }}>
                     <div style={{ fontSize:13, fontWeight:650, color:"#2C2621", lineHeight:1.5 }}>
                       {String(a.question).slice(LEADER_ANSWER_PREFIX.length)}
@@ -4980,12 +5048,8 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
 
           {/* 5. Staff quotes */}
           <MnSection title="Staff quotes" dot="#7A6F63" count={`${quotes.length}`}>
-            {quotes.length ? quotes.map((qt, i) => (
-              <div key={i} style={{ fontSize:13, lineHeight:1.6, color:"#5A4A3B", background:"#FDFAF4",
-                borderLeft:"3px solid #E2D3C2", borderRadius:"0 9px 9px 0", padding:"9px 13px", fontStyle:"italic", marginBottom:8 }}>
-                "{qt.text}"
-                {qt.translation && <div style={{ fontStyle:"normal", fontSize:12, color:"#7A6F63", marginTop:5 }}>{qt.translation}</div>}
-              </div>
+            {quotes.length ? quotes.map((item, i) => (
+              <ItemWithNotes key={i} item={item} quote />
             )) : <div style={{ fontSize:12.5, color:"#A89C8D", fontStyle:"italic" }}>No quotes approved for this department.</div>}
           </MnSection>
 
@@ -4997,13 +5061,18 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
           )}
         </div>
 
-        {/* ── RIGHT: agenda, then the meeting-notes pad under it ── */}
+        {/* ── RIGHT: agenda, then Reflect, then the meeting-notes pad ── */}
         <div>
-          {agenda.length > 0 && (
-            <MnSection title="Meeting agenda" dot="#E0863C" count={`${agenda.length}`} defaultOpen>
+          <MnSection title="Meeting agenda" dot="#E0863C" count={`${agenda.length}`} defaultOpen>
               <div style={{ fontSize:11.5, color:"#7A6F63", marginBottom:8 }}>
                 What {leaderName || "the country leader"} wants to walk through — most important first.
               </div>
+              {agenda.length === 0 && (
+                <div style={{ fontSize:12.5, color:"#A89C8D", fontStyle:"italic" }}>
+                  Nothing on the agenda yet — {leaderName || "the country leader"} adds departments with the
+                  "+ Agenda" button while preparing.
+                </div>
+              )}
               {agenda.map((a, i) => {
                 const here = a.deptKey === dept.key;
                 return (
@@ -5019,6 +5088,27 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
                   </div>
                 );
               })}
+          </MnSection>
+
+          {/* Reflect — the country leader's five essay answers for this meeting */}
+          {REFLECT_QS.some(qd => String(reflections[qd.key] || "").trim()) && (
+            <MnSection title="Reflect" dot="#B96524"
+              count={`${REFLECT_QS.filter(qd => String(reflections[qd.key] || "").trim()).length} of ${REFLECT_QS.length} answered`} defaultOpen>
+              <div style={{ fontSize:11.5, color:"#7A6F63", marginBottom:8 }}>
+                {leaderName || "The country leader"}'s reflections on the whole report, written while preparing.
+              </div>
+              {REFLECT_QS.map(qd => String(reflections[qd.key] || "").trim() ? (
+                <div key={qd.key} style={{ marginBottom:10 }}>
+                  <div style={{ fontSize:11, fontWeight:800, letterSpacing:.5, textTransform:"uppercase", color:"#B96524" }}>{qd.label}</div>
+                  <div style={{ fontSize:12, color:"#7A6F63", fontStyle:"italic", lineHeight:1.5, margin:"2px 0 4px" }}>{qd.prompt}</div>
+                  <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.55, whiteSpace:"pre-wrap" }}>{reflections[qd.key]}</div>
+                  {String(reflections[qd.key + "En"] || "").trim() && (
+                    <div style={{ marginTop:4, fontSize:12, color:"#7A6F63", borderLeft:"2px solid #E2D3C2", paddingLeft:8, lineHeight:1.5, whiteSpace:"pre-wrap" }}>
+                      <span style={{ fontSize:9, fontWeight:800, textTransform:"uppercase", letterSpacing:.5, marginRight:6 }}>English (AI)</span>{reflections[qd.key + "En"]}
+                    </div>
+                  )}
+                </div>
+              ) : null)}
             </MnSection>
           )}
 

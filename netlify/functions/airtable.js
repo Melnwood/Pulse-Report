@@ -176,11 +176,10 @@ exports.handler = async (event) => {
   try {
     // ── LIST ──
     if (action === "list") {
-      // Prep (reflections + agenda) is for P&C leadership and the country's own
-      // leader — never directors.
-      if (table === "prep" && role === "director") {
-        return { statusCode: 200, headers, body: JSON.stringify({ records: [] }) };
-      }
+      // Prep (reflections + agenda) is readable by everyone in the meeting —
+      // P&C leadership, the country's own leader, AND department leaders
+      // (directors), whose Meeting Notes page shows the agenda and the
+      // leader's Reflect answers. Directors still can't write prep.
       // Leadership briefs are for P&C leadership only.
       if (table === "briefs" && role && role !== "leader") {
         return { statusCode: 200, headers, body: JSON.stringify({ records: [] }) };
