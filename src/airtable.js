@@ -566,6 +566,9 @@ export async function loadPrep(country, year) {
     reactions: parseJSONObj(f["Reactions"]),
     reflections: parseJSONObj(f["Reflections"]),
     agenda,
+    // P&C's private leading notes per agenda item — the proxy strips this
+    // field for everyone who isn't a P&C leader, so it's {} for them.
+    leaderNotes: parseJSONObj(f["Leader Notes"]),
     ready: !!f["Ready"],
     readyAt: f["Ready At"] || null,
     author: f["Author"] || "",
@@ -582,6 +585,7 @@ export async function savePrep(country, year, patch, author) {
   if (patch.reactions !== undefined) fields["Reactions"] = JSON.stringify(patch.reactions).slice(0, 95000);
   if (patch.reflections !== undefined) fields["Reflections"] = JSON.stringify(patch.reflections).slice(0, 95000);
   if (patch.agenda !== undefined) fields["Agenda"] = JSON.stringify(patch.agenda).slice(0, 95000);
+  if (patch.leaderNotes !== undefined) fields["Leader Notes"] = JSON.stringify(patch.leaderNotes).slice(0, 95000);
   if (patch.ready !== undefined) { fields["Ready"] = !!patch.ready; fields["Ready At"] = patch.ready ? new Date().toISOString() : null; }
   if (existing.records.length) {
     const id = existing.records[0].id;

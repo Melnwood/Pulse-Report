@@ -2378,6 +2378,139 @@ function RespondentSurveyModal({ resp, onClose }) {
   );
 }
 
+// "Country Pulse Report agendas" — where Mel & Chris build out the FULL meeting
+// agenda for each country on top of what the country leader queued up. Everyone
+// (leader + department leaders) sees the full agenda in their meeting views;
+// only P&C sees the leading notes attached to each item.
+function CountryAgendasPanel({ latestRuns = [] }) {
+  const [open, setOpen] = useState(null); // country name
+  const runs = [...latestRuns].sort((a, b) => String(a.country).localeCompare(String(b.country)));
+  if (!runs.length) return null;
+  return (
+    <div style={{ ...card, padding: 0, overflow: "hidden", marginBottom: 24 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "11px 14px 7px", flexWrap: "wrap" }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#7A6F63", textTransform: "uppercase", letterSpacing: 1.5 }}>Country Pulse Report agendas</span>
+        <span style={{ fontSize: 11, color: "#A89C8D" }}>· build the full meeting agenda — your leading notes stay with P&C</span>
+      </div>
+      {runs.map(run => (
+        <div key={run.country} style={{ borderTop: "1px solid #F3EBE1" }}>
+          <button onClick={() => setOpen(open === run.country ? null : run.country)}
+            style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", padding: "10px 14px",
+              background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 650, color: "#2C2621" }}>
+            <span style={{ color: "#A89C8D", fontSize: 11 }}>{open === run.country ? "▾" : "▸"}</span>
+            {run.country} <span style={{ fontWeight: 500, color: "#A89C8D", fontSize: 12 }}>{run.year}</span>
+          </button>
+          {open === run.country && <CountryAgendaEditor run={run} />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CountryAgendaEditor({ run }) {
+  const [prep, setPrep] = useState(null);
+  const [err, setErr] = useState("");
+  const [newLabel, setNewLabel] = useState("");
+  const [newDept, setNewDept] = useState("");
+  const [notesDraft, setNotesDraft] = useState({}); // agenda item id -> leading note text
+  const deptList = (run.depts || []).map(d => ({ key: d.key, label: d.label || d.key }));
+  const deptLabelFor = (k) => (deptList.find(d => d.key === k) || {}).label || k;
+  const reload = async () => {
+    try {
+      const p = await loadPrep(run.country, run.year);
+      setPrep(p); setNotesDraft(p.leaderNotes || {});
+    } catch (e) { setErr(e.message); setPrep({ agenda: [], leaderNotes: {}, author: "" }); }
+  };
+  useEffect(() => { reload(); /* eslint-disable-line */ }, [run.country, run.year]);
+  const agenda = prep ? [...(prep.agenda || [])].sort((a, b) => (a.order || 0) - (b.order || 0)) : [];
+
+  const saveAgenda = async (items) => {
+    const withOrder = items.map((a, i) => ({ ...a, order: i + 1 }));
+    setPrep(p => ({ ...p, agenda: withOrder }));
+    setErr("");
+    try { await savePrep(run.country, run.year, { agenda: withOrder }); }
+    catch (e) { setErr("Couldn't save the agenda: " + e.message); reload(); }
+  };
+  const move = (i, dir) => {
+    const items = [...agenda]; const j = i + dir;
+    if (j < 0 || j >= items.length) return;
+    [items[i], items[j]] = [items[j], items[i]];
+    saveAgenda(items);
+  };
+  const remove = (i) => {
+    if (!window.confirm(`Take "${agenda[i].label}" off the ${run.country} agenda?`)) return;
+    saveAgenda(agenda.filter((_, x) => x !== i));
+  };
+  const add = () => {
+    const label = newLabel.trim();
+    if (!label) return;
+    const id = "pc" + Math.random().toString(36).slice(2, 10);
+    saveAgenda([...agenda, { id, label, deptKey: newDept || null, by: "PC" }]);
+    setNewLabel("");
+  };
+  const saveNote = async (itemId) => {
+    const next = { ...((prep && prep.leaderNotes) || {}) };
+    const text = (notesDraft[itemId] || "").trim();
+    if (text) next[itemId] = text; else delete next[itemId];
+    setPrep(p => ({ ...p, leaderNotes: next }));
+    try { await savePrep(run.country, run.year, { leaderNotes: next }); }
+    catch (e) { setErr("Couldn't save your leading note: " + e.message); }
+  };
+
+  if (!prep) return <div style={{ padding: "4px 14px 12px", fontSize: 12.5, color: "#7A6F63" }}>Loading…</div>;
+  return (
+    <div style={{ padding: "0 14px 14px 34px" }}>
+      {err && <div style={{ color: "#BE6650", fontSize: 12, marginBottom: 8 }}>{err}</div>}
+      {agenda.length === 0 && (
+        <div style={{ fontSize: 12.5, color: "#A89C8D", fontStyle: "italic", marginBottom: 8 }}>
+          Nothing on the agenda yet — add the first item below{prep.author ? `, or wait for ${prep.author}'s prep` : ""}.
+        </div>
+      )}
+      {agenda.map((a, i) => (
+        <div key={a.id || i} style={{ borderBottom: "1px solid #F8F2E8", padding: "8px 0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ background: "#E0863C", color: "#fff", borderRadius: "50%", width: 18, height: 18,
+              display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>{i + 1}</span>
+            <span style={{ flex: 1, fontSize: 13, color: "#2C2621", lineHeight: 1.45, minWidth: 160 }}>{a.label}</span>
+            {a.deptKey && (
+              <span style={{ fontSize: 10.5, fontWeight: 700, color: "#7A6F63", background: "#FDFAF4",
+                border: "1px solid #ECE2D2", borderRadius: 10, padding: "1px 8px", whiteSpace: "nowrap" }}>{deptLabelFor(a.deptKey)}</span>
+            )}
+            <span style={{ fontSize: 10, fontWeight: 700, color: a.by === "PC" ? "#B96524" : "#A89C8D" }}>
+              {a.by === "PC" ? "added by P&C" : `from ${prep.author || "the leader"}`}
+            </span>
+            <span style={{ display: "flex", gap: 3 }}>
+              <button onClick={() => move(i, -1)} disabled={i === 0} title="Move up"
+                style={{ ...navBtn, fontSize: 11, padding: "2px 8px", opacity: i === 0 ? .4 : 1 }}>↑</button>
+              <button onClick={() => move(i, 1)} disabled={i === agenda.length - 1} title="Move down"
+                style={{ ...navBtn, fontSize: 11, padding: "2px 8px", opacity: i === agenda.length - 1 ? .4 : 1 }}>↓</button>
+              <button onClick={() => remove(i)} title="Remove from agenda"
+                style={{ ...navBtn, fontSize: 11, padding: "2px 8px", color: "#BE6650", borderColor: "#E8C7BC" }}>✕</button>
+            </span>
+          </div>
+          <textarea rows={1} value={notesDraft[a.id] || ""} placeholder="Your leading note for this item (only P&C sees this)…"
+            onChange={e => setNotesDraft(prev => ({ ...prev, [a.id]: e.target.value }))}
+            onBlur={() => saveNote(a.id)}
+            style={{ width: "100%", boxSizing: "border-box", fontSize: 12.5, padding: "7px 10px", marginTop: 6,
+              border: "1px dashed #E2D3C2", borderRadius: 8, resize: "vertical", fontFamily: "inherit",
+              background: (notesDraft[a.id] || "").trim() ? "#FBEFE4" : "#FFFDF9", lineHeight: 1.5 }} />
+        </div>
+      ))}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
+        <input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="Add an agenda item…"
+          onKeyDown={e => { if (e.key === "Enter") add(); }}
+          style={{ flex: 1, minWidth: 180, fontSize: 13, padding: "8px 10px", border: "1px solid #E2D3C2", borderRadius: 8 }} />
+        <select value={newDept} onChange={e => setNewDept(e.target.value)}
+          style={{ fontSize: 12.5, padding: "8px 10px", border: "1px solid #E2D3C2", borderRadius: 8, background: "#fff" }}>
+          <option value="">No department</option>
+          {deptList.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
+        </select>
+        <button onClick={add} disabled={!newLabel.trim()} style={{ ...navBtn, fontSize: 12, padding: "7px 14px" }}>Add</button>
+      </div>
+    </div>
+  );
+}
+
 // "Pulse survey progress" — one row per OPEN survey: who's finished, who's in
 // the middle, and (once someone says how many staff should take it) how many
 // haven't started. Shown on the P&C Leadership page for every country, and on
@@ -3187,6 +3320,9 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
 
         {/* ── Pulse survey progress — any survey out in the field right now ── */}
         <PulseSurveyProgress refreshKey={String(surveysOpen)} />
+
+        {/* ── Country Pulse Report agendas — P&C builds the full meeting plan ── */}
+        <CountryAgendasPanel latestRuns={latestRuns} />
 
         {/* ── Director review progress — compact, at the very top ──
             One row per active country: how much of its director review is done.
@@ -5114,16 +5250,26 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
               )}
               {agenda.map((a, i) => {
                 const here = a.deptKey === dept.key;
+                const leadNote = isPCLead && prepData && prepData.leaderNotes && prepData.leaderNotes[a.id];
                 return (
-                  <div key={a.id || i} style={{ display:"flex", gap:8, alignItems:"flex-start", padding:"6px 8px",
-                    borderRadius:8, marginBottom:4,
+                  <div key={a.id || i} style={{ padding:"6px 8px", borderRadius:8, marginBottom:4,
                     background: here ? "#FBEFE4" : "transparent",
                     border: here ? "1px solid #E0A56F" : "1px solid transparent" }}>
-                    <span style={{ background:"#E0863C", color:"white", borderRadius:"50%", width:18, height:18,
-                      display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:700, flexShrink:0 }}>{i + 1}</span>
-                    <span style={{ flex:1, fontSize:12.5, color:"#2C2621", fontWeight: here ? 700 : 500, lineHeight:1.45 }}>
-                      {a.label}{here && <span style={{ color:"#B96524", fontSize:10.5, fontWeight:700 }}> · this department</span>}
-                    </span>
+                    <div style={{ display:"flex", gap:8, alignItems:"flex-start" }}>
+                      <span style={{ background:"#E0863C", color:"white", borderRadius:"50%", width:18, height:18,
+                        display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:700, flexShrink:0 }}>{i + 1}</span>
+                      <span style={{ flex:1, fontSize:12.5, color:"#2C2621", fontWeight: here ? 700 : 500, lineHeight:1.45 }}>
+                        {a.label}{here && <span style={{ color:"#B96524", fontSize:10.5, fontWeight:700 }}> · this department</span>}
+                      </span>
+                    </div>
+                    {/* P&C's leading note — the server never sends this field to anyone else */}
+                    {leadNote && (
+                      <div style={{ margin:"5px 0 0 26px", fontSize:11.5, color:"#8A5A2B", background:"#FBEFE4",
+                        border:"1px dashed #E0A56F", borderRadius:7, padding:"5px 9px", lineHeight:1.5 }}>
+                        <span style={{ fontSize:8.5, fontWeight:800, textTransform:"uppercase", letterSpacing:.5, marginRight:5 }}>P&C leading note</span>
+                        {leadNote}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -6323,6 +6469,11 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
   prepRef.current = prep;
   // The leader's prep opens as a window over the report (from the header button).
   const [prepOpen, setPrepOpen] = useState(false);
+  // The leader's own meeting-notes window: the full agenda + their notes per
+  // department. Their notes go to them + P&C; department leaders' notes never
+  // appear here.
+  const [mnOpen, setMnOpen] = useState(false);
+  const [mnDept, setMnDept] = useState(null);
   // The Concern & Watch questions open the same way — a window over the report.
   const [flaggedOpen, setFlaggedOpen] = useState(false);
   // "How scoring works" for the country leader, right on their report.
@@ -6502,6 +6653,17 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
                   border: `1px solid ${prep.ready ? "#C7E0CB" : "#E0863C"}` }}>
                 {prep.ready ? tr("✓ You've finished your part — thank you!") : tr("Prepare for your Pulse meeting")}
               </button>
+            )}
+            {prepMode && prep && (
+              <button onClick={() => setMnOpen(true)}
+                style={{ fontSize:12, fontWeight:700, cursor:"pointer", borderRadius:16, padding:"6px 13px",
+                  color:"#5C9A6D", background:"#E9F1E9", border:"1px solid #C7E0CB" }}>
+                📝 {tr("Meeting notes")}
+              </button>
+            )}
+            {prepMode && (
+              <HowToVideosButton audience="Country leaders"
+                style={{ fontSize:12, padding:"6px 13px", borderRadius:16, border:"1px solid #E2D3C2", background:"#FDFAF4", color:"#5A4A3B" }} />
             )}
             {flaggedCount > 0 && (
               <button onClick={() => setFlaggedOpen(true)}
@@ -6698,6 +6860,65 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
         </div>
       )}
 
+      {/* The country leader's meeting-notes window — full agenda + their own
+          notes per department (shared with P&C; department leaders' notes are
+          never shown here). */}
+      {prepMode && prep && mnOpen && (() => {
+        const agendaSorted = [...(prep.agenda || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
+        const effDept = mnDept || (agendaSorted.find(a => a.deptKey) || {}).deptKey || (depts[0] || {}).key;
+        const deptObj = depts.find(d => d.key === effDept);
+        return (
+          <div className="no-print" onClick={() => setMnOpen(false)}
+            style={{ position:"fixed", inset:0, background:"rgba(44,38,33,0.45)", zIndex:60,
+              overflowY:"auto", padding: isMobile ? "14px 10px 40px" : "40px 20px 60px" }}>
+            <div onClick={e => e.stopPropagation()} style={{ maxWidth:720, margin:"0 auto", background:"#fff",
+              borderRadius:14, padding:"20px 22px", boxShadow:"0 24px 60px rgba(44,38,33,.35)" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+                <span style={{ fontFamily:FONT_DISPLAY, fontSize:19, fontWeight:600, color:"#2C2621" }}>{tr("Meeting notes")}</span>
+                <button onClick={() => setMnOpen(false)} style={{ marginLeft:"auto", background:"none", border:"none",
+                  cursor:"pointer", fontSize:19, color:"#7A6F63", lineHeight:1 }}>✕</button>
+              </div>
+              <div style={{ fontSize:12.5, color:"#7A6F63", lineHeight:1.55, marginBottom:12 }}>
+                {tr("The full agenda for your Pulse meeting — tap an item to take notes for that department. Your notes here are shared with People & Culture only.")}
+              </div>
+              {agendaSorted.length > 0 && (
+                <div style={{ marginBottom:14 }}>
+                  {agendaSorted.map((a, i) => {
+                    const active = a.deptKey && a.deptKey === effDept;
+                    return (
+                      <button key={a.id || i} onClick={() => a.deptKey && setMnDept(a.deptKey)}
+                        style={{ display:"flex", gap:8, alignItems:"flex-start", width:"100%", textAlign:"left",
+                          padding:"6px 8px", borderRadius:8, marginBottom:3, cursor: a.deptKey ? "pointer" : "default",
+                          background: active ? "#FBEFE4" : "transparent",
+                          border: active ? "1px solid #E0A56F" : "1px solid transparent" }}>
+                        <span style={{ background:"#E0863C", color:"white", borderRadius:"50%", width:18, height:18,
+                          display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:700, flexShrink:0 }}>{i + 1}</span>
+                        <span style={{ flex:1, fontSize:12.5, color:"#2C2621", fontWeight: active ? 700 : 500, lineHeight:1.45 }}>{a.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:4 }}>
+                {depts.map(d => (
+                  <button key={d.key} onClick={() => setMnDept(d.key)}
+                    style={{ fontSize:11.5, fontWeight:700, cursor:"pointer", borderRadius:14, padding:"4px 11px",
+                      color: d.key === effDept ? "#B96524" : "#7A6F63",
+                      background: d.key === effDept ? "#FBEFE4" : "#FDFAF4",
+                      border: `1px solid ${d.key === effDept ? "#E0A56F" : "#ECE2D2"}` }}>
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+              {deptObj && (
+                <NotesPanel country={country} year={year} deptKey={deptObj.key} deptLabel={deptObj.label}
+                  me={me || prepAuthor || leaderName} saveMe={saveMe} isPCLead={false} meetingMode />
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       <style>{`
         @media print {
           .no-print { display:none !important; }
@@ -6830,42 +7051,14 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
               <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={"§ Area"} label={"Your notes on " + dept.label} me={me} hasNote={!!noted["§ Area"]} onSaved={reloadNoted} btnLabel="Notes on this area" />
             </div>
           )}
-          {/* Country leader prep: the reaction lives right up here by the name. */}
-          {prep && (
-            <div className="no-print" style={{ marginTop:10 }}>
-              <div style={{ fontSize:13, fontWeight:700, color:"#2C2621", marginBottom:7 }}>
-                {tr("As you read over this department's survey information, do you feel like it matches what you're seeing or experiencing?")}
-              </div>
-              <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
-                {["Yes, this matches", "Partly", "This doesn't match"].map(c => (
-                  <button key={c} onClick={() => { setReactChoice(c); prep.saveReaction(dept.key, { choice: c }); }}
-                    style={{ fontSize:12, fontWeight:600, cursor:"pointer", borderRadius:20, padding:"6px 12px",
-                      color: reactChoice === c ? "#fff" : "#5A4A3B",
-                      background: reactChoice === c ? "#E0863C" : "#FDFAF4",
-                      border: `1px solid ${reactChoice === c ? "#E0863C" : "#E2D3C2"}` }}>
-                    {tr(c)}
-                  </button>
-                ))}
-                {reactChoice && <span style={{ fontSize:11, color:"#5C9A6D", fontWeight:600 }}>✓ Saved</span>}
-              </div>
-            </div>
-          )}
         </div>
+        {/* Top right: just the score. */}
         <div style={{ textAlign:"right" }}>
           <div style={{ fontSize:34, fontWeight:800, color:statusColor, lineHeight:1, fontVariantNumeric:"tabular-nums" }}>{dept.avg}</div>
           <span style={{ fontSize:11, fontWeight:700, color:statusColor, background:statusBg,
             border:`1px solid ${statusBd}`, borderRadius:20, padding:"3px 10px", display:"inline-block", marginTop:6 }}>
             {dept.status}
           </span>
-          {/* Country leader prep: departments are the agenda items — one button, next to the score. */}
-          {prep && (
-            <div className="no-print" style={{ marginTop:8, maxWidth:170 }}>
-              <AgendaBtn label={dept.label} />
-              <div style={{ fontSize:10.5, color:"#A89C8D", lineHeight:1.4, marginTop:4 }}>
-                {tr("Adds this department to your Pulse meeting agenda.")}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -7072,6 +7265,31 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
         </Disclosure>
       )}
       </div>
+
+      {/* Country leader prep: the reaction row at the BOTTOM of the department's
+          window — question, the three answers, and the agenda button at the far
+          right at the same height. */}
+      {prep && (
+        <div className="no-print" style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap",
+          background:"#FDFAF4", border:"1px solid #ECE2D2", borderRadius:10, padding:"9px 12px", marginTop:10 }}>
+          <span style={{ flex:1, minWidth:200, fontSize:12.5, fontWeight:650, color:"#2C2621", lineHeight:1.45 }}>
+            {tr("As you read over this department's survey information, do you feel like it matches what you're seeing or experiencing?")}
+          </span>
+          {["Yes, this matches", "Partly", "This doesn't match"].map(c => (
+            <button key={c} onClick={() => { setReactChoice(c); prep.saveReaction(dept.key, { choice: c }); }}
+              style={{ fontSize:11.5, fontWeight:600, cursor:"pointer", borderRadius:16, padding:"5px 11px", whiteSpace:"nowrap",
+                color: reactChoice === c ? "#fff" : "#5A4A3B",
+                background: reactChoice === c ? "#E0863C" : "#fff",
+                border: `1px solid ${reactChoice === c ? "#E0863C" : "#E2D3C2"}` }}>
+              {tr(c)}
+            </button>
+          ))}
+          {reactChoice && <span style={{ fontSize:11, color:"#5C9A6D", fontWeight:600 }}>✓</span>}
+          <span title={tr("Adds this department to your Pulse meeting agenda.")} style={{ marginLeft:"auto" }}>
+            <AgendaBtn label={dept.label} />
+          </span>
+        </div>
+      )}
 
     </div>
   );

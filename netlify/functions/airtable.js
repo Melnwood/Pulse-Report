@@ -203,6 +203,11 @@ exports.handler = async (event) => {
         all = all.map(r => { const f = r.fields || {};
           return { ...r, fields: { Run: f.Run, Status: f.Status, Started: f.Started, Updated: f.Updated } }; });
       }
+      // P&C's private leading notes on agenda items stay with P&C: everyone
+      // else gets the prep row without the Leader Notes field.
+      if (table === "prep" && role && role !== "leader") {
+        all = all.map(r => { const f = { ...(r.fields || {}) }; delete f["Leader Notes"]; return { ...r, fields: f }; });
+      }
       // Notes carry a visibility. Non-leaders never receive someone else's PRIVATE
       // note — a country leader gets public notes plus their own; a director also
       // gets their own. (Enforced here on the server, not just hidden in the client.)
