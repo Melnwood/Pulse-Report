@@ -4900,6 +4900,26 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
                   </summary>
                   <div style={{ padding:"4px 2px 14px 21px" }}>
                     <QuestionHeatmap q={q} />
+                    {/* The question NEVER appears without its Survey Basics — same
+                        text and precedence as the review (master → override → built-in). */}
+                    {(() => {
+                      const sbMatch = findSurveyBasics(dept.key, q.en);
+                      if (!sbMatch) return null;
+                      const level = q.status === "Healthy" ? "high" : q.status === "Watch" ? "mid" : "low";
+                      const sbKey = SB_KEY[dept.key] || String(dept.key || "").toLowerCase();
+                      const masterText = sbMaster?.[`${sbKey}:${normQ(q.en)}:${level}`];
+                      const override = sbOverrides?.[`${country}:${year}:${dept.key}:${normQ(q.en)}`];
+                      const sbText = masterText || override || sbMatch[level];
+                      if (!sbText) return null;
+                      return (
+                        <div style={{ display:"flex", alignItems:"flex-start", gap:6,
+                          background:"#F6F1E8", borderRadius:5, padding:"5px 8px", marginTop:8 }}>
+                          <span style={{ fontSize:9, fontWeight:700, color:"#7A6F63",
+                            textTransform:"uppercase", letterSpacing:.5, whiteSpace:"nowrap", paddingTop:1, flexShrink:0 }}>Survey Basics</span>
+                          <span style={{ fontSize:11, color:"#2C2621", fontStyle:"italic", lineHeight:1.4, flex:1 }}>{sbText}</span>
+                        </div>
+                      );
+                    })()}
                     {notesHere.map(n => <NoteCard key={n.id} n={n} />)}
                     <div className="no-print" style={{ marginTop:10 }}>
                       <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={q.en}

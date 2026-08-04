@@ -40,6 +40,29 @@ The whole app uses the Warm & Human palette; the old orange/navy is retired. Cen
 - Healthy `#5C9A6D` / bg `#E9F1E9` · Watch `#C08636` / bg `#F7EEDC` · Concern `#BE6650` / bg `#F6E5DE`
 - Type: Fraunces (headings & scores), Inter (body/UI); rounded cards 14-16px, gentle warm shadows.
 
+## Mel's standing rules — NEVER violate these, on any page, in any redesign
+
+Mel has had to repeat these too many times. They are permanent product rules,
+not per-task preferences. Check every new or changed screen against them:
+
+1. **A question never appears without its Survey Basics.** Anywhere a survey
+   question is shown (review, meeting notes, workspace, report, anything new),
+   its Survey Basics interpretation line goes with it — same text, same
+   precedence (master default → per-run override → built-in), via
+   `findSurveyBasics` + `sbMaster`/`sbOverrides`. No exceptions.
+2. **Every page mirrors the department leader review's structure.** Section
+   order is always: Question scores, Strengths, Growth areas, Leadership
+   questions, Staff quotes. Everyone follows along on the same map — a page
+   that deviates creates confusion in the meeting room.
+3. **Heatmaps are `components/QuestionHeatmap` — never fork or restyle it.**
+   The review, the report, and meeting notes must render the identical thing.
+4. **Attribution is exact.** Anything labeled as the country leader's (notes,
+   answers) shows ONLY content authored by that leader — filter by author,
+   never show "all public notes" under one person's name.
+5. **Reuse, don't rebuild.** When a new page needs something an existing page
+   has (scoring, notes, heatmaps, translation), use the same component or
+   function. If two pages render the same concept differently, that's a bug.
+
 ## Keep exactly — reskin only, do NOT rebuild
 
 - Pulse Report — `ReportView` / `DeptReportPage` (summary + per-dept drill-down).
