@@ -5252,6 +5252,16 @@ function WorkspaceView({ allRuns, setView, authRole, authUser, authDepts = [], c
 }
 
 function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead }) {
+  // Privacy reminder dismissal — keyed by pulse report (country+period), so it
+  // greets people once each pulse and then stays out of the way.
+  const privacyKey = `pulse:notesPrivacySeen:${country}:${year}`;
+  const [privacySeen, setPrivacySeen] = useState(() => {
+    try { return localStorage.getItem(privacyKey) === "1"; } catch { return false; }
+  });
+  const dismissPrivacy = () => {
+    setPrivacySeen(true);
+    try { localStorage.setItem(privacyKey, "1"); } catch {}
+  };
   const isMobile = useIsMobile();
   const [notes, setNotes] = useState(null);      // null = loading
   const [draft, setDraft] = useState("");
@@ -5321,12 +5331,20 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
       </div>
 
       <div style={{ padding: 14 }}>
-        <div style={{ fontSize: 12, color: "#7A6F63", background:"#FDFAF4", border:"1px solid #FDFAF4",
-          borderRadius:8, padding:"8px 12px", marginBottom:14, lineHeight:1.5 }}>
-          Every note is <b>Private by default</b> — only you & P&C leadership (Mel &amp; Chris) see it.
-          Set a note to <b>Shared</b> to let the team &amp; country leadership see that one. Each note is
-          its own choice, and you can change any note anytime with its tag.
-        </div>
+        {/* The privacy reminder shows once per pulse report — the ✕ tucks it
+            away on this device until the next pulse comes around. */}
+        {!privacySeen && (
+          <div style={{ fontSize: 12, color: "#7A6F63", background:"#FDFAF4", border:"1px solid #FDFAF4",
+            borderRadius:8, padding:"8px 12px", marginBottom:14, lineHeight:1.5, display:"flex", gap:10, alignItems:"flex-start" }}>
+            <span style={{ flex:1 }}>
+              Every note is <b>Private by default</b> — only you & P&C leadership (Mel &amp; Chris) see it.
+              Set a note to <b>Shared</b> to let the team &amp; country leadership see that one. Each note is
+              its own choice, and you can change any note anytime with its tag.
+            </span>
+            <button onClick={dismissPrivacy} title="Got it — hide until the next pulse report"
+              style={{ background:"none", border:"none", cursor:"pointer", color:"#A89C8D", fontSize:15, lineHeight:1, padding:"0 2px", flexShrink:0 }}>✕</button>
+          </div>
+        )}
         {!me && (
           <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center", flexWrap: "wrap" }}>
             <span style={{ fontSize: 12, color: "#7A6F63" }}>Your name (so notes are yours):</span>
