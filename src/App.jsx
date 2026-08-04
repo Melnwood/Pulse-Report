@@ -3913,6 +3913,20 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
   const [atBusy, setAtBusy] = useState(false);
   const [importMsg, setImportMsg] = useState(null);
 
+  // The country leader's agenda — on the Meeting Notes tab the department list
+  // follows THEIR order, so the meeting walks the room through the departments
+  // the way the leader prioritized them. Off-agenda departments follow after,
+  // in their usual order.
+  const [leaderAgenda, setLeaderAgenda] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    if (!country || !year) { setLeaderAgenda([]); return; }
+    loadPrep(country, year)
+      .then(p => { if (alive) setLeaderAgenda([...(p.agenda || [])].sort((a, b) => (a.order || 0) - (b.order || 0))); })
+      .catch(() => { if (alive) setLeaderAgenda([]); });
+    return () => { alive = false; };
+  }, [country, year]);
+
   // Apply a director-review Excel handed over from the Leadership section. The
   // parent has already opened this run, so country/year are correct here.
   const runImport = async (file) => {
@@ -3961,6 +3975,16 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
         return (parseFloat(a.avg)||0) - (parseFloat(b.avg)||0); // worst score first within a band
       })
     : [];
+
+  // On Meeting Notes, the sidebar walks the country leader's agenda order:
+  // agenda departments first (in the leader's priority order), everything else
+  // after in the usual order. The Review tab keeps its worst-first sort.
+  const agendaRank = new Map();
+  leaderAgenda.forEach((a, i) => { if (a.deptKey && !agendaRank.has(a.deptKey)) agendaRank.set(a.deptKey, i); });
+  const agendaOrdered = deptTab === "notes" && agendaRank.size > 0;
+  const sidebarDepts = agendaOrdered
+    ? [...depts].sort((a, b) => (agendaRank.has(a.key) ? agendaRank.get(a.key) : 999) - (agendaRank.has(b.key) ? agendaRank.get(b.key) : 999))
+    : depts;
 
   useEffect(() => {
     if (openToDept && depts.some(d => d.key === openToDept)) {
@@ -4070,7 +4094,13 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
               </button>
             );
           })()}
-          {depts.map(d => (
+          {agendaOrdered && (
+            <div style={{ padding:"9px 16px 5px", fontSize:10, fontWeight:800, color:"#B96524",
+              textTransform:"uppercase", letterSpacing:1 }}>
+              {leaderName ? `${leaderName}'s agenda order` : "Agenda order"}
+            </div>
+          )}
+          {sidebarDepts.map(d => (
             <button key={d.key} onClick={()=>setActiveDept(d.key)}
               style={{
                 display:"block", width:"100%", textAlign:"left",
@@ -4079,7 +4109,14 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
                 cursor:"pointer",
               }}>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <span style={{ width:8, height:8, borderRadius:"50%", background:sc(d.status), flexShrink:0 }} />
+                {agendaOrdered && agendaRank.has(d.key) ? (
+                  <span style={{ background:"#E0863C", color:"#fff", borderRadius:"50%", width:15, height:15,
+                    display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:9, fontWeight:800, flexShrink:0 }}>
+                    {agendaRank.get(d.key) + 1}
+                  </span>
+                ) : (
+                  <span style={{ width:8, height:8, borderRadius:"50%", background:sc(d.status), flexShrink:0 }} />
+                )}
                 <span style={{ color: activeDept===d.key ? "#2C2621":"#7A6F63", fontSize:13, fontWeight: activeDept===d.key?600:400 }}>{d.label}</span>
               </div>
               <div style={{ color:"#7A6F63", fontSize:11, marginLeft:16, marginTop:2 }}>{d.avg} · {d.n} respondents</div>
@@ -4134,8 +4171,10 @@ function ReviewView({ country, year, surveyData, selections, toggleItem, setRewr
                 fontWeight:600, color:"#2C2621", background:"#FFFFFF",
                 border:"1px solid #F7EEDC", borderRadius:10, appearance:"menulist" }}>
               <option value="__flagged__">⚠ Concern &amp; Watch questions</option>
-              {depts.map(d => (
-                <option key={d.key} value={d.key}>{d.label} — {d.status} · {d.avg} avg</option>
+              {sidebarDepts.map(d => (
+                <option key={d.key} value={d.key}>
+                  {agendaOrdered && agendaRank.has(d.key) ? `${agendaRank.get(d.key) + 1}. ` : ""}{d.label} — {d.status} · {d.avg} avg
+                </option>
               ))}
             </select>
           )}
