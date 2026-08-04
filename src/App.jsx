@@ -5117,7 +5117,7 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
               Just write — decisions, follow-ups, anything worth remembering. Every note saves with your name and today's date.
             </div>
             <NotesPanel country={country} year={year} deptKey={dept.key} deptLabel={dept.label}
-              me={me} saveMe={saveMe} isPCLead={isPCLead} />
+              me={me} saveMe={saveMe} isPCLead={isPCLead} meetingMode />
           </MnSection>
         </div>
       </div>
@@ -5341,7 +5341,11 @@ function WorkspaceView({ allRuns, setView, authRole, authUser, authDepts = [], c
   );
 }
 
-function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead }) {
+// meetingMode (the Meeting Notes page): no privacy choice — every note is
+// always shared with the People & Culture team (author + P&C see it; the
+// country leader doesn't). The pad is already per-department, so what's
+// written on Singles is for Singles.
+function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead, meetingMode = false }) {
   // Privacy reminder dismissal — keyed by pulse report (country+period), so it
   // greets people once each pulse and then stays out of the way.
   const privacyKey = `pulse:notesPrivacySeen:${country}:${year}`;
@@ -5386,8 +5390,11 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
     if (!me) { setErr("Set your name first so the note is yours."); return; }
     setSaving(true); setErr(null);
     try {
+      // Meeting notes are always for the P&C team: stored "Private", which the
+      // app serves to the author + P&C only — never the country leader.
       await addDepartmentNote({ country, year, deptKey, author: me,
-        title: draft.trim().split("\n")[0].slice(0, 80), body: draft.trim(), visibility });
+        title: draft.trim().split("\n")[0].slice(0, 80), body: draft.trim(),
+        visibility: meetingMode ? "Private" : visibility });
       setDraft("");
       await reload();
     } catch (e) { setErr("Couldn't save note: " + e.message); }
@@ -5427,9 +5434,14 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
           <div style={{ fontSize: 12, color: "#7A6F63", background:"#FDFAF4", border:"1px solid #FDFAF4",
             borderRadius:8, padding:"8px 12px", marginBottom:14, lineHeight:1.5, display:"flex", gap:10, alignItems:"flex-start" }}>
             <span style={{ flex:1 }}>
-              Every note is <b>Private by default</b> — only you & P&C leadership (Mel &amp; Chris) see it.
-              Set a note to <b>Shared</b> to let the team &amp; country leadership see that one. Each note is
-              its own choice, and you can change any note anytime with its tag.
+              {meetingMode ? (
+                <>Notes here go to the <b>People &amp; Culture team</b> — you and P&amp;C see them; the country
+                leader doesn't. After the meetings, P&amp;C gathers what everyone wrote for each department.</>
+              ) : (
+                <>Every note is <b>Private by default</b> — only you & P&C leadership (Mel &amp; Chris) see it.
+                Set a note to <b>Shared</b> to let the team &amp; country leadership see that one. Each note is
+                its own choice, and you can change any note anytime with its tag.</>
+              )}
             </span>
             <button onClick={dismissPrivacy} title="Got it — hide until the next pulse report"
               style={{ background:"none", border:"none", cursor:"pointer", color:"#A89C8D", fontSize:15, lineHeight:1, padding:"0 2px", flexShrink:0 }}>✕</button>
@@ -5456,7 +5468,14 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
           style={{ width: "100%", boxSizing: "border-box", fontSize: 13, padding: 10,
             border: "1px solid #E2D3C2", borderRadius: 8, resize: "vertical", fontFamily: "inherit" }} />
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
-          <VisibilityPicker value={visibility} onChange={setVisibility} isMobile={isMobile} />
+          {meetingMode ? (
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#5C9A6D", background: "#E9F1E9",
+              border: "1px solid #C7E0CB", borderRadius: 6, padding: "3px 10px" }}>
+              Shared with the People &amp; Culture team
+            </span>
+          ) : (
+            <VisibilityPicker value={visibility} onChange={setVisibility} isMobile={isMobile} />
+          )}
           <button onClick={save} disabled={saving || !draft.trim()}
             style={{ ...navBtn, marginLeft: "auto", background: (saving || !draft.trim()) ? "#ECE2D2" : "#E0863C",
               color: (saving || !draft.trim()) ? "#7A6F63" : "#fff" }}>
@@ -5475,7 +5494,12 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead })
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
                 <span style={{ fontSize: 12, fontWeight: 700, color: "#5A4A3B" }}>{n.author || "Unknown"}</span>
                 <span style={{ fontSize: 11, color: "#A89C8D" }}>{fmt(n.created)}</span>
-                <VisibilityChip visibility={n.visibility} onClick={() => flip(n)} />
+                {meetingMode ? (
+                  <span style={{ fontSize: 10, fontWeight: 700, color: "#5C9A6D", background: "#E9F1E9",
+                    border: "1px solid #C7E0CB", borderRadius: 5, padding: "2px 7px" }}>P&amp;C team</span>
+                ) : (
+                  <VisibilityChip visibility={n.visibility} onClick={() => flip(n)} />
+                )}
                 {canDelete(n) && (
                   <button onClick={() => del(n)} title="Delete this note"
                     style={{ marginLeft: "auto", fontSize: 11, fontWeight: 600, color: "#BE6650",
