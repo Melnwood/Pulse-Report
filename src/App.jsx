@@ -5797,7 +5797,10 @@ function DeptBorderlineChooser({ dept, canEdit, saveStatusOverride }) {
 // forcePublic: country leaders don't get a Private option — everything they
 // write on their report is shared with the People & Culture team, and the
 // dialog says so instead of offering the toggle.
-function DirectorNoteButton({ country, year, deptKey, question, label, me, hasNote, onSaved, compact, btnLabel = "Department Leader's Note", forcePublic = false }) {
+function DirectorNoteButton({ country, year, deptKey, question, label, me, hasNote, onSaved, compact, btnLabel = "Department Leader's Note", forcePublic = false, notes = [] }) {
+  // Notes by OTHER people on this question that this viewer may see — shown
+  // read-only inside the window, and counted on the button so they can't hide.
+  const others = (notes || []).filter(n => n.author !== me);
   const [open, setOpen] = useState(false);
   const [noteId, setNoteId] = useState(null);
   const [text, setText] = useState("");
@@ -5811,8 +5814,9 @@ function DirectorNoteButton({ country, year, deptKey, question, label, me, hasNo
     setOpen(true); setSaved(false); setSavedAt(null); setSaveErr(false);
     try {
       const all = await loadQuestionNotes(country, year, deptKey);   // this run's dept notes
-      const mine = (all || []).find(n => n.question === question && n.author === me)
-                || (all || []).find(n => n.question === question);
+      // Only ever load YOUR OWN note into the editor — never someone else's
+      // (that risked silently overwriting a colleague's note).
+      const mine = (all || []).find(n => n.question === question && n.author === me);
       if (mine) { setNoteId(mine.id); setText(mine.body || ""); setVis(forcePublic ? "Public" : (mine.visibility || "Private")); }
       else { setNoteId(null); setText(""); setVis(forcePublic ? "Public" : "Private"); }
     } catch { setNoteId(null); setText(""); }
@@ -5830,12 +5834,16 @@ function DirectorNoteButton({ country, year, deptKey, question, label, me, hasNo
   const setVisibility = (v) => { setVis(v); persist(text, v); };
   const close = () => { clearTimeout(timer.current); if (text.trim() && !saved) persist(text, vis); setOpen(false); };
 
+  const anyNotes = hasNote || others.length > 0;
   const bstyle = { fontSize: compact ? 10 : 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
     borderRadius: 5, padding: compact ? "3px 8px" : "4px 10px", display: "inline-flex", alignItems: "center", gap: 4,
-    color: hasNote ? "#5C9A6D" : "#E0863C", background: hasNote ? "#E9F1E9" : "#F7E7D5", border: "0.5px solid " + (hasNote ? "#C7E0CB" : "#E0A56F") };
+    color: anyNotes ? "#5C9A6D" : "#E0863C", background: anyNotes ? "#E9F1E9" : "#F7E7D5", border: "0.5px solid " + (anyNotes ? "#C7E0CB" : "#E0A56F") };
+  const totalCount = others.length + (hasNote ? 1 : 0);
 
   return (<>
-    <button onClick={openModal} style={bstyle}>{hasNote ? "✓" : "✎"} {btnLabel}</button>
+    <button onClick={openModal} style={bstyle}>
+      {hasNote ? "✓" : others.length ? "🗨" : "✎"} {btnLabel}{totalCount > 0 ? ` · ${totalCount}` : ""}
+    </button>
     {open && (
       <div onClick={e => { if (e.target === e.currentTarget) close(); }}
         style={{ position: "fixed", inset: 0, background: "rgba(44,38,33,.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
@@ -5846,6 +5854,25 @@ function DirectorNoteButton({ country, year, deptKey, question, label, me, hasNo
             <button onClick={close} aria-label="Close" style={{ marginLeft: "auto", border: "none", background: "none", fontSize: 18, color: "#7A6F63", cursor: "pointer", lineHeight: 1 }}>✕</button>
           </div>
           <div style={{ padding: "14px 16px" }}>
+            {others.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                {others.map(n => (
+                  <div key={n.id} style={{ background: "#FDFAF4", border: "1px solid #ECE2D2", borderRadius: 10,
+                    padding: "9px 12px", marginBottom: 7 }}>
+                    <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: .4, textTransform: "uppercase", color: "#7A6F63", marginBottom: 3 }}>
+                      {n.author || "Unknown"}
+                    </div>
+                    <div style={{ fontSize: 13, color: "#2C2621", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{n.body}</div>
+                    {n.translation && (
+                      <div style={{ marginTop: 5, fontSize: 12, color: "#7A6F63", borderLeft: "2px solid #E2D3C2", paddingLeft: 8, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+                        <span style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: .5, marginRight: 6 }}>English (AI)</span>{n.translation}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: "#A89C8D", textTransform: "uppercase", letterSpacing: .5, margin: "10px 0 4px" }}>Your note</div>
+              </div>
+            )}
             <textarea autoFocus value={text} onChange={e => onType(e.target.value)} placeholder="Type your note here — it saves automatically."
               style={{ width: "100%", minHeight: 120, border: "1px solid #F0DFCE", borderRadius: 8, padding: "10px 12px", fontSize: 13.5, fontFamily: "inherit", color: "#2C2621", lineHeight: 1.55, resize: "vertical", boxSizing: "border-box" }} />
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
@@ -5878,15 +5905,23 @@ function DirectorNoteButton({ country, year, deptKey, question, label, me, hasNo
 }
 
 function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, addItem, saveRefinement, refinements, country, year, canEdit = true, sbOverrides, saveSbOverride, statusOverrides, saveStatusOverride, sbMaster, saveSbMaster, isAdmin, me, saveMe, isPCLead }) {
-  const [noted, setNoted] = useState({});
+  const [noted, setNoted] = useState({});       // question -> the viewer wrote a note
+  const [notesByQ, setNotesByQ] = useState({}); // question -> every note the viewer may SEE
   const reloadNoted = async () => {
     try {
       const all = await loadQuestionNotes(country, year, dept.key);
-      const m = {}; (all || []).forEach(n => { if ((n.body || "").trim()) m[n.question] = true; });
-      setNoted(m);
+      const m = {}, byQ = {};
+      const canSeeN = n => n.visibility === "Public" || (me && n.author === me) || isPCLead;
+      (all || []).forEach(n => {
+        if (!(n.body || "").trim()) return;
+        if (me && n.author === me) m[n.question] = true;
+        if (canSeeN(n)) (byQ[n.question] = byQ[n.question] || []).push(n);
+      });
+      Object.values(byQ).forEach(list => list.sort((a, b) => new Date(a.created || 0) - new Date(b.created || 0)));
+      setNoted(m); setNotesByQ(byQ);
     } catch { /* offline */ }
   };
-  useEffect(() => { reloadNoted(); /* eslint-disable-next-line */ }, [country, year, dept.key]);
+  useEffect(() => { reloadNoted(); /* eslint-disable-next-line */ }, [country, year, dept.key, me, isPCLead]);
   const isMobile = useIsMobile();
   // Which question's heatmap popup is open on mobile (index), or null. One at a time.
   const [openHeatmap, setOpenHeatmap] = useState(null);
@@ -5983,7 +6018,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, addItem, saveRefin
                         {q.burden && <span style={{ fontSize:9, color:"#C08636" }}>Burden [inv.]</span>}
                         <span style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", justifyContent:"flex-end" }}>
                           <BorderlineChooser q={q} deptKey={dept.key} canEdit={canEdit} saveStatusOverride={saveStatusOverride} />
-                          <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={q.en} label={q.en} me={me} hasNote={!!noted[q.en]} onSaved={reloadNoted} compact />
+                          <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={q.en} label={q.en} me={me} hasNote={!!noted[q.en]} notes={notesByQ[q.en] || []} onSaved={reloadNoted} compact />
                           <button onClick={() => setOpenHeatmap(openHeatmap===i ? null : i)}
                             style={{ fontSize:11, fontWeight:600, color:"#E0863C",
                               background:"#F7E7D5", border:"0.5px solid #E0A56F", borderRadius:5,
@@ -5999,7 +6034,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, addItem, saveRefin
                     {!isMobile && (
                       <div className="no-print" style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginTop:2 }}>
                         <BorderlineChooser q={q} deptKey={dept.key} canEdit={canEdit} saveStatusOverride={saveStatusOverride} />
-                        <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={q.en} label={q.en} me={me} hasNote={!!noted[q.en]} onSaved={reloadNoted} compact />
+                        <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={q.en} label={q.en} me={me} hasNote={!!noted[q.en]} notes={notesByQ[q.en] || []} onSaved={reloadNoted} compact />
                       </div>
                     )}
 
@@ -6184,7 +6219,7 @@ function DeptReviewPanel({ dept, sel, toggleItem, setRewrite, addItem, saveRefin
                       );
                     })()}
                   </div>
-                  <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={item.text} label={item.rewrite?.trim() || item.text} me={me} hasNote={!!noted[item.text]} onSaved={reloadNoted} compact />
+                  <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={item.text} label={item.rewrite?.trim() || item.text} me={me} hasNote={!!noted[item.text]} notes={notesByQ[item.text] || []} onSaved={reloadNoted} compact />
                   {item.include && canEdit && (
                     <button
                       onClick={() => {
@@ -6976,17 +7011,26 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
 
 function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaster, me, isPCLead, startCollapsed = false, prep = null, tr = (s) => s }) {
   const isMobile = useIsMobile();
-  // Which questions/areas the viewer has already noted (so the button shows a ✓).
+  // Which questions/areas the viewer has already noted (button ✓), plus every
+  // note the viewer is allowed to SEE per question (shown inside the note window).
   const [noted, setNoted] = useState({});
+  const [notesByQ, setNotesByQ] = useState({});
   const reloadNoted = async () => {
     if (!dept) return;
     try {
       const all = await loadQuestionNotes(country, year, dept.key);
-      const m = {}; (all || []).forEach(n => { if ((n.body || "").trim() && n.author === me) m[n.question] = true; });
-      setNoted(m);
+      const m = {}, byQ = {};
+      const canSeeN = n => n.visibility === "Public" || (me && n.author === me) || isPCLead;
+      (all || []).forEach(n => {
+        if (!(n.body || "").trim()) return;
+        if (n.author === me) m[n.question] = true;
+        if (canSeeN(n)) (byQ[n.question] = byQ[n.question] || []).push(n);
+      });
+      Object.values(byQ).forEach(list => list.sort((a, b) => new Date(a.created || 0) - new Date(b.created || 0)));
+      setNoted(m); setNotesByQ(byQ);
     } catch { /* offline */ }
   };
-  useEffect(() => { reloadNoted(); /* eslint-disable-next-line */ }, [country, year, dept && dept.key, me]);
+  useEffect(() => { reloadNoted(); /* eslint-disable-next-line */ }, [country, year, dept && dept.key, me, isPCLead]);
 
   // ── Country Leader Prep layer (only when `prep` is passed) ──
   // Reaction ("As you read over this department's survey information, do you feel like it matches what you're seeing or experiencing?") — one per department, up by
@@ -7085,7 +7129,7 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
           <div style={{ fontSize:13, color:"#7A6F63" }}>n = {dept.n} respondents</div>
           {!prep && (
             <div className="no-print" style={{ marginTop:8 }}>
-              <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={"§ Area"} label={"Your notes on " + dept.label} me={me} hasNote={!!noted["§ Area"]} onSaved={reloadNoted} btnLabel="Notes on this area" />
+              <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={"§ Area"} label={"Your notes on " + dept.label} me={me} hasNote={!!noted["§ Area"]} notes={notesByQ["§ Area"] || []} onSaved={reloadNoted} btnLabel="Notes on this area" />
             </div>
           )}
         </div>
@@ -7198,7 +7242,7 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
                 })()}
                 {/* Interactive bits must not toggle the row — preventDefault stops the <details> toggle only. */}
                 <span className="no-print" style={{ display:"block", marginTop:6 }} onClick={e => e.preventDefault()}>
-                  <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={q.en} label={q.en} me={me} hasNote={!!noted[q.en]} onSaved={reloadNoted} compact btnLabel="My note" forcePublic={!!prep} />
+                  <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={q.en} label={q.en} me={me} hasNote={!!noted[q.en]} notes={notesByQ[q.en] || []} onSaved={reloadNoted} compact btnLabel="My note" forcePublic={!!prep} />
                 </span>
               </span>
               {!isMobile && (
