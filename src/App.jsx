@@ -2461,6 +2461,20 @@ function CountryAgendaEditor({ run }) {
   return (
     <div style={{ padding: "0 14px 14px 34px" }}>
       {err && <div style={{ color: "#BE6650", fontSize: 12, marginBottom: 8 }}>{err}</div>}
+      {/* Overall leading notes — how P&C wants to lead this whole meeting.
+          Same protected field as the per-item notes: nobody else ever gets it. */}
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: .5, textTransform: "uppercase", color: "#B96524", marginBottom: 4 }}>
+          Leading this meeting — P&C only
+        </div>
+        <textarea rows={3} value={notesDraft.__overall__ || ""}
+          placeholder="How you and Chris want to lead the whole agenda — openings, tone, what to land on. Only P&C ever sees this."
+          onChange={e => setNotesDraft(prev => ({ ...prev, __overall__: e.target.value }))}
+          onBlur={() => saveNote("__overall__")}
+          style={{ width: "100%", boxSizing: "border-box", fontSize: 13, padding: "9px 11px",
+            border: "1px solid #E0A56F", borderRadius: 10, resize: "vertical", fontFamily: "inherit",
+            background: "#FBEFE4", lineHeight: 1.55 }} />
+      </div>
       {agenda.length === 0 && (
         <div style={{ fontSize: 12.5, color: "#A89C8D", fontStyle: "italic", marginBottom: 8 }}>
           Nothing on the agenda yet — add the first item below{prep.author ? `, or wait for ${prep.author}'s prep` : ""}.
@@ -4998,8 +5012,17 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
   // Notes attached to one question, oldest first — the conversation in order.
   const notesFor = (qText) => visQ.filter(n => !isAnswer(n) && n.question === qText)
     .sort((a, b) => new Date(a.created || 0) - new Date(b.created || 0));
-  // (Department-level notes live in the Meeting notes pad on the right — no
-  // separate "Notes about this department" window; Mel wants one home per note.)
+  // (Pad notes live only in the Meeting notes window on the right — no separate
+  // "Notes about this department" window; Mel wants one home per note.)
+  // Section-level review notes ("§ …" question keys) still need a home: quotes
+  // notes go with Staff quotes; area notes sit at the top of the left column.
+  const secNotes = visQ.filter(n => !isAnswer(n) && String(n.question || "").startsWith("§"))
+    .sort((a, b) => new Date(a.created || 0) - new Date(b.created || 0));
+  const quotesSecNotes = secNotes.filter(n => /quote/i.test(String(n.question)));
+  const areaNotes = secNotes.filter(n => !/quote/i.test(String(n.question)));
+  // Note totals per section so a note can never hide in a closed fold.
+  const notesCountFor = (items) => loading ? 0 :
+    items.reduce((acc, it) => acc + notesFor(it.key).length + (it.key !== it.text ? notesFor(it.text).length : 0), 0);
   // Leadership-question answers — ONLY the country leader's own (never anyone
   // else's public notes; that was showing Chris under David's name).
   const answers = visQ.filter(isAnswer).filter(n => !leaderName || n.author === leaderName);
@@ -5010,7 +5033,12 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
   const growth       = getApproved(dept.key, "growth");
   const leadershipQs = getApproved(dept.key, "leadershipQs");
   const quotes       = getApproved(dept.key, "quotes");
-  const questions    = dept.questions || [];
+  // SAME order as the review and the report: Concern first, then Watch, then
+  // Healthy — worst score first within each band. Never deviate.
+  const questions    = [...(dept.questions || [])].sort((a, b) => {
+    const o = { Concern: 0, Watch: 1, Healthy: 2 };
+    return (o[a.status] ?? 1) - (o[b.status] ?? 1) || a.score - b.score;
+  });
   const loading = dNotes === null || qNotes === null;
   const qWithNotes = loading ? 0 : questions.filter(q => notesFor(q.en).length > 0).length;
   const myNoteOn = (qText) => visQ.some(n => n.author === me && n.question === qText);
@@ -5106,6 +5134,13 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
             </div>
           )}
 
+          {/* Review notes written on this department as an area */}
+          {!loading && areaNotes.length > 0 && (
+            <div style={{ marginBottom:14 }}>
+              {areaNotes.map(n => <NoteCard key={n.id} n={n} />)}
+            </div>
+          )}
+
           {/* 1. Question scores */}
           <MnSection title="Question scores" dot="#E0863C" defaultOpen
             count={loading ? "…" : `${questions.length} questions${qWithNotes ? ` · ${qWithNotes} with notes` : ""}`}>
@@ -5162,7 +5197,8 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
           </MnSection>
 
           {/* 2. Strengths — plus the country leader's "What's working" note */}
-          <MnSection title="Strengths" dot="#5C9A6D" count={`${strengths.length}`}>
+          <MnSection title="Strengths" dot="#5C9A6D"
+            count={`${strengths.length}${notesCountFor(strengths) ? ` · ${notesCountFor(strengths)} note${notesCountFor(strengths) === 1 ? "" : "s"}` : ""}`}>
             {strengths.length ? strengths.map((item, i) => (
               <ItemWithNotes key={i} item={item} dotColor="#5C9A6D" />
             )) : <div style={{ fontSize:12.5, color:"#A89C8D", fontStyle:"italic" }}>Nothing approved for this department yet.</div>}
@@ -5170,7 +5206,8 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
           </MnSection>
 
           {/* 3. Growth areas — plus the country leader's "Where attention is needed" note */}
-          <MnSection title="Growth areas" dot="#C08636" count={`${growth.length}`}>
+          <MnSection title="Growth areas" dot="#C08636"
+            count={`${growth.length}${notesCountFor(growth) ? ` · ${notesCountFor(growth)} note${notesCountFor(growth) === 1 ? "" : "s"}` : ""}`}>
             {growth.length ? growth.map((item, i) => (
               <ItemWithNotes key={i} item={item} dotColor="#BE6650" />
             )) : <div style={{ fontSize:12.5, color:"#A89C8D", fontStyle:"italic" }}>Nothing approved for this department yet.</div>}
@@ -5179,7 +5216,7 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
 
           {/* 4. Leadership questions — ONLY the country leader's answers */}
           <MnSection title="Leadership questions" dot="#B96524"
-            count={loading ? "…" : (answers.length ? `${answers.length} answered` : `${leadershipQs.length}`)}>
+            count={loading ? "…" : `${answers.length ? `${answers.length} answered` : `${leadershipQs.length}`}${notesCountFor(leadershipQs) ? ` · ${notesCountFor(leadershipQs)} note${notesCountFor(leadershipQs) === 1 ? "" : "s"}` : ""}`}>
             {leadershipQs.length === 0 && answers.length === 0 ? (
               <div style={{ fontSize:12.5, color:"#A89C8D", fontStyle:"italic" }}>No leadership questions selected for this department.</div>
             ) : (
@@ -5219,10 +5256,12 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
           </MnSection>
 
           {/* 5. Staff quotes */}
-          <MnSection title="Staff quotes" dot="#7A6F63" count={`${quotes.length}`}>
+          <MnSection title="Staff quotes" dot="#7A6F63"
+            count={`${quotes.length}${(notesCountFor(quotes) + (loading ? 0 : quotesSecNotes.length)) ? ` · ${notesCountFor(quotes) + quotesSecNotes.length} note${(notesCountFor(quotes) + quotesSecNotes.length) === 1 ? "" : "s"}` : ""}`}>
             {quotes.length ? quotes.map((item, i) => (
               <ItemWithNotes key={i} item={item} quote />
             )) : <div style={{ fontSize:12.5, color:"#A89C8D", fontStyle:"italic" }}>No quotes approved for this department.</div>}
+            {!loading && quotesSecNotes.map(n => <NoteCard key={n.id} n={n} />)}
           </MnSection>
 
         </div>
@@ -5233,6 +5272,13 @@ function DeptMeetingNotesPage({ dept, country, year, me, saveMe, isPCLead, getAp
               <div style={{ fontSize:11.5, color:"#7A6F63", marginBottom:8 }}>
                 What {leaderName || "the country leader"} wants to walk through — most important first.
               </div>
+              {isPCLead && prepData && prepData.leaderNotes && prepData.leaderNotes.__overall__ && (
+                <div style={{ marginBottom:8, fontSize:11.5, color:"#8A5A2B", background:"#FBEFE4",
+                  border:"1px dashed #E0A56F", borderRadius:7, padding:"6px 9px", lineHeight:1.5 }}>
+                  <span style={{ fontSize:8.5, fontWeight:800, textTransform:"uppercase", letterSpacing:.5, marginRight:5 }}>P&C — leading this meeting</span>
+                  {prepData.leaderNotes.__overall__}
+                </div>
+              )}
               {agenda.length === 0 && (
                 <div style={{ fontSize:12.5, color:"#A89C8D", fontStyle:"italic" }}>
                   Nothing on the agenda yet — {leaderName || "the country leader"} adds departments with the
