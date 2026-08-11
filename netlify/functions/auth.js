@@ -80,7 +80,7 @@ exports.handler = async (event) => {
       id: rec.id,
       email,
       name: f.Name || email,
-      role: String(f.Role || "director").toLowerCase().trim(),   // leader | country | director
+      role: String(f.Role || "director").toLowerCase().trim(),   // leader | country | director | coach
       country: f.Country || null,
       department,
     };
@@ -192,7 +192,7 @@ exports.handler = async (event) => {
         const email = String(u.email || "").trim().toLowerCase();
         const role = String(u.role || "director").toLowerCase().trim();
         if (!email || !u.name) return { statusCode: 400, headers, body: JSON.stringify({ error: "Name and email are required." }) };
-        if (!["leader", "country", "director"].includes(role)) return { statusCode: 400, headers, body: JSON.stringify({ error: "Invalid role." }) };
+        if (!["leader", "country", "director", "coach"].includes(role)) return { statusCode: 400, headers, body: JSON.stringify({ error: "Invalid role." }) };
         // Departments is a multi-select: accept an array or a comma string from
         // the client and write an array of dept codes (empty for non-directors).
         const deptArr = role === "director"

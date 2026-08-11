@@ -5,6 +5,7 @@ import { card, navBtn, lbl, inp, useIsMobile } from "../theme";
 const ROLES = [
   { value: "director", label: "Department leader — edits their department" },
   { value: "country",  label: "Country leader — views their country" },
+  { value: "coach",    label: "Country coach — walks alongside one or more countries" },
   { value: "leader",   label: "P&C leader — full access" },
 ];
 const blank = { id: null, name: "", email: "", role: "director", country: "", department: "", password: "", active: true };
@@ -76,8 +77,10 @@ export default function UsersView({ setView, me }) {
                   {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
               </div>
-              <div><label style={lbl}>Country {form.role === "leader" && <span style={{ color: "#A89C8D" }}>(leaders: leave blank)</span>}</label>
-                <input style={inp} value={form.country} onChange={e => set("country", e.target.value)} placeholder="e.g. Hungary" disabled={form.role === "leader"} /></div>
+              <div><label style={lbl}>Country {form.role === "leader" ? <span style={{ color: "#A89C8D" }}>(leaders: leave blank)</span>
+                  : form.role === "coach" ? <span style={{ color: "#A89C8D" }}>(coaches: separate several with commas)</span> : null}</label>
+                <input style={inp} value={form.country} onChange={e => set("country", e.target.value)}
+                  placeholder={form.role === "coach" ? "e.g. Hungary, Serbia" : "e.g. Hungary"} disabled={form.role === "leader"} /></div>
               {form.role === "director" && (
                 <div><label style={lbl}>Department</label><input style={inp} value={form.department} onChange={e => set("department", e.target.value)} placeholder="e.g. HR" /></div>
               )}
@@ -110,7 +113,10 @@ export default function UsersView({ setView, me }) {
                   <div style={{ fontSize: 12, color: "#7A6F63" }}>{u.email}</div>
                 </div>
                 <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "#5A4A3B", background: "#FDFAF4", border: "1px solid #E2D3C2", borderRadius: 20, padding: "3px 10px" }}>
-                  {u.role === "leader" ? "P&C leader" : u.role === "country" ? `${u.country || "?"} leader` : `${u.country || "?"} · ${u.department || "?"}`}
+                  {u.role === "leader" ? "P&C leader"
+                    : u.role === "country" ? `${u.country || "?"} leader`
+                    : u.role === "coach" ? `Coach · ${u.country || "?"}`
+                    : `${u.country || "?"} · ${u.department || "?"}`}
                 </span>
                 <button onClick={() => startEdit(u)} style={{ ...navBtn, fontSize: 12, padding: "6px 12px" }}>Edit</button>
                 <button onClick={() => resetPw(u)} title="Clear their password so they set a new one at next sign-in"

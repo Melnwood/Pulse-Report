@@ -5,9 +5,11 @@
 // ── ACCESS CONTROL ──
 // When AUTH_SECRET is set (i.e. login is switched on), every request must carry a
 // valid session token (Authorization: Bearer …). The token says who you are —
-// role (leader | country | director) and country. Non-leaders are scoped to their
-// own country, enforced HERE on the server, so a director literally cannot pull or
-// change another country's data even by calling this function directly:
+// role (leader | country | director | coach) and country. Non-leaders are scoped to
+// their own country, enforced HERE on the server, so a director literally cannot pull
+// or change another country's data even by calling this function directly:
+//   • coach → like a country leader, but may cover SEVERAL countries (comma list),
+//     never sees prep/briefs/surveys, and their "Coach" notes are private to them
 //   • list  → results are filtered to the caller's country
 //   • write → country role is read-only; director may only write within their country
 // Leaders (and the unconfigured/auth-off state) are unrestricted.
@@ -69,10 +71,16 @@ exports.handler = async (event) => {
   // auth-off state) is unrestricted.
   const deptSet = new Set(String((user && user.department) || "")
     .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean));
-  const readScoped   = role === "country";                 // only country leaders are read-filtered
+  // A COACH walks alongside one or more countries: read-scoped like a country
+  // leader (across every country they coach), and they may write notes only.
+  const isCoach = role === "coach";
+  const coachCountries = isCoach
+    ? String(country || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean)
+    : [];
+  const readScoped   = role === "country" || isCoach;      // country leaders + coaches are read-filtered
   // Country leaders are read-only EXCEPT their prep + notes (their own country
   // only — enforced per-record below). Directors write within their departments.
-  const writeByCountry = role === "country";
+  const writeByCountry = role === "country" || isCoach;
   const writeByDept  = role === "director";                // directors write within their departments
 
   let body;
@@ -127,8 +135,10 @@ exports.handler = async (event) => {
   };
 
   // Country scoping — for the country-leader READ filter only.
+  const myCountries = isCoach ? coachCountries : [String(country || "").toLowerCase()];
   const startsWithCountry = (s) =>
-    typeof s === "string" && s.toLowerCase().startsWith((country + " ").toLowerCase());
+    typeof s === "string" && myCountries.some(c => c && s.toLowerCase().startsWith(c + " "));
+  const isMyCountry = (c) => myCountries.includes(String(c || "").toLowerCase());
   let countryDeptIds = null;
   const allowedCountryDeptIds = async () => {
     if (countryDeptIds) return countryDeptIds;
@@ -138,14 +148,14 @@ exports.handler = async (event) => {
   };
   const recordInCountry = async (tbl, fields) => {
     fields = fields || {};
-    if (tbl === "runs") return startsWithCountry(fields.Run) || String(fields.Country || "").toLowerCase() === country.toLowerCase();
+    if (tbl === "runs") return startsWithCountry(fields.Run) || isMyCountry(fields.Country);
     if (tbl === "departments") return startsWithCountry(fields["Department Key"]);
     if (tbl === "deptNotes" || tbl === "questionNotes") return startsWithCountry(fields.Run);
-    if (tbl === "measures") return String(fields.Country || "").toLowerCase() === country.toLowerCase();
+    if (tbl === "measures") return isMyCountry(fields.Country);
     if (tbl === "surveyBasics") return true; // shared org-wide defaults — everyone reads them
     if (tbl === "helpVideos") return true;   // shared help content — everyone reads it
     if (tbl === "prep") return startsWithCountry(fields.Run);
-    if (tbl === "surveys") return String(fields.Country || "").toLowerCase() === country.toLowerCase();
+    if (tbl === "surveys") return isMyCountry(fields.Country);
     if (tbl === "surveyResponses") return startsWithCountry(fields.Run);
     if (tbl === "checkins") return startsWithCountry(fields.Run);
     if (tbl === "selections") { const set = await allowedCountryDeptIds(); const id = selectionDeptId(fields); return !!id && set.has(id); }
@@ -189,6 +199,12 @@ exports.handler = async (event) => {
       // content: the link token is stripped from surveys, and responses come
       // back as status-only rows (no answers, no codes). Directors see none.
       // (Staff submit through the separate public survey function, never this proxy.)
+      // A coach is there for the country's people, not the mechanics: no prep,
+      // no leadership briefs, no survey machinery.
+      if ((table === "prep" || table === "briefs" || table === "surveys" ||
+           table === "surveyResponses" || table === "checkins") && isCoach) {
+        return { statusCode: 200, headers, body: JSON.stringify({ records: [] }) };
+      }
       if ((table === "surveys" || table === "surveyResponses" || table === "checkins") && role === "director") {
         return { statusCode: 200, headers, body: JSON.stringify({ records: [] }) };
       }
@@ -211,12 +227,18 @@ exports.handler = async (event) => {
       // Notes carry a visibility. Non-leaders never receive someone else's PRIVATE
       // note — a country leader gets public notes plus their own; a director also
       // gets their own. (Enforced here on the server, not just hidden in the client.)
-      if ((table === "deptNotes" || table === "questionNotes") && role && role !== "leader") {
+      if (table === "deptNotes" || table === "questionNotes") {
         const myName = String((user && user.name) || "");
         all = all.filter(r => {
           const f = r.fields || {};
-          if ((f.Visibility || "Private") === "Public") return true;
-          return (role === "director" || role === "country") && myName !== "" && String(f.Author || "") === myName;
+          const vis = f.Visibility || "Private";
+          const mine = myName !== "" && String(f.Author || "") === myName;
+          // A coach's "Coach" note is theirs alone — not even P&C reads it
+          // unless the coach shares it (which makes it Public).
+          if (vis === "Coach") return mine;
+          if (!role || role === "leader") return true;   // P&C see everything else
+          if (vis === "Public") return true;
+          return mine;
         });
       }
       return { statusCode: 200, headers, body: JSON.stringify({ records: all }) };
@@ -227,7 +249,7 @@ exports.handler = async (event) => {
       if (writeByCountry) {
         // One survey exception: a country leader may set how many staff should
         // take their own country's survey — the Expected field, nothing else.
-        if (table === "surveys") {
+        if (table === "surveys" && !isCoach) {
           if (action !== "update") return fail(403, "Read-only access.");
           for (const rec of (records || [])) {
             const keys = Object.keys(rec.fields || {});
@@ -236,6 +258,10 @@ exports.handler = async (event) => {
             const c = f && String((f.fields || {}).Country || "").toLowerCase();
             if (!f || c !== country.toLowerCase()) return fail(403, "Outside your country.");
           }
+        }
+        // A coach writes notes only — in the countries they coach.
+        if (isCoach) {
+          if (table !== "deptNotes" && table !== "questionNotes") return fail(403, "Read-only access.");
         }
         // The check-off roster is theirs to manage (their own country's runs only —
         // the per-record checks below handle that via the Run field).

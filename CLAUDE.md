@@ -59,7 +59,13 @@ not per-task preferences. Check every new or changed screen against them:
 4. **Attribution is exact.** Anything labeled as the country leader's (notes,
    answers) shows ONLY content authored by that leader — filter by author,
    never show "all public notes" under one person's name.
-5. **Reuse, don't rebuild.** When a new page needs something an existing page
+5. **Roles are:** `leader` (Mel & Chris, P&C — sees everything), `country`
+   (country leader — their country, with prep), `director` (department leader —
+   their department across countries), `coach` (country coach — reads the
+   countries they coach WITHOUT the leadership questions, keeps "Coach" notes
+   only they can see until they share). Every new surface must decide what each
+   of these four sees, and the server must enforce it.
+6. **Reuse, don't rebuild.** When a new page needs something an existing page
    has (scoring, notes, heatmaps, translation), use the same component or
    function. If two pages render the same concept differently, that's a bug.
 

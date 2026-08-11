@@ -1098,6 +1098,13 @@ export default function App() {
     : authUser;
   const exitPreview = () => { setPreviewAs(null); setView("leadership"); };
 
+  // A country coach walks alongside one or more countries: they read those
+  // countries' reports (without the leadership questions, which belong to the
+  // country leader's own prep) and keep their own coaching notes.
+  const isCoachRole = viewRole === "coach";
+  const coachCountries = isCoachRole
+    ? String((viewUser && viewUser.country) || "").split(",").map(s => s.trim()).filter(Boolean)
+    : [];
   const effIsAdmin  = authed ? viewRole === "leader" : isAdmin;
   const effIsPCLead = authed ? viewRole === "leader" : isPCLead;
   const effMe       = authed ? (authUser.name || me) : me;
@@ -1124,7 +1131,7 @@ export default function App() {
   useEffect(() => {
     if (view !== "sections" || !authed || !viewRole) return;
     if (viewRole === "director") setViewRaw("home");
-    else if (viewRole === "country") setViewRaw("dashboard");
+    else if (viewRole === "country" || viewRole === "coach") setViewRaw("dashboard");
     else if (viewRole === "leader") setViewRaw("leadership");
   }, [view, authed, viewRole]);   // eslint-disable-line
 
@@ -1890,6 +1897,7 @@ export default function App() {
       // the plain report (the server blocks them from prep anyway).
       prepMode={viewRole === "country" || effIsPCLead}
       prepAuthor={(viewUser && viewUser.name) || effMe || ""}
+      coachMode={isCoachRole}
     />
   );
 
@@ -1909,7 +1917,9 @@ export default function App() {
       country={country} year={year} surveyData={effSurveyData}
       refinements={refinements} setRefinements={setRefinements}
       openReport={openReport}
-      lockCountry={viewRole === "country" ? (viewUser && viewUser.country) : null}
+      lockCountry={viewRole === "country" ? (viewUser && viewUser.country)
+        : (isCoachRole && coachCountries.length === 1 ? coachCountries[0] : null)}
+      countryChoices={isCoachRole && coachCountries.length > 1 ? coachCountries : null}
       isLeader={effIsAdmin}
       authUser={viewUser} onSignOut={signOut}
     />
@@ -4748,16 +4758,17 @@ function ScoringHelpPanel({ onClose, audience = "Department leaders" }) {
 // or Shared on its own (default Private). Saves to Airtable so notes persist.
 // A single note thread (for one question, or one section via a sentinel label).
 // Notes are pre-loaded by the parent and passed in; this handles composing + display.
-function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes, me, isPCLead, onAdded, onFlip, sub }) {
+function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes, me, isPCLead, onAdded, onFlip, sub, coachMode = false }) {
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
-  const [visibility, setVisibility] = useState("Private");
+  const [visibility, setVisibility] = useState(coachMode ? "Coach" : "Private");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState(null);
 
   const visible = (notes || []).filter(n =>
-    n.visibility === "Public" || (me && n.author === me) || isPCLead);
+    n.visibility === "Coach" ? (me && n.author === me)
+      : (n.visibility === "Public" || (me && n.author === me) || isPCLead));
 
   const fmt = (iso) => { if (!iso) return ""; try { const d = new Date(iso);
     return d.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}); } catch { return ""; } };
@@ -4821,7 +4832,7 @@ function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes
             style={{ width:"100%", boxSizing:"border-box", fontSize:13, padding:8, marginTop:6,
               border:"1px solid #E2D3C2", borderRadius:8, resize:"vertical", fontFamily:"inherit" }} />
           <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:6, flexWrap:"wrap" }}>
-            <VisibilityPicker value={visibility} onChange={setVisibility} isMobile={isMobile} />
+            <VisibilityPicker value={visibility} onChange={setVisibility} isMobile={isMobile} coachMode={coachMode} />
             <button onClick={save} disabled={saving || !draft.trim()}
               style={{ ...navBtn, marginLeft:"auto", background:(saving||!draft.trim())?"#ECE2D2":"#E0863C", color:(saving||!draft.trim())?"#7A6F63":"#fff" }}>
               {saving ? "Saving…" : "Add"}
@@ -5409,7 +5420,7 @@ function WorkspaceView({ allRuns, setView, authRole, authUser, authDepts = [], c
   });
   const notesFor = (qtext) => notes.filter(n => n.question === qtext);
   const flip = async (n) => {
-    const next = n.visibility === "Public" ? "Private" : "Public";
+    const next = n.visibility === "Public" ? (coachMode ? "Coach" : "Private") : "Public";
     setNotes(prev => prev.map(x => x.id === n.id ? { ...x, visibility: next } : x));
     try { await setQuestionNoteVisibility(n.id, next); } catch { reloadNotes(); }
   };
@@ -5567,7 +5578,7 @@ function WorkspaceView({ allRuns, setView, authRole, authUser, authDepts = [], c
 // always shared with the People & Culture team (author + P&C see it; the
 // country leader doesn't). The pad is already per-department, so what's
 // written on Singles is for Singles.
-function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead, meetingMode = false }) {
+function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead, meetingMode = false, coachMode = false }) {
   // Privacy reminder dismissal — keyed by pulse report (country+period), so it
   // greets people once each pulse and then stays out of the way.
   const privacyKey = `pulse:notesPrivacySeen:${country}:${year}`;
@@ -5581,7 +5592,7 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead, m
   const isMobile = useIsMobile();
   const [notes, setNotes] = useState(null);      // null = loading
   const [draft, setDraft] = useState("");
-  const [visibility, setVisibility] = useState("Private");
+  const [visibility, setVisibility] = useState(coachMode ? "Coach" : "Private");
   const [saving, setSaving] = useState(false);
   const [nameInput, setNameInput] = useState("");
   const [err, setErr] = useState(null);
@@ -5594,9 +5605,11 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead, m
   };
   useEffect(() => { setNotes(null); reload(); /* eslint-disable-next-line */ }, [country, year, deptKey]);
 
-  // Visibility rule: show a note if it's Public, or you wrote it, or you're P&C lead.
+  // Visibility rule: show a note if it's Public, or you wrote it, or you're P&C
+  // lead — except a coach's "Coach" note, which only its author ever sees.
   const visible = (notes || []).filter(n =>
-    n.visibility === "Public" || (me && n.author === me) || isPCLead);
+    n.visibility === "Coach" ? (me && n.author === me)
+      : (n.visibility === "Public" || (me && n.author === me) || isPCLead));
 
   const fmt = (iso) => {
     if (!iso) return "";
@@ -5624,7 +5637,7 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead, m
   };
 
   const flip = async (n) => {
-    const next = n.visibility === "Public" ? "Private" : "Public";
+    const next = n.visibility === "Public" ? (coachMode ? "Coach" : "Private") : "Public";
     // optimistic
     setNotes(prev => prev.map(x => x.id === n.id ? { ...x, visibility: next } : x));
     try { await setDepartmentNoteVisibility(n.id, next); }
@@ -5696,7 +5709,7 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead, m
               Shared with the People &amp; Culture team
             </span>
           ) : (
-            <VisibilityPicker value={visibility} onChange={setVisibility} isMobile={isMobile} />
+            <VisibilityPicker value={visibility} onChange={setVisibility} isMobile={isMobile} coachMode={coachMode} />
           )}
           <button onClick={save} disabled={saving || !draft.trim()}
             style={{ ...navBtn, marginLeft: "auto", background: (saving || !draft.trim()) ? "#ECE2D2" : "#E0863C",
@@ -5797,14 +5810,15 @@ function DeptBorderlineChooser({ dept, canEdit, saveStatusOverride }) {
 // forcePublic: country leaders don't get a Private option — everything they
 // write on their report is shared with the People & Culture team, and the
 // dialog says so instead of offering the toggle.
-function DirectorNoteButton({ country, year, deptKey, question, label, me, hasNote, onSaved, compact, btnLabel = "Department Leader's Note", forcePublic = false, notes = [] }) {
+function DirectorNoteButton({ country, year, deptKey, question, label, me, hasNote, onSaved, compact, btnLabel = "Department Leader's Note", forcePublic = false, notes = [], coachMode = false }) {
   // Notes by OTHER people on this question that this viewer may see — shown
   // read-only inside the window, and counted on the button so they can't hide.
   const others = (notes || []).filter(n => n.author !== me);
   const [open, setOpen] = useState(false);
   const [noteId, setNoteId] = useState(null);
   const [text, setText] = useState("");
-  const [vis, setVis] = useState(forcePublic ? "Public" : "Private");
+  const ownLevel = coachMode ? "Coach" : "Private";
+  const [vis, setVis] = useState(forcePublic ? "Public" : ownLevel);
   const [saved, setSaved] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
   const [saveErr, setSaveErr] = useState(false);
@@ -5817,8 +5831,8 @@ function DirectorNoteButton({ country, year, deptKey, question, label, me, hasNo
       // Only ever load YOUR OWN note into the editor — never someone else's
       // (that risked silently overwriting a colleague's note).
       const mine = (all || []).find(n => n.question === question && n.author === me);
-      if (mine) { setNoteId(mine.id); setText(mine.body || ""); setVis(forcePublic ? "Public" : (mine.visibility || "Private")); }
-      else { setNoteId(null); setText(""); setVis(forcePublic ? "Public" : "Private"); }
+      if (mine) { setNoteId(mine.id); setText(mine.body || ""); setVis(forcePublic ? "Public" : (mine.visibility || ownLevel)); }
+      else { setNoteId(null); setText(""); setVis(forcePublic ? "Public" : ownLevel); }
     } catch { setNoteId(null); setText(""); }
   };
   const persist = async (t, v) => {
@@ -5883,10 +5897,11 @@ function DirectorNoteButton({ country, year, deptKey, question, label, me, hasNo
                 </span>
               ) : (
               <div style={{ display: "flex", gap: 4 }}>
-                {["Private", "Public"].map(v => (
+                {[ownLevel, "Public"].map(v => (
                   <button key={v} onClick={() => setVisibility(v)} style={{ fontSize: 11.5, fontWeight: 600, borderRadius: 6, padding: "6px 11px", cursor: "pointer",
                     border: "1px solid " + (vis === v ? "#2C2621" : "#ECE2D2"), background: vis === v ? "#2C2621" : "#fff", color: vis === v ? "#fff" : "#7A6F63" }}>
-                    {v === "Private" ? "Private to me" : "Share with team"}</button>
+                    {v === "Public" ? (coachMode ? "Share with P&C + country leader" : "Share with team")
+                      : coachMode ? "Just me" : "Private to me"}</button>
                 ))}
               </div>
               )}
@@ -6516,7 +6531,7 @@ function PrepFooter({ mode, prep, savePrepPatch, depts, country, isMobile, tr = 
 }
 
 // ─── REPORT VIEW ──────────────────────────────────────────────────────────────
-function ReportView({ country, year, surveyData, getApproved, setView, sbOverrides, sbMaster, runRespondents, me, saveMe, isPCLead, leaderName, prepMode = false, prepAuthor = "" }) {
+function ReportView({ country, year, surveyData, getApproved, setView, sbOverrides, sbMaster, runRespondents, me, saveMe, isPCLead, leaderName, prepMode = false, prepAuthor = "", coachMode = false }) {
   const leaderFirst = leaderName ? String(leaderName).trim().split(/\s+/)[0] : null;
 
   // ── Country Leader Prep (Priority 4) ──
@@ -6864,7 +6879,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
         <div id="dept-detail-section" />
         {activeDept ? (
           // Single dept selected — show just that one
-          <DeptReportPage dept={activeDeptData} getApproved={getApproved} country={country} year={year} sbOverrides={sbOverrides} sbMaster={sbMaster} me={me} isPCLead={isPCLead} prep={prepApi} tr={tr} />
+          <DeptReportPage dept={activeDeptData} getApproved={getApproved} country={country} year={year} sbOverrides={sbOverrides} sbMaster={sbMaster} me={me} isPCLead={isPCLead} prep={prepApi} tr={tr} coachMode={coachMode} />
         ) : (
           // No tab selected — show all for print
           <div>
@@ -6872,7 +6887,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
               Select a department above to focus, or download PDF to get the full report.
             </div>
             <div className="print-only">
-              {depts.map(dept => <DeptReportPage key={dept.key} dept={dept} getApproved={getApproved} country={country} year={year} sbOverrides={sbOverrides} sbMaster={sbMaster} me={me} isPCLead={isPCLead} prep={prepApi} tr={tr} />)}
+              {depts.map(dept => <DeptReportPage key={dept.key} dept={dept} getApproved={getApproved} country={country} year={year} sbOverrides={sbOverrides} sbMaster={sbMaster} me={me} isPCLead={isPCLead} prep={prepApi} tr={tr} coachMode={coachMode} />)}
             </div>
           </div>
         )}
@@ -7009,7 +7024,7 @@ function ReportView({ country, year, surveyData, getApproved, setView, sbOverrid
   );
 }
 
-function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaster, me, isPCLead, startCollapsed = false, prep = null, tr = (s) => s }) {
+function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaster, me, isPCLead, startCollapsed = false, prep = null, tr = (s) => s, coachMode = false }) {
   const isMobile = useIsMobile();
   // Which questions/areas the viewer has already noted (button ✓), plus every
   // note the viewer is allowed to SEE per question (shown inside the note window).
@@ -7111,7 +7126,9 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
   if (!dept) return null;
   const strengths    = getApproved(dept.key, "strengths");
   const growth       = getApproved(dept.key, "growth");
-  const leadershipQs = getApproved(dept.key, "leadershipQs");
+  // The leadership questions belong to the country leader's own prep — a coach
+  // reads the report without them.
+  const leadershipQs = coachMode ? [] : getApproved(dept.key, "leadershipQs");
   const quotes       = getApproved(dept.key, "quotes").slice(0,4);
 
   const statusColor = sc(dept.status);
@@ -7127,9 +7144,9 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
         <div>
           <div style={{ fontFamily:FONT_DISPLAY, fontSize:24, fontWeight:600, color:"#2C2621", marginBottom:2 }}>{tr(dept.label)}</div>
           <div style={{ fontSize:13, color:"#7A6F63" }}>n = {dept.n} respondents</div>
-          {!prep && (
+          {(!prep || coachMode) && (
             <div className="no-print" style={{ marginTop:8 }}>
-              <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={"§ Area"} label={"Your notes on " + dept.label} me={me} hasNote={!!noted["§ Area"]} notes={notesByQ["§ Area"] || []} onSaved={reloadNoted} btnLabel="Notes on this area" />
+              <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={"§ Area"} label={"Your notes on " + dept.label} me={me} hasNote={!!noted["§ Area"]} notes={notesByQ["§ Area"] || []} onSaved={reloadNoted} btnLabel={coachMode ? "My coaching note" : "Notes on this area"} coachMode={coachMode} />
             </div>
           )}
         </div>
@@ -7242,7 +7259,7 @@ function DeptReportPage({ dept, getApproved, country, year, sbOverrides, sbMaste
                 })()}
                 {/* Interactive bits must not toggle the row — preventDefault stops the <details> toggle only. */}
                 <span className="no-print" style={{ display:"block", marginTop:6 }} onClick={e => e.preventDefault()}>
-                  <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={q.en} label={q.en} me={me} hasNote={!!noted[q.en]} notes={notesByQ[q.en] || []} onSaved={reloadNoted} compact btnLabel="My note" forcePublic={!!prep} />
+                  <DirectorNoteButton country={country} year={year} deptKey={dept.key} question={q.en} label={q.en} me={me} hasNote={!!noted[q.en]} notes={notesByQ[q.en] || []} onSaved={reloadNoted} compact btnLabel="My note" forcePublic={!!prep && !coachMode} coachMode={coachMode} />
                 </span>
               </span>
               {!isMobile && (
@@ -7452,7 +7469,7 @@ function TrendsExampleModal({ country, onClose, onNever }) {
 }
 
 // ─── DASHBOARD VIEW ───────────────────────────────────────────────────────────
-function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country, year, surveyData, refinements, setRefinements, openReport, lockCountry, isLeader = true, authUser, onSignOut }) {
+function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country, year, surveyData, refinements, setRefinements, openReport, lockCountry, isLeader = true, authUser, onSignOut, countryChoices = null }) {
   const isMobile = useIsMobile();
   // "How scoring works" — the same explainer the department leaders get, served
   // with country-leader-audience videos.
@@ -7478,10 +7495,15 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
       localStorage.setItem(TRENDS_PREVIEW_KEY, JSON.stringify({ ...st, never: true }));
     } catch {}
   };
-  const countries = [...new Set(allRuns.map(r=>r.country))].sort();
+  // A coach sees only the countries they walk alongside.
+  const allCountries = [...new Set(allRuns.map(r=>r.country))].sort();
+  const countries = countryChoices
+    ? allCountries.filter(c => countryChoices.some(x => x.toLowerCase() === String(c).toLowerCase()))
+    : allCountries;
   const DEPTS_ORDER = ["HR","LD","LC","MPD","Counseling","Women","Singles","Marriages","JVK"];
   // A country leader is locked to their country; everyone else uses the selector.
-  const effDashCountry = lockCountry || dashCountry;
+  const effDashCountry = lockCountry
+    || (countryChoices && (dashCountry === "all" || !countries.includes(dashCountry)) ? countries[0] : dashCountry);
 
   // Build trend data per country+dept
   const runsByCountry = {};
@@ -7527,9 +7549,9 @@ function DashboardView({ allRuns, dashCountry, setDashCountry, setView, country,
             onClose={() => setShowTrendsExample(false)} onNever={neverShowTrendsExample} />
         )}
         {!lockCountry && (
-          <select value={dashCountry} onChange={e=>setDashCountry(e.target.value)}
+          <select value={effDashCountry} onChange={e=>setDashCountry(e.target.value)}
             style={{ background:"#F6F1E8", border:"1px solid #ECE2D2", borderRadius:6, color:"#2C2621", padding:"6px 12px", fontSize:13 }}>
-            <option value="all">All Countries</option>
+            {!countryChoices && <option value="all">All Countries</option>}
             {countries.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         )}
