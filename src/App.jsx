@@ -10,7 +10,7 @@ import VideosView from "./components/VideosView";
 import { authStatus, tokenValid, getUser, logout, listCountryLeaders } from "./authClient";
 import CountryLeadersView from "./components/CountryLeadersView";
 import SURVEY_BASICS from "./surveyBasics.json";
-import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, deleteDepartmentNote, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, updateQuestionNote, deleteQuestionNote, loadMeasures, loadSurveyBasicsMaster, saveSurveyBasicsMaster, loadHelpVideos, loadPrep, savePrep, saveBrief, loadBriefs, baseYear, periodSeq, periodCmp, loadSurveys, createSurvey, setSurveyStatus, loadSurveyResponses, updateSurvey, deleteSurvey, loadCheckins, addCheckins, removeCheckin } from "./airtable";
+import { airtablePing, upsertRun, upsertDepartment, loadSelections, saveSelections as atSaveSelections, loadRunSelections, loadAllRuns, loadRunSurveyData, setDepartmentReviewStatus, addDepartmentNote, loadDepartmentNotes, setDepartmentNoteVisibility, deleteDepartmentNote, addQuestionNote, loadQuestionNotes, setQuestionNoteVisibility, updateQuestionNote, deleteQuestionNote, loadMeasures, loadSurveyBasicsMaster, saveSurveyBasicsMaster, loadHelpVideos, loadPrep, savePrep, saveBrief, loadBriefs, baseYear, periodSeq, periodCmp, loadSurveys, createSurvey, setSurveyStatus, loadSurveyResponses, updateSurvey, deleteSurvey, loadCheckins, addCheckins, removeCheckin, loadRunDepartmentNotes } from "./airtable";
 import { synthesizeLeadership, languageForCountry, translateBatch, translateToEnglish, nativeLanguageLabel } from "./ai";
 import MeasurePanel from "./components/MeasurePanel";
 import NotesDigest from "./components/NotesDigest";
@@ -2388,6 +2388,99 @@ function RespondentSurveyModal({ resp, onClose }) {
   );
 }
 
+// "Gather the meeting notes" — after the meetings, every note everyone wrote,
+// grouped by department, for one country's pulse. Each department leader writes
+// in their own department during the meeting; this is where P&C collects them
+// all in one place (and can copy the lot into a document).
+function GatherNotesModal({ runs = [], onClose }) {
+  const sorted = [...runs].sort((a, b) => String(a.country).localeCompare(String(b.country)));
+  const [run, setRun] = useState(sorted[0] || null);
+  const [notes, setNotes] = useState(null);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!run) return;
+    let alive = true;
+    setNotes(null);
+    loadRunDepartmentNotes(run.country, run.year)
+      .then(list => { if (alive) setNotes(list); })
+      .catch(() => { if (alive) setNotes([]); });
+    return () => { alive = false; };
+  }, [run]);
+
+  const deptLabel = (key) => {
+    const d = (run && (run.depts || []).find(x => x.key === key)) || null;
+    return (d && d.label) || key || "—";
+  };
+  // Departments in the run's own order, with their notes attached.
+  const groups = (() => {
+    if (!notes) return null;
+    const byDept = new Map();
+    notes.forEach(n => { const k = n.deptKey || "—"; (byDept.get(k) || byDept.set(k, []).get(k)).push(n); });
+    const order = (run && (run.depts || []).map(d => d.key)) || [];
+    const keys = [...byDept.keys()].sort((a, b) => {
+      const ia = order.indexOf(a), ib = order.indexOf(b);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+    return keys.map(k => ({ key: k, label: deptLabel(k), items: byDept.get(k) }));
+  })();
+  const fmt = (iso) => { try { return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }); } catch { return ""; } };
+  const copyAll = async () => {
+    if (!groups) return;
+    const text = groups.map(g =>
+      `${g.label}\n${"-".repeat(g.label.length)}\n` +
+      g.items.map(n => `• ${n.body}\n  — ${n.author || "Unknown"}${n.created ? ", " + fmt(n.created) : ""}`).join("\n")
+    ).join("\n\n");
+    try {
+      await navigator.clipboard.writeText(`Meeting notes — ${run.country} ${run.year}\n\n${text}`);
+      setCopied(true); setTimeout(() => setCopied(false), 2500);
+    } catch {}
+  };
+
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(44,38,33,0.45)", zIndex:1000,
+      overflowY:"auto", padding:"36px 14px 60px" }}>
+      <div onClick={e => e.stopPropagation()} style={{ maxWidth:760, margin:"0 auto", background:"#fff",
+        borderRadius:14, padding:"20px 22px", boxShadow:"0 24px 60px rgba(44,38,33,.35)" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6, flexWrap:"wrap" }}>
+          <span style={{ fontFamily:FONT_DISPLAY, fontSize:19, fontWeight:600, color:"#2C2621" }}>Gather the meeting notes</span>
+          <select value={run ? run.country : ""} onChange={e => setRun(sorted.find(r => r.country === e.target.value) || null)}
+            style={{ fontSize:13, padding:"6px 10px", border:"1px solid #E2D3C2", borderRadius:8, background:"#FDFAF4" }}>
+            {sorted.map(r => <option key={r.country} value={r.country}>{r.country} {r.year}</option>)}
+          </select>
+          <button onClick={copyAll} style={{ ...navBtn, fontSize:12, padding:"6px 12px" }}>{copied ? "✓ Copied" : "Copy all"}</button>
+          <button onClick={onClose} style={{ marginLeft:"auto", background:"none", border:"none", cursor:"pointer",
+            fontSize:19, color:"#7A6F63", lineHeight:1 }}>✕</button>
+        </div>
+        <div style={{ fontSize:12.5, color:"#7A6F63", lineHeight:1.55, marginBottom:14 }}>
+          Everything written in the Meeting notes windows during this country's pulse meetings — department by
+          department, with who wrote each note. Only you and Chris see this gather.
+        </div>
+        {!groups ? (
+          <div style={{ fontSize:13, color:"#7A6F63" }}>Loading…</div>
+        ) : groups.length === 0 ? (
+          <div style={{ fontSize:13, color:"#A89C8D", fontStyle:"italic" }}>No meeting notes written for this pulse yet.</div>
+        ) : groups.map(g => (
+          <div key={g.key} style={{ marginBottom:16 }}>
+            <div style={{ display:"flex", alignItems:"baseline", gap:8, borderBottom:"1px solid #ECE2D2", paddingBottom:5, marginBottom:8 }}>
+              <span style={{ fontFamily:FONT_DISPLAY, fontSize:15.5, fontWeight:600, color:"#2C2621" }}>{g.label}</span>
+              <span style={{ fontSize:11.5, color:"#A89C8D" }}>{g.items.length} note{g.items.length === 1 ? "" : "s"}</span>
+            </div>
+            {g.items.map(n => (
+              <div key={n.id} style={{ background:"#FDFAF4", border:"1px solid #ECE2D2", borderRadius:10,
+                padding:"9px 12px", marginBottom:7 }}>
+                <div style={{ fontSize:13, color:"#2C2621", lineHeight:1.55, whiteSpace:"pre-wrap" }}>{n.body}</div>
+                <div style={{ fontSize:10.5, color:"#A89C8D", marginTop:5 }}>
+                  {n.author || "Unknown"}{n.created ? " · " + fmt(n.created) : ""}
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // "Country Pulse Report agendas" — where Mel & Chris build out the FULL meeting
 // agenda for each country on top of what the country leader queued up. Everyone
 // (leader + department leaders) sees the full agenda in their meeting views;
@@ -3147,6 +3240,7 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
   const [sysMenu, setSysMenu] = useState(false);         // the System dropdown in the banner
   const [inviteOpen, setInviteOpen] = useState(false);   // the pre-written country-leader email
   const [surveysOpen, setSurveysOpen] = useState(false); // staff survey links + responses
+  const [gatherOpen, setGatherOpen] = useState(false);   // end-of-meeting notes gather
   const [showPreview, setShowPreview] = useState(false);                // the "See what others see" panel
   const [orgIssues, setOrgIssues] = useState(null);   // null = loading; array of question rows across the org
   const issuesLoadedRef = useRef("");
@@ -3299,6 +3393,7 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
                   minWidth:190, overflow:"hidden", padding:"4px 0" }}>
                   {[
                     isAdmin && ["📋 Staff surveys", () => setSurveysOpen(true)],
+                    isAdmin && ["🗒 Gather the meeting notes", () => setGatherOpen(true)],
                     isAdmin && ["✉ Email a country leader", () => setInviteOpen(true)],
                     (authUser && authUser.role === "leader") && ["Manage people", () => setView("users")],
                     isAdmin && ["Country leaders", () => setView("leaders")],
@@ -3344,6 +3439,8 @@ function LeadershipView({ country, setCountry, year, setYear, fileRef, handleFil
 
         {/* ── Pulse survey progress — any survey out in the field right now ── */}
         <PulseSurveyProgress refreshKey={String(surveysOpen)} />
+
+        {gatherOpen && <GatherNotesModal runs={latestRuns} onClose={() => setGatherOpen(false)} />}
 
         {/* ── Country Pulse Report agendas — P&C builds the full meeting plan ── */}
         <CountryAgendasPanel latestRuns={latestRuns} />

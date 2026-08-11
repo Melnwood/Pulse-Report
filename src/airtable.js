@@ -470,6 +470,22 @@ export async function loadDepartmentNotes(country, year, deptKey) {
     .sort((a, b) => new Date(b.created || 0) - new Date(a.created || 0));
 }
 
+// Every meeting note written across a whole run, grouped by department — the
+// end-of-meeting gather. The proxy already filters to what the caller may see
+// (P&C see everyone's; anyone else sees public + their own).
+export async function loadRunDepartmentNotes(country, year) {
+  const run = `${country} ${year}`;
+  const res = await call({ action: "list", table: "deptNotes", filterByFormula: `{Run} = ${q(run)}` });
+  return (res.records || []).map(r => ({
+    id: r.id,
+    body: r.fields["Body"] || "",
+    deptKey: r.fields["Department"] || "",
+    author: r.fields["Author"] || "",
+    created: r.fields["Created"] || null,
+    visibility: r.fields["Visibility"] || "Private",
+  })).sort((a, b) => new Date(a.created || 0) - new Date(b.created || 0));
+}
+
 // Flip a note between Private and Public.
 export async function setDepartmentNoteVisibility(noteId, visibility) {
   await call({ action: "update", table: "deptNotes",
