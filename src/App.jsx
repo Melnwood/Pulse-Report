@@ -436,6 +436,42 @@ const MASTER_BY_NORM = (() => {
 // recompute each department's roll-up from the effective statuses. Runs even
 // with no overrides (the re-sourcing must always happen). Returns a NEW object;
 // the input is untouched.
+// Re-score a run's department list with TODAY's rules. The Status stored in
+// Airtable was written when the run was imported, under whatever rules existed
+// then — so the dashboard (which reads it) could disagree with the report
+// (which always recomputes). Everything now runs through the same scoring, so
+// the landing page, the dashboard and the report always agree.
+function rescoreRunDepts(run) {
+  if (!run || !Array.isArray(run.depts)) return run;
+  let changed = false;
+  const depts = run.depts.map(d => {
+    if (!d || !d.surveyDataJSON) return d;
+    let questions = null, ov = {};
+    try { questions = (JSON.parse(d.surveyDataJSON) || {}).questions || null; } catch { return d; }
+    if (!Array.isArray(questions) || !questions.length) return d;
+    try { ov = d.statusOverridesJSON ? (JSON.parse(d.statusOverridesJSON) || {}) : {}; } catch { ov = {}; }
+    const scored = questions.map(q => {
+      const master = (q.col != null && MASTER_BY_COL.get(q.col)) || MASTER_BY_NORM.get(normQ(q.en)) || null;
+      const eff = master ? { ...q, en: master.en, burden: master.burden, scale: master.scale } : { ...q };
+      const auto = (Array.isArray(eff.vals) && eff.vals.length)
+        ? (getStatus(eff.vals, eff).status || eff.autoStatus || eff.status)
+        : (eff.autoStatus || eff.status);
+      const chosen = ov[`${run.country}:${run.year}:${d.key}:${normQ(eff.en)}`] ||
+                     ov[`${run.country}:${run.year}:${d.key}:${normQ(q.en)}`];
+      return { ...eff, autoStatus: auto, status: (chosen && chosen !== auto) ? chosen : auto };
+    });
+    const auto = deptStatus(scored);
+    const scores = scored.map(q => q.score).filter(Boolean);
+    const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
+    const deptChosen = ov[`${run.country}:${run.year}:${d.key}:${normQ(DEPT_OVERRIDE_KEY)}`];
+    const bl = deptBorderlineOptions(avg, auto);
+    const status = (deptChosen && bl && bl.options.includes(deptChosen)) ? deptChosen : auto;
+    if (status && status !== d.status) changed = true;
+    return { ...d, status: status || d.status };
+  });
+  return changed ? { ...run, depts } : run;
+}
+
 function applyStatusOverrides(sd, overrides, country, year) {
   if (!sd || !sd.depts) return sd;
   const ov = overrides || {};
@@ -1179,7 +1215,7 @@ export default function App() {
       // 2. shared list from Airtable — merge by country+year (Airtable wins)
       setRunsLoading(true);
       try {
-        const shared = await loadAllRuns();
+        const shared = (await loadAllRuns()).map(rescoreRunDepts);
         if (shared && shared.length) {
           setAllRuns(prev => {
             const byKey = {};
@@ -1690,7 +1726,7 @@ export default function App() {
   // Airtable — used by the leaders' dashboard's Refresh button.
   const reloadRuns = async () => {
     try {
-      const shared = await loadAllRuns();
+      const shared = (await loadAllRuns()).map(rescoreRunDepts);
       if (shared && shared.length) {
         setAllRuns(prev => {
           const byKey = {};

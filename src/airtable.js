@@ -312,6 +312,11 @@ export async function loadAllRuns() {
       status: d.fields["Status"]?.name || d.fields["Status"] || null,
       n: d.fields["Respondents"] ?? null,
       reviewDone: (d.fields["Review Status"]?.name || d.fields["Review Status"]) === "Finished",
+      // The stored Status was written when the run was imported, under whatever
+      // scoring rules existed then. Ship the raw question data too so the app
+      // can re-score with TODAY's rules — one truth on every screen.
+      surveyDataJSON: d.fields["Survey Data JSON"] || null,
+      statusOverridesJSON: d.fields["Status Overrides"] || null,
     });
   }
 
