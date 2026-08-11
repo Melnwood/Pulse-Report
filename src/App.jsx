@@ -2001,8 +2001,9 @@ function SectionsView({ setView, isPCLead, isAdmin, toggleAdmin, authUser, onSig
 // a mode is picked, then a country/department, then "Start preview". The exit is
 // the fixed banner (PreviewBanner) that follows you across every screen.
 function PreviewAsPanel({ allRuns, setPreviewAs, setView }) {
-  const [mode, setMode] = useState(null);   // null | "country" | "director" — closed by default
+  const [mode, setMode] = useState(null);   // null | "country" | "director" | "coach" — closed by default
   const [country, setCountry] = useState("");
+  const [coachCountries, setCoachCountries] = useState([]); // a coach can cover several
   const [depts, setDepts] = useState([]);   // one or more department keys (directors can own several)
   const countries = [...new Set(allRuns.map(r => r.country).filter(Boolean))].sort();
 
@@ -2011,6 +2012,16 @@ function PreviewAsPanel({ allRuns, setPreviewAs, setView }) {
   const startCountry = () => {
     if (!country) return;
     setPreviewAs({ role: "country", country, label: `${country} country leader` });
+    setView("sections");
+  };
+  const toggleCoachCountry = (c) =>
+    setCoachCountries(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
+  const startCoach = () => {
+    if (!coachCountries.length) return;
+    const label = coachCountries.length === 1
+      ? `${coachCountries[0]} country coach`
+      : `${coachCountries.slice(0, -1).join(", ")} & ${coachCountries[coachCountries.length - 1]} country coach`;
+    setPreviewAs({ role: "coach", country: coachCountries.join(","), label });
     setView("sections");
   };
   const startDirector = () => {
@@ -2039,8 +2050,36 @@ function PreviewAsPanel({ allRuns, setPreviewAs, setView }) {
       </div>
       <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
         {modeBtn("country", "View as a country leader")}
+        {modeBtn("coach", "View as a country coach")}
         {modeBtn("director", "View as a P&C department leader")}
       </div>
+
+      {mode === "coach" && (
+        <div style={{ marginTop:14 }}>
+          <div style={{ fontSize:12, color:"#7A6F63", marginBottom:8 }}>
+            Pick the country (or countries) this coach walks alongside — they see the report without the
+            leadership questions:
+          </div>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:12 }}>
+            {countries.map(c => {
+              const on = coachCountries.includes(c);
+              return (
+                <button key={c} onClick={() => toggleCoachCountry(c)}
+                  style={{ fontSize:12.5, fontWeight:600, cursor:"pointer", borderRadius:20, padding:"6px 13px",
+                    color: on ? "#fff" : "#5A4A3B", background: on ? "#E0863C" : "#FDFAF4",
+                    border: `1px solid ${on ? "#E0863C" : "#E2D3C2"}` }}>
+                  {on ? "✓ " : ""}{c}
+                </button>
+              );
+            })}
+          </div>
+          <button onClick={startCoach} disabled={!coachCountries.length}
+            style={{ ...navBtn, background: coachCountries.length ? "#E0863C" : "#ECE2D2",
+              color: coachCountries.length ? "#fff" : "#A89C8D", border:"1px solid transparent", fontWeight:700 }}>
+            Start preview →
+          </button>
+        </div>
+      )}
 
       {mode === "country" && (
         <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap", marginTop:14 }}>
