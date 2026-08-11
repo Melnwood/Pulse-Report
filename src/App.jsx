@@ -4887,8 +4887,13 @@ function ScoringHelpPanel({ onClose, audience = "Department leaders" }) {
         <div style={{ background:"#F6F1E8", border:"1px solid #ECE2D2", borderRadius:10,
           padding:14, marginTop:4 }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10, flexWrap:"wrap" }}>
-            <span style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5 }}>Status thresholds</span>
+            <span style={{ fontSize:11, fontWeight:700, color:"#7A6F63", textTransform:"uppercase", letterSpacing:1.5 }}>Status thresholds — one question</span>
             {watch("Status thresholds")}
+          </div>
+          <div style={{ fontSize:12, color:"#5A4A3B", lineHeight:1.55, marginBottom:10 }}>
+            These bands are for <b>one question</b>. A department is not just its average — the 40% rule and
+            the majority-flagged rule above can override it, which is why a department can average 3.18 and
+            still read Concern, or average 4.01 and read Watch.
           </div>
           <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
           <table style={{ width:"100%", minWidth: isMobile ? 380 : "auto", borderCollapse:"collapse", fontSize:12 }}>
