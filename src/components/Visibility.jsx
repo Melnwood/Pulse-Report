@@ -8,21 +8,17 @@
 import { IconLock, IconEye } from "./Icons";
 
 export const VIS_SHARED = "Public";
-// "Coach" is a coach's own private level: nobody else sees it — not even P&C —
-// until they choose Shared, which sends it to P&C and the country leader.
-export const VIS_COACH = "Coach";
-export const visLabel = (v) => (v === VIS_SHARED ? "Shared" : v === VIS_COACH ? "Just me" : "Private");
+export const visLabel = (v) => (v === VIS_SHARED ? "Shared" : "Private");
 export const visAudience = (v) => (v === VIS_SHARED
   ? "the whole team & country leadership can see this note"
-  : v === VIS_COACH
-  ? "only you can see this note — no one else, not even P&C"
   : "only you & P&C leadership (Mel & Chris) can see this note");
 
 // Segmented Private/Shared picker for the composer — sets the note being written.
 export function VisibilityPicker({ value, onChange, isMobile, coachMode = false }) {
   const shared = value === VIS_SHARED;
-  const own = coachMode ? VIS_COACH : "Private";
-  const ownLabel = coachMode ? "Just me" : "Private";
+  // A coach's private note is the same level as everyone else's: them + P&C.
+  const own = "Private";
+  const ownLabel = coachMode ? "Just me & P&C" : "Private";
   const btn = (active, bg) => ({ fontSize:12, fontWeight:600, display:"inline-flex", alignItems:"center", gap:5,
     padding: isMobile ? "9px 14px" : "5px 12px", border:"none", cursor:"pointer",
     background: active ? bg : "transparent", color: active ? "#fff" : "#7A6F63" });

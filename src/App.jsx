@@ -4762,13 +4762,12 @@ function NoteThread({ country, year, deptKey, questionLabel, displayLabel, notes
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
-  const [visibility, setVisibility] = useState(coachMode ? "Coach" : "Private");
+  const [visibility, setVisibility] = useState("Private");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState(null);
 
   const visible = (notes || []).filter(n =>
-    n.visibility === "Coach" ? (me && n.author === me)
-      : (n.visibility === "Public" || (me && n.author === me) || isPCLead));
+    n.visibility === "Public" || (me && n.author === me) || isPCLead);
 
   const fmt = (iso) => { if (!iso) return ""; try { const d = new Date(iso);
     return d.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}); } catch { return ""; } };
@@ -5420,7 +5419,7 @@ function WorkspaceView({ allRuns, setView, authRole, authUser, authDepts = [], c
   });
   const notesFor = (qtext) => notes.filter(n => n.question === qtext);
   const flip = async (n) => {
-    const next = n.visibility === "Public" ? (coachMode ? "Coach" : "Private") : "Public";
+    const next = n.visibility === "Public" ? "Private" : "Public";
     setNotes(prev => prev.map(x => x.id === n.id ? { ...x, visibility: next } : x));
     try { await setQuestionNoteVisibility(n.id, next); } catch { reloadNotes(); }
   };
@@ -5592,7 +5591,7 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead, m
   const isMobile = useIsMobile();
   const [notes, setNotes] = useState(null);      // null = loading
   const [draft, setDraft] = useState("");
-  const [visibility, setVisibility] = useState(coachMode ? "Coach" : "Private");
+  const [visibility, setVisibility] = useState("Private");
   const [saving, setSaving] = useState(false);
   const [nameInput, setNameInput] = useState("");
   const [err, setErr] = useState(null);
@@ -5606,10 +5605,9 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead, m
   useEffect(() => { setNotes(null); reload(); /* eslint-disable-next-line */ }, [country, year, deptKey]);
 
   // Visibility rule: show a note if it's Public, or you wrote it, or you're P&C
-  // lead — except a coach's "Coach" note, which only its author ever sees.
+  // lead. (A coach's private notes follow the same rule: theirs + Mel & Chris.)
   const visible = (notes || []).filter(n =>
-    n.visibility === "Coach" ? (me && n.author === me)
-      : (n.visibility === "Public" || (me && n.author === me) || isPCLead));
+    n.visibility === "Public" || (me && n.author === me) || isPCLead);
 
   const fmt = (iso) => {
     if (!iso) return "";
@@ -5637,7 +5635,7 @@ function NotesPanel({ country, year, deptKey, deptLabel, me, saveMe, isPCLead, m
   };
 
   const flip = async (n) => {
-    const next = n.visibility === "Public" ? (coachMode ? "Coach" : "Private") : "Public";
+    const next = n.visibility === "Public" ? "Private" : "Public";
     // optimistic
     setNotes(prev => prev.map(x => x.id === n.id ? { ...x, visibility: next } : x));
     try { await setDepartmentNoteVisibility(n.id, next); }
@@ -5817,7 +5815,7 @@ function DirectorNoteButton({ country, year, deptKey, question, label, me, hasNo
   const [open, setOpen] = useState(false);
   const [noteId, setNoteId] = useState(null);
   const [text, setText] = useState("");
-  const ownLevel = coachMode ? "Coach" : "Private";
+  const ownLevel = "Private";
   const [vis, setVis] = useState(forcePublic ? "Public" : ownLevel);
   const [saved, setSaved] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
@@ -5900,8 +5898,8 @@ function DirectorNoteButton({ country, year, deptKey, question, label, me, hasNo
                 {[ownLevel, "Public"].map(v => (
                   <button key={v} onClick={() => setVisibility(v)} style={{ fontSize: 11.5, fontWeight: 600, borderRadius: 6, padding: "6px 11px", cursor: "pointer",
                     border: "1px solid " + (vis === v ? "#2C2621" : "#ECE2D2"), background: vis === v ? "#2C2621" : "#fff", color: vis === v ? "#fff" : "#7A6F63" }}>
-                    {v === "Public" ? (coachMode ? "Share with P&C + country leader" : "Share with team")
-                      : coachMode ? "Just me" : "Private to me"}</button>
+                    {v === "Public" ? (coachMode ? "Share with the country leader too" : "Share with team")
+                      : coachMode ? "Just me & P&C (Mel & Chris)" : "Private to me"}</button>
                 ))}
               </div>
               )}

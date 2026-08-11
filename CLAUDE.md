@@ -62,8 +62,8 @@ not per-task preferences. Check every new or changed screen against them:
 5. **Roles are:** `leader` (Mel & Chris, P&C — sees everything), `country`
    (country leader — their country, with prep), `director` (department leader —
    their department across countries), `coach` (country coach — reads the
-   countries they coach WITHOUT the leadership questions, keeps "Coach" notes
-   only they can see until they share). Every new surface must decide what each
+   countries they coach WITHOUT the leadership questions; their private notes
+   are theirs + P&C, and sharing adds the country leader and team). Every new surface must decide what each
    of these four sees, and the server must enforce it.
 6. **Reuse, don't rebuild.** When a new page needs something an existing page
    has (scoring, notes, heatmaps, translation), use the same component or

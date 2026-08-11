@@ -8,8 +8,9 @@
 // role (leader | country | director | coach) and country. Non-leaders are scoped to
 // their own country, enforced HERE on the server, so a director literally cannot pull
 // or change another country's data even by calling this function directly:
-//   • coach → like a country leader, but may cover SEVERAL countries (comma list),
-//     never sees prep/briefs/surveys, and their "Coach" notes are private to them
+//   • coach → like a country leader, but may cover SEVERAL countries (comma list)
+//     and never sees prep/briefs/surveys. Their private notes follow the normal
+//     rule: the coach + P&C leadership (Mel & Chris).
 //   • list  → results are filtered to the caller's country
 //   • write → country role is read-only; director may only write within their country
 // Leaders (and the unconfigured/auth-off state) are unrestricted.
@@ -233,10 +234,9 @@ exports.handler = async (event) => {
           const f = r.fields || {};
           const vis = f.Visibility || "Private";
           const mine = myName !== "" && String(f.Author || "") === myName;
-          // A coach's "Coach" note is theirs alone — not even P&C reads it
-          // unless the coach shares it (which makes it Public).
-          if (vis === "Coach") return mine;
-          if (!role || role === "leader") return true;   // P&C see everything else
+          // P&C leadership (Mel & Chris) see every note, including a coach's
+          // private ones — that's the agreed rule, and it's what the app says.
+          if (!role || role === "leader") return true;
           if (vis === "Public") return true;
           return mine;
         });
