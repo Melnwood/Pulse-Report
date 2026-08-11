@@ -1208,7 +1208,9 @@ export default function App() {
       try {
         const _v = localStorage.getItem("pulse:runs");
         if (_v) {
-          const loaded = JSON.parse(_v).map((run, i) => ({ ...run, id: run.id || `${run.country}-${run.year}-${i}` }));
+          const loaded = JSON.parse(_v)
+            .map((run, i) => ({ ...run, id: run.id || `${run.country}-${run.year}-${i}` }))
+            .map(rescoreRunDepts);   // local copies carry old statuses too
           setAllRuns(loaded);
         }
       } catch {}
