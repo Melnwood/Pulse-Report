@@ -12,7 +12,9 @@
 //     and never sees prep/briefs/surveys. Their private notes follow the normal
 //     rule: the coach + P&C leadership (Mel & Chris).
 //   • list  → results are filtered to the caller's country
-//   • write → country role is read-only; director may only write within their country
+//   • write → country role is read-only apart from prep + notes; a director edits
+//     review content only in their own department, but may write NOTES anywhere
+//     (the pulse meeting walks every department and everyone takes notes)
 // Leaders (and the unconfigured/auth-off state) are unrestricted.
 const { verifyToken } = require("./authlib");
 
@@ -177,7 +179,11 @@ exports.handler = async (event) => {
     fields = fields || {};
     if (tbl === "runs") return true; // shared run metadata; directors work across all countries
     if (tbl === "departments") return deptSet.has(codeOf(fields));
-    if (tbl === "deptNotes" || tbl === "questionNotes") return deptSet.has(String(fields.Department || "").trim().toLowerCase());
+    // NOTES ARE FOR THE WHOLE MEETING: in the pulse meeting the room walks
+    // department by department and everyone writes where the conversation is,
+    // so a department leader may write a note under ANY department. Their
+    // review CONTENT (selections, survey basics, measures) stays theirs alone.
+    if (tbl === "deptNotes" || tbl === "questionNotes") return true;
     if (tbl === "measures") return deptSet.has(String(fields.Department || "").trim().toLowerCase());
     if (tbl === "surveyBasics") return mySbKeys.has(String(fields["SB Key"] || "").trim().toLowerCase());
     if (tbl === "selections") { const set = await myDepartmentIds(); const id = selectionDeptId(fields); return !!id && set.has(id); }
@@ -312,9 +318,15 @@ exports.handler = async (event) => {
             if (!ok) return fail(403, "Outside your department.");
           }
         } else if (action === "delete") {
+          const myName = String((user && user.name) || "");
           for (const id of (recordIds || [])) {
             const f = await getRecord(tableId, id);
             if (!f || !(await recordInDept(table, f.fields))) return fail(403, "Outside your department.");
+            // Notes: only your own, even though you may write in any department.
+            if ((table === "deptNotes" || table === "questionNotes") &&
+                !(myName && String((f.fields || {}).Author || "") === myName)) {
+              return fail(403, "You can only delete your own notes.");
+            }
           }
         }
       }
